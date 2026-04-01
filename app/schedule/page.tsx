@@ -94,9 +94,6 @@ export default function SchedulePage() {
     const dayShifts = shifts.filter(s => s.date === selectedDate)
     const isHoliday = !!holidays[selectedDate]
     const maxStaff = (getDayType(new Date(selectedDate + 'T12:00:00'), specialDays) === 'weekend' || isHoliday) ? 3 : 1
-    const selectedStaffMember = staffList.find(s => s.id === selectedStaff)
-    if (dayShifts.length >= maxStaff && selectedStaffMember?.role !== 'admin') {
-      toast.error('この日は満員です。桐島に確認してください。')
       setLoading(false); return
     }
     const { error } = await supabase.from('shifts').insert({
