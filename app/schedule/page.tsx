@@ -131,12 +131,16 @@ export default function SchedulePage() {
               {holiday && <div className="text-[8px] text-rose-400 leading-tight truncate px-0.5">{holiday}</div>}
               {dayShifts.length > 0 && (
                 <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
-                  {dayShifts.slice(0,3).map((s, j) => (
-                    <div key={j} className="w-4 h-4 rounded-full bg-teal-600 flex items-center justify-center"
-                      style={{ fontSize: '7px', color: 'white', fontWeight: 'bold' }}>
-                      {(s.staff as any)?.name?.slice(0,1)}
-                    </div>
-                  ))}
+                  {dayShifts.slice(0,3).map((s, j) => {
+                    const n = (s.staff as any)?.name ?? ''
+                    const isKitchen = ['荒波','竹内'].some(k => n.includes(k))
+                    return (
+                      <div key={j} className={`w-4 h-4 rounded-full flex items-center justify-center ${isKitchen ? 'bg-amber-500' : 'bg-teal-600'}`}
+                        style={{ fontSize: '7px', color: 'white', fontWeight: 'bold' }}>
+                        {n.slice(0,1)}
+                      </div>
+                    )
+                  })}
                   {dayShifts.length > 3 && (
                     <div className="w-4 h-4 rounded-full bg-zinc-600 flex items-center justify-center"
                       style={{ fontSize: '7px', color: 'white' }}>+{dayShifts.length - 3}</div>
