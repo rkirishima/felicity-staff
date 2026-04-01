@@ -11,9 +11,9 @@ type Shift = { id: string; staff_id: string; date: string; start_time: string; e
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
 const TIME_OPTIONS = Array.from({ length: 21 }, (_, i) => {
   const totalMins = 9 * 60 + i * 30
-  const h = Math.floor(totalMins / 60)
-  const m = totalMins % 60
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+  const h = String(Math.floor(totalMins / 60)).padStart(2, '0')
+  const m = String(totalMins % 60).padStart(2, '0')
+  return `${h}:${m}`
 }) // 09:00 〜 19:00
 function isWeekend(d: Date) { return d.getDay() === 0 || d.getDay() === 6 }
 function isFoodTruck(d: Date) { return d.getDay() === 3 || d.getDay() === 4 }
