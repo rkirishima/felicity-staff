@@ -1,28 +1,32 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { Clock, CalendarDays, ShieldCheck, ClipboardList, BookOpen } from 'lucide-react'
 
 const items = [
-  { href: '/', label: '打刻', icon: '⏱' },
-  { href: '/schedule', label: 'シフト', icon: '📅' },
-  { href: '/hygiene', label: '衛生', icon: '✅' },
-  { href: '/operations', label: '作業', icon: '📋' },
-  { href: '/recipes', label: 'レシピ', icon: '☕' },
+  { href: '/', label: '打刻', icon: Clock },
+  { href: '/schedule', label: 'シフト', icon: CalendarDays },
+  { href: '/hygiene', label: '衛生', icon: ShieldCheck },
+  { href: '/operations', label: '作業', icon: ClipboardList },
+  { href: '/recipes', label: 'レシピ', icon: BookOpen },
 ]
 
 export default function BottomNav() {
   const path = usePathname()
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 flex z-50">
-      {items.map(item => (
-        <Link key={item.href} href={item.href}
-          className={`flex-1 flex flex-col items-center py-3 text-xs transition-colors ${
-            path === item.href ? 'text-teal-400' : 'text-zinc-500 hover:text-zinc-300'
-          }`}>
-          <span className="text-lg">{item.icon}</span>
-          <span>{item.label}</span>
-        </Link>
-      ))}
+    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-800/60 flex z-50 backdrop-blur-sm">
+      {items.map(({ href, label, icon: Icon }) => {
+        const active = path === href
+        return (
+          <Link key={href} href={href}
+            className={`flex-1 flex flex-col items-center py-3 gap-1 transition-colors ${
+              active ? 'text-teal-400' : 'text-zinc-600 hover:text-zinc-400'
+            }`}>
+            <Icon size={20} strokeWidth={active ? 2 : 1.5} />
+            <span className={`text-[10px] tracking-wider ${active ? 'font-medium' : ''}`}>{label}</span>
+          </Link>
+        )
+      })}
     </nav>
   )
 }
