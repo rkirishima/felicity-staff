@@ -15,7 +15,7 @@ export default function AdminPage() {
           <div className="text-2xl mb-2">⏱</div>
           <div className="text-sm font-medium">出勤記録</div>
         </button>
-        <button onClick={() => router.push('/schedule')}
+        <button onClick={() => router.push('/admin/shifts')}
           className="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-6 text-center transition-all">
           <div className="text-2xl mb-2">📅</div>
           <div className="text-sm font-medium">シフト管理</div>
