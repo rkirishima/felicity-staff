@@ -9,6 +9,12 @@ type Template = { id: string; name: string; day_type: string; start_time: string
 type Shift = { id: string; staff_id: string; date: string; start_time: string; end_time: string; status: string; staff: { name: string } }
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
+const TIME_OPTIONS = Array.from({ length: 21 }, (_, i) => {
+  const totalMins = 9 * 60 + i * 30
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+}) // 09:00 〜 19:00
 function isWeekend(d: Date) { return d.getDay() === 0 || d.getDay() === 6 }
 function isFoodTruck(d: Date) { return d.getDay() === 3 || d.getDay() === 4 }
 function getDayType(d: Date, specialDays: string[]) {
@@ -248,13 +254,19 @@ export default function SchedulePage() {
                   <div className="mt-2 p-3 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
                     <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間</p>
                     <div className="flex items-center gap-2">
-                      <input type="time" value={customStart}
+                      <select value={customStart}
                         onChange={e => { setCustomStart(e.target.value); setSelectedTemplate('') }}
-                        className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white" />
+                        className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white">
+                        <option value="">開始</option>
+                        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
                       <span className="text-stone-400 text-sm">〜</span>
-                      <input type="time" value={customEnd}
+                      <select value={customEnd}
                         onChange={e => { setCustomEnd(e.target.value); setSelectedTemplate('') }}
-                        className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white" />
+                        className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white">
+                        <option value="">終了</option>
+                        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
                     </div>
                   </div>
                 )}
