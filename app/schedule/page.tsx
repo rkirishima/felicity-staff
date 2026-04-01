@@ -99,6 +99,7 @@ export default function SchedulePage() {
       toast.error('この日は満員です。桐島に確認してください。')
       setLoading(false); return
     }
+    // adminは常に登録可能
     const { error } = await supabase.from('shifts').insert({
       staff_id: selectedStaff, date: selectedDate,
       start_time: startTime, end_time: endTime, status: 'approved',
@@ -254,18 +255,18 @@ export default function SchedulePage() {
                   <div className="mt-2 p-3 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
                     <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間</p>
                     <div className="flex items-center gap-2">
-                      <select value={customStart}
-                        onChange={e => { setCustomStart(e.target.value); setSelectedTemplate('') }}
+                      <select
+                        onChange={e => setCustomStart(e.target.value)}
                         className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white">
                         <option value="">開始</option>
-                        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                        {TIME_OPTIONS.map(t => <option key={t} value={t} selected={customStart === t}>{t}</option>)}
                       </select>
                       <span className="text-stone-400 text-sm">〜</span>
-                      <select value={customEnd}
-                        onChange={e => { setCustomEnd(e.target.value); setSelectedTemplate('') }}
+                      <select
+                        onChange={e => setCustomEnd(e.target.value)}
                         className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white">
                         <option value="">終了</option>
-                        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                        {TIME_OPTIONS.map(t => <option key={t} value={t} selected={customEnd === t}>{t}</option>)}
                       </select>
                     </div>
                   </div>
