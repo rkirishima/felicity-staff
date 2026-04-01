@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { getHolidaysOf } from 'japanese-holidays'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
-type Shift = { id: string; staff_id: string; date: string; start_time: string; end_time: string; status: string; staff: { name: string } }
+type Shift = { id: string; staff_id: string; date: string; start_time: string; end_time: string; status: string; staff: { name: string } | { name: string }[] }
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
 function isWeekend(d: Date) { return d.getDay() === 0 || d.getDay() === 6 }
@@ -73,7 +73,7 @@ export default function SchedulePage() {
   const month = viewMonth.getMonth()
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const cells = Array.from({ length: firstDay }, () => null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1))
+  const cells: (number | null)[] = [...Array.from({ length: firstDay }, () => null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white p-4 max-w-lg mx-auto">
