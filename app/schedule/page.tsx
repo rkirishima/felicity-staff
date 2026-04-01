@@ -121,7 +121,16 @@ export default function SchedulePage() {
               {holiday && <div className="text-[8px] text-rose-400 leading-tight truncate px-0.5">{holiday}</div>}
               {dayShifts.length > 0 && (
                 <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
-                  {dayShifts.map((_, j) => <div key={j} className="w-1.5 h-1.5 rounded-full bg-teal-400" />)}
+                  {dayShifts.slice(0,3).map((s, j) => (
+                    <div key={j} className="w-4 h-4 rounded-full bg-teal-600 flex items-center justify-center"
+                      style={{ fontSize: '7px', color: 'white', fontWeight: 'bold' }}>
+                      {(s.staff as any)?.name?.slice(0,1)}
+                    </div>
+                  ))}
+                  {dayShifts.length > 3 && (
+                    <div className="w-4 h-4 rounded-full bg-zinc-600 flex items-center justify-center"
+                      style={{ fontSize: '7px', color: 'white' }}>+{dayShifts.length - 3}</div>
+                  )}
                 </div>
               )}
             </button>
