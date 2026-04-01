@@ -20,6 +20,7 @@ export default function SchedulePage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [overrideMode, setOverrideMode] = useState(false)
   const [viewMonth, setViewMonth] = useState(new Date())
   const [holidays, setHolidays] = useState<Record<string, string>>({})
   const [specialDays, setSpecialDays] = useState<string[]>([])
@@ -76,7 +77,7 @@ export default function SchedulePage() {
     if (error) { toast.error('エラー: ' + error.message); setLoading(false); return }
     toast.success('シフトを登録しました！')
     setSelectedDate(null); setSelectedTemplate(null); setSelectedStaff(null)
-    setLoading(false); loadShifts()
+    setLoading(false); setOverrideMode(false); loadShifts()
   }
 
   const year = viewMonth.getFullYear()
