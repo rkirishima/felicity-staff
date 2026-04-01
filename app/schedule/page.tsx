@@ -34,19 +34,27 @@ export default function SchedulePage() {
     })
     setHolidays(map)
     supabase.from('shift_templates').select('*').order('day_type').then(({ data }) => setTemplates(data ?? []))
-    supabase.from('staff').select('id, name, role, skill').eq('active', true).not('role', 'eq', 'accountant').order('name').then(({ data }) => setStaffList(data ?? []))
-    loadShifts()
+    supabase.from('staff').select('id, name, role, skill').eq('active', true).not('role', 'eq', 'accountant').order('name').then(({ data }) => {
+      const s = data ?? []
+      setStaffList(s)
+      const y = viewMonth.getFullYear()
+      const m = String(viewMonth.getMonth() + 1).padStart(2, '0')
+      supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status')
+        .gte('date', `${y}-${m}-01`).lte('date', `${y}-${m}-31`).neq('status', 'rejected')
+        .then(({ data: sd }) => setShifts((sd ?? []).map((sh: any) => ({
+          ...sh, staff: { name: s.find((st: any) => st.id === sh.staff_id)?.name ?? '' }
+        }))))
+    })
   }, [viewMonth])
 
   async function loadShifts() {
     const y = viewMonth.getFullYear()
     const m = String(viewMonth.getMonth() + 1).padStart(2, '0')
-    const { data } = await supabase
-      .from('shifts')
-      .select('id, staff_id, date, start_time, end_time, status, staff!shifts_staff_id_fkey(name)')
-      .gte('date', `${y}-${m}-01`)
-      .lte('date', `${y}-${m}-31`)
-    setShifts(data ?? [])
+    const { data: sd } = await supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status')
+      .gte('date', `${y}-${m}-01`).lte('date', `${y}-${m}-31`).neq('status', 'rejected')
+    setShifts((sd ?? []).map((sh: any) => ({
+      ...sh, staff: { name: staffList.find((st: any) => st.id === sh.staff_id)?.name ?? '' }
+    })))
   }
 
   async function submitShift() {
