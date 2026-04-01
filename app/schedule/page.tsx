@@ -21,6 +21,8 @@ export default function SchedulePage() {
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [overrideMode, setOverrideMode] = useState(false)
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
   const [viewMonth, setViewMonth] = useState(new Date())
   const [holidays, setHolidays] = useState<Record<string, string>>({})
   const [specialDays, setSpecialDays] = useState<string[]>([])
@@ -70,7 +72,9 @@ export default function SchedulePage() {
   async function submitShift() {
     if (!selectedDate || !selectedTemplate || !selectedStaff) { toast.error('日付・シフト・スタッフを選んでください'); return }
     const tmpl = templates.find(t => t.id === selectedTemplate)
-    if (!tmpl) return
+    if (!tmpl && !customStart) { toast.error('シフトを選んでください'); return }
+    const startTime = customStart || tmpl?.start_time || ''
+    const endTime = customEnd || tmpl?.end_time || ''
     setLoading(true)
     const dayShifts = shifts.filter(s => s.date === selectedDate && s.status !== 'rejected')
     const date = new Date(selectedDate + 'T12:00:00')
@@ -79,12 +83,12 @@ export default function SchedulePage() {
     if (dayShifts.length >= maxStaff) { toast.error('この日は満員です。桐島に確認してください。'); setLoading(false); return }
     const { error } = await supabase.from('shifts').insert({
       staff_id: selectedStaff, date: selectedDate,
-      start_time: tmpl.start_time, end_time: tmpl.end_time, status: 'approved',
+      start_time: startTime, end_time: endTime, status: 'approved',
     })
     if (error) { toast.error('エラー: ' + error.message); setLoading(false); return }
     toast.success('シフトを登録しました！')
     setSelectedDate(null); setSelectedTemplate(null); setSelectedStaff(null)
-    setLoading(false); setOverrideMode(false); loadShifts()
+    setLoading(false); setOverrideMode(false); setCustomStart(''); setCustomEnd(''); loadShifts()
   }
 
   const year = viewMonth.getFullYear()
@@ -199,12 +203,24 @@ export default function SchedulePage() {
                   const d = new Date(selectedDate + 'T12:00:00')
                   return t.day_type === (getDayType(d, specialDays) === 'weekend' || holidays[selectedDate] ? 'weekend' : 'weekday')
                 }).map(t => (
-                  <button key={t.id} onClick={() => setSelectedTemplate(t.id)}
-                    className={`w-full flex justify-between px-3 py-2 rounded-lg text-sm transition-all ${selectedTemplate === t.id ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'}`}>
+                  <button key={t.id} onClick={() => { setSelectedTemplate(t.id); setCustomStart(''); setCustomEnd('') }}
+                    className={`w-full flex justify-between px-3 py-2 rounded-lg text-sm transition-all ${selectedTemplate === t.id && !customStart ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'}`}>
                     <span>{t.name}</span>
                     <span className="text-zinc-500">{t.start_time.slice(0,5)}〜{t.end_time.slice(0,5)}</span>
                   </button>
                 ))}
+                {staffList.find(s => s.id === selectedStaff)?.role === 'admin' && (
+                  <div className="mt-2 p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-2">
+                    <p className="text-xs text-stone-500 font-medium">⚙️ カスタム時間</p>
+                    <div className="flex items-center gap-2">
+                      <input type="time" value={customStart} onChange={e => { setCustomStart(e.target.value); setSelectedTemplate('') }}
+                        className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white" />
+                      <span className="text-stone-400 text-sm">〜</span>
+                      <input type="time" value={customEnd} onChange={e => { setCustomEnd(e.target.value); setSelectedTemplate('') }}
+                        className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white" />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <button onClick={submitShift} disabled={loading}
