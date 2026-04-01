@@ -94,8 +94,8 @@ export default function SchedulePage() {
     const dayShifts = shifts.filter(s => s.date === selectedDate)
     const isHoliday = !!holidays[selectedDate]
     const maxStaff = (getDayType(new Date(selectedDate + 'T12:00:00'), specialDays) === 'weekend' || isHoliday) ? 3 : 1
-    const isAdmin = staffList.find(s => s.id === selectedStaff)?.role === 'admin'
-    if (dayShifts.length >= maxStaff && !isAdmin) {
+    const selectedStaffMember = staffList.find(s => s.id === selectedStaff)
+    if (dayShifts.length >= maxStaff && selectedStaffMember?.role !== 'admin') {
       toast.error('この日は満員です。桐島に確認してください。')
       setLoading(false); return
     }
@@ -255,14 +255,14 @@ export default function SchedulePage() {
                     <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間</p>
                     <div className="flex items-center gap-2">
                       <select value={customStart}
-                        onChange={e => { setCustomStart(e.target.value); setSelectedTemplate('') }}
+                        onChange={e => setCustomStart(e.target.value)}
                         className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white">
                         <option value="">開始</option>
                         {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                       <span className="text-stone-400 text-sm">〜</span>
                       <select value={customEnd}
-                        onChange={e => { setCustomEnd(e.target.value); setSelectedTemplate('') }}
+                        onChange={e => setCustomEnd(e.target.value)}
                         className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white">
                         <option value="">終了</option>
                         {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
