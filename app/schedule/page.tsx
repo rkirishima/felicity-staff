@@ -10,14 +10,7 @@ type Shift = { id: string; staff_id: string; date: string; start_time: string; e
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
 function isWeekend(d: Date) { return d.getDay() === 0 || d.getDay() === 6 }
 function isFoodTruck(d: Date) { return d.getDay() === 3 || d.getDay() === 4 }
-function isGWWeekday(d: Date) {
-  const str = d.toISOString().split('T')[0]
-  return ['2026-04-30', '2026-05-01', '2026-05-02'].includes(str)
-}
-function getDayType(d: Date) {
-  if (isWeekend(d) || isGWWeekday(d)) return 'weekend'
-  return 'weekday'
-}
+function getDayType(d: Date, specialDays: string[]) { return (isWeekend(d) || specialDays.includes(d.toISOString().split('T')[0])) ? 'weekend' : 'weekday' }
 
 export default function SchedulePage() {
   const [templates, setTemplates] = useState<Template[]>([])
@@ -29,6 +22,7 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(false)
   const [viewMonth, setViewMonth] = useState(new Date())
   const [holidays, setHolidays] = useState<Record<string, string>>({})
+  const [specialDays, setSpecialDays] = useState<string[]>([])
   const supabase = createClient()
 
   useEffect(() => {
@@ -40,6 +34,7 @@ export default function SchedulePage() {
       map[key] = h.name
     })
     setHolidays(map)
+    supabase.from('special_business_days').select('date, day_type').then(({ data }) => setSpecialDays((data ?? []).filter((d: any) => d.day_type === 'weekend').map((d: any) => d.date)))
     supabase.from('shift_templates').select('*').order('day_type').then(({ data }) => setTemplates(data ?? []))
     supabase.from('staff').select('id, name, role, skill').eq('active', true).not('role', 'eq', 'accountant').order('name').then(({ data }) => {
       const s = data ?? []
@@ -72,7 +67,7 @@ export default function SchedulePage() {
     const dayShifts = shifts.filter(s => s.date === selectedDate && s.status !== 'rejected')
     const date = new Date(selectedDate + 'T12:00:00')
     const isHoliday = !!holidays[selectedDate]
-    const maxStaff = (getDayType(date) === 'weekend' || isHoliday) ? 3 : 1
+    const maxStaff = (getDayType(date, specialDays) === 'weekend' || isHoliday) ? 3 : 1
     if (dayShifts.length >= maxStaff) { toast.error('この日は満員です。桐島に確認してください。'); setLoading(false); return }
     const { error } = await supabase.from('shifts').insert({
       staff_id: selectedStaff, date: selectedDate,
