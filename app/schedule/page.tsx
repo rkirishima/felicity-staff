@@ -247,13 +247,13 @@ export default function SchedulePage() {
                     <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間</p>
                     <div className="flex items-center gap-2">
                       <select className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white text-stone-700"
-                        onChange={e => { setCustomStart(e.target.value); setSelectedTemplate('') }}>
+                        onChange={e => setCustomStart(e.target.value)}>
                         <option value="">開始</option>
                         {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                       <span className="text-stone-400 text-sm">〜</span>
                       <select className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white text-stone-700"
-                        onChange={e => { setCustomEnd(e.target.value); setSelectedTemplate('') }}>
+                        onChange={e => setCustomEnd(e.target.value)}>
                         <option value="">終了</option>
                         {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
