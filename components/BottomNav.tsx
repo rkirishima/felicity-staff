@@ -14,16 +14,16 @@ const items = [
 export default function BottomNav() {
   const path = usePathname()
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-800/60 flex z-50 backdrop-blur-sm">
+    <nav className="fixed bottom-0 left-0 right-0 flex z-50"
+      style={{ backgroundColor: '#F5F0E8', borderTop: '1px solid #E5DDD0' }}>
       {items.map(({ href, label, icon: Icon }) => {
         const active = path === href
         return (
           <Link key={href} href={href}
-            className={`flex-1 flex flex-col items-center py-3 gap-1 transition-colors ${
-              active ? 'text-teal-400' : 'text-zinc-600 hover:text-zinc-400'
-            }`}>
+            className="flex-1 flex flex-col items-center py-3 gap-1 transition-colors"
+            style={{ color: active ? '#292524' : '#A8A29E' }}>
             <Icon size={20} strokeWidth={active ? 2 : 1.5} />
-            <span className={`text-[10px] tracking-wider ${active ? 'font-medium' : ''}`}>{label}</span>
+            <span className="text-[10px] tracking-wider">{label}</span>
           </Link>
         )
       })}
