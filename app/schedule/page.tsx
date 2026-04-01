@@ -185,7 +185,7 @@ export default function SchedulePage() {
               <div className="space-y-1">
                 {templates.filter(t => {
                   const d = new Date(selectedDate + 'T12:00:00')
-                  return t.day_type === (getDayType(d) === 'weekend' || holidays[selectedDate] ? 'weekend' : 'weekday')
+                  return t.day_type === (getDayType(d, specialDays) === 'weekend' || holidays[selectedDate] ? 'weekend' : 'weekday')
                 }).map(t => (
                   <button key={t.id} onClick={() => setSelectedTemplate(t.id)}
                     className={`w-full flex justify-between px-3 py-2 rounded-lg text-sm transition-all ${selectedTemplate === t.id ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'}`}>
