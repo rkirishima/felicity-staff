@@ -43,7 +43,7 @@ export default function SchedulePage() {
     const m = String(viewMonth.getMonth() + 1).padStart(2, '0')
     const { data } = await supabase
       .from('shifts')
-      .select('id, staff_id, date, start_time, end_time, status, staff(name)')
+      .select('id, staff_id, date, start_time, end_time, status, staff!shifts_staff_id_fkey(name)')
       .gte('date', `${y}-${m}-01`)
       .lte('date', `${y}-${m}-31`)
     setShifts(data ?? [])
