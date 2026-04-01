@@ -76,7 +76,7 @@ export default function SchedulePage() {
   const cells: (number | null)[] = [...Array.from({ length: firstDay }, () => null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white p-4 max-w-lg mx-auto">
+    <main className="min-h-screen p-4 max-w-lg mx-auto" style={{ backgroundColor: '#F5F0E8', color: '#1c1917' }}>
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => setViewMonth(new Date(year, month - 1))} className="text-zinc-400 hover:text-white px-3 py-1">←</button>
         <h2 className="text-lg font-bold tracking-widest text-teal-400">{year}年{month + 1}月</h2>
@@ -91,7 +91,7 @@ export default function SchedulePage() {
 
       <div className="grid grid-cols-7 gap-1 mb-6">
         {DAYS.map((d, i) => (
-          <div key={d} className={`text-center text-xs py-1 ${i === 0 || i === 6 ? 'text-teal-400' : i === 3 || i === 4 ? 'text-amber-400' : 'text-zinc-500'}`}>{d}</div>
+          <div key={d} className={`text-center text-xs py-1 ${i === 0 || i === 6 ? 'text-teal-400' : i === 3 || i === 4 ? 'text-amber-400' : 'text-stone-400'}`}>{d}</div>
         ))}
         {cells.map((day, i) => {
           if (!day) return <div key={i} />
@@ -106,11 +106,11 @@ export default function SchedulePage() {
           return (
             <button key={i} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
               className={`relative rounded-lg p-1 text-center transition-all min-h-[48px] ${
-                isSelected ? 'ring-2 ring-teal-400 bg-teal-900' :
+                isSelected ? 'ring-2 ring-teal-500 bg-teal-100' :
                 holiday ? 'bg-rose-950 hover:bg-rose-900' :
                 foodtruck ? 'bg-amber-950 hover:bg-amber-900' :
-                weekend ? 'bg-zinc-800 hover:bg-zinc-700' :
-                'bg-zinc-900 hover:bg-zinc-800'
+                weekend ? 'bg-white hover:bg-stone-50' :
+                'bg-white/60 hover:bg-white'
               }`}>
               <div className={`text-xs font-medium ${
                 holiday ? 'text-rose-400' :
@@ -139,7 +139,7 @@ export default function SchedulePage() {
       </div>
 
       {selectedDate && (
-        <div className="bg-zinc-900 rounded-2xl p-4 mb-4 space-y-4">
+        <div className="bg-white rounded-2xl shadow-sm p-4 mb-4 space-y-4">
           <div>
             <h3 className="font-bold text-teal-400">
               {new Date(selectedDate + 'T12:00:00').toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}
@@ -151,7 +151,7 @@ export default function SchedulePage() {
             <div className="space-y-1">
               <p className="text-xs text-zinc-500">入ってるスタッフ</p>
               {shifts.filter(s => s.date === selectedDate && s.status !== 'rejected').map(s => (
-                <div key={s.id} className="flex justify-between bg-zinc-800 rounded-lg px-3 py-2 text-sm">
+                <div key={s.id} className="flex justify-between bg-stone-100 rounded-lg px-3 py-2 text-sm">
                   <span>{(s.staff as any)?.name}</span>
                   <span className="text-zinc-500">{s.start_time.slice(0,5)}〜{s.end_time.slice(0,5)}</span>
                 </div>
@@ -164,7 +164,7 @@ export default function SchedulePage() {
               <div className="grid grid-cols-3 gap-2">
                 {staffList.filter(s => s.role !== 'admin').map(s => (
                   <button key={s.id} onClick={() => setSelectedStaff(s.id)}
-                    className={`py-2 rounded-lg text-sm transition-all ${selectedStaff === s.id ? 'bg-teal-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}>
+                    className={`py-2 rounded-lg text-sm transition-all ${selectedStaff === s.id ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'}`}>
                     {s.name}
                   </button>
                 ))}
@@ -178,7 +178,7 @@ export default function SchedulePage() {
                   return t.day_type === (getDayType(d) === 'weekend' || holidays[selectedDate] ? 'weekend' : 'weekday')
                 }).map(t => (
                   <button key={t.id} onClick={() => setSelectedTemplate(t.id)}
-                    className={`w-full flex justify-between px-3 py-2 rounded-lg text-sm transition-all ${selectedTemplate === t.id ? 'bg-teal-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}>
+                    className={`w-full flex justify-between px-3 py-2 rounded-lg text-sm transition-all ${selectedTemplate === t.id ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'}`}>
                     <span>{t.name}</span>
                     <span className="text-zinc-500">{t.start_time.slice(0,5)}〜{t.end_time.slice(0,5)}</span>
                   </button>
