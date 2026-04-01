@@ -23,6 +23,7 @@ export default function SchedulePage() {
   const [overrideMode, setOverrideMode] = useState(false)
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
+  const [editMode, setEditMode] = useState(false)
   const [viewMonth, setViewMonth] = useState(new Date())
   const [holidays, setHolidays] = useState<Record<string, string>>({})
   const [specialDays, setSpecialDays] = useState<string[]>([])
@@ -177,9 +178,15 @@ export default function SchedulePage() {
             <div className="space-y-1">
               <p className="text-xs text-zinc-500">入ってるスタッフ</p>
               {shifts.filter(s => s.date === selectedDate && s.status !== 'rejected').map(s => (
-                <div key={s.id} className="flex justify-between bg-stone-100 rounded-lg px-3 py-2 text-sm">
+                <div key={s.id} className="flex justify-between items-center bg-stone-100 rounded-lg px-3 py-2 text-sm">
                   <span>{(s.staff as any)?.name}</span>
-                  <span className="text-zinc-500">{s.start_time.slice(0,5)}〜{s.end_time.slice(0,5)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">{s.start_time.slice(0,5)}〜{s.end_time.slice(0,5)}</span>
+                    {editMode && (
+                      <button onClick={() => deleteShift(s.id)}
+                        className="w-6 h-6 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center font-bold text-sm transition-all">×</button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -209,7 +216,7 @@ export default function SchedulePage() {
                     <span className="text-zinc-500">{t.start_time.slice(0,5)}〜{t.end_time.slice(0,5)}</span>
                   </button>
                 ))}
-                {staffList.find(s => s.id === selectedStaff)?.role === 'admin' && (
+                {(staffList.find(s => s.id === selectedStaff)?.role === 'admin' || editMode) && staffList.find(s => s.id === selectedStaff) && (
                   <div className="mt-2 p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-2">
                     <p className="text-xs text-stone-500 font-medium">⚙️ カスタム時間</p>
                     <div className="flex items-center gap-2">
