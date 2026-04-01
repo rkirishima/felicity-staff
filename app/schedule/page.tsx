@@ -61,11 +61,7 @@ export default function SchedulePage() {
   }
 
   async function deleteShift(shiftId: string) {
-    const sb = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    const { error } = await sb.from('shifts').delete().eq('id', shiftId)
+    const { error } = await supabase.from('shifts').delete().eq('id', shiftId)
     if (error) { toast.error('削除失敗'); return }
     toast.success('シフトを削除しました')
     loadShifts()
