@@ -244,9 +244,9 @@ export default function SchedulePage() {
                   </button>
                 ))}
 
-                {isAdmin && (
+                {selectedStaff && (
                   <div className="mt-2 p-3 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
-                    <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間（桐島のみ）</p>
+                    <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間</p>
                     <div className="flex items-center gap-2">
                       <input type="time" value={customStart}
                         onChange={e => { setCustomStart(e.target.value); setSelectedTemplate('') }}
