@@ -29,7 +29,6 @@ export default function SchedulePage() {
   const [editMode, setEditMode] = useState(false)
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
