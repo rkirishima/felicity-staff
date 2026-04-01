@@ -10,7 +10,14 @@ type Shift = { id: string; staff_id: string; date: string; start_time: string; e
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
 function isWeekend(d: Date) { return d.getDay() === 0 || d.getDay() === 6 }
 function isFoodTruck(d: Date) { return d.getDay() === 3 || d.getDay() === 4 }
-function getDayType(d: Date) { return isWeekend(d) ? 'weekend' : 'weekday' }
+function isGWWeekday(d: Date) {
+  const str = d.toISOString().split('T')[0]
+  return ['2026-04-30', '2026-05-01', '2026-05-02'].includes(str)
+}
+function getDayType(d: Date) {
+  if (isWeekend(d) || isGWWeekday(d)) return 'weekend'
+  return 'weekday'
+}
 
 export default function SchedulePage() {
   const [templates, setTemplates] = useState<Template[]>([])
