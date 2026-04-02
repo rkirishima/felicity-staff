@@ -117,7 +117,6 @@ export default function HomePage() {
     toast.success(selected.name.split(' ')[0] + 'さん、おはようございます')
     setLoading(false)
     // 今日最初か確認
-    const today = new Date().toISOString().slice(0, 10)
     const { data } = await getSb().from('timeclock').select('id').gte('clock_in', today + 'T00:00:00')
     if (data && data.length <= 1) setTimeout(() => setShowCheckPrompt('opening'), 1500)
   }
