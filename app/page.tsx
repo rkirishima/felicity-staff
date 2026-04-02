@@ -111,9 +111,44 @@ export default function HomePage() {
     setClockHistory(hist ?? [])
   }
 
+
+  // Felicity Cafe座標
+  const CAFE_LAT = 35.267359
+  const CAFE_LNG = 139.610321
+  const CAFE_RADIUS_M = 300 // 半径300m
+
+  function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const R = 6371000
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLng = (lng2 - lng1) * Math.PI / 180
+    const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2) ** 2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  }
+
+  async function checkLocation(): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) { resolve(false); return }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const dist = calcDistance(pos.coords.latitude, pos.coords.longitude, CAFE_LAT, CAFE_LNG)
+          resolve(dist <= CAFE_RADIUS_M)
+        },
+        () => resolve(false),
+        { timeout: 8000, maximumAge: 60000 }
+      )
+    })
+  }
+
   async function clockIn() {
     if (!selected) return
     setLoading(true)
+    // GPS位置確認
+    const nearby = await checkLocation()
+    if (!nearby) {
+      toast.error('店舗の近くにいる時のみ出勤できます📍')
+      setLoading(false)
+      return
+    }
     // 二重出勤防止チェック
     const today = new Date().toISOString().slice(0, 10)
     const { data: existing } = await getSb().from('timeclock')
@@ -138,6 +173,13 @@ export default function HomePage() {
   async function clockOut() {
     if (!selected) return
     setLoading(true)
+    // GPS位置確認
+    const nearbyOut = await checkLocation()
+    if (!nearbyOut) {
+      toast.error('店舗の近くにいる時のみ退勤できます📍')
+      setLoading(false)
+      return
+    }
     await getSb().from('timeclock').update({ clock_out: new Date().toISOString() })
       .eq('staff_id', selected.id).is('clock_out', null)
     setClockOutTime(new Date())
