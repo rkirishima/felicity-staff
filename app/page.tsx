@@ -28,6 +28,7 @@ export default function HomePage() {
   const [clockInTime, setClockInTime] = useState<Date | null>(null)
   const [clockOutTime, setClockOutTime] = useState<Date | null>(null)
   const [weekStats, setWeekStats] = useState<{ hours: number; pay: number } | null>(null)
+  const [clockHistory, setClockHistory] = useState<any[]>([])
   const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week')
   const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
   const router = useRouter()
@@ -103,6 +104,11 @@ export default function HomePage() {
       return sum + (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
     }, 0)
     setWeekStats({ hours: Math.round(hours * 10) / 10, pay: Math.round(hours * (staff.hourly_rate || 1300)) })
+    // 直近の打刻履歴も取得
+    const { data: hist } = await getSb().from('timeclock')
+      .select('clock_in, clock_out').eq('staff_id', staff.id)
+      .order('clock_in', { ascending: false }).limit(10)
+    setClockHistory(hist ?? [])
   }
 
   async function clockIn() {
@@ -273,6 +279,31 @@ export default function HomePage() {
                 <p className="text-2xl font-medium text-teal-600">¥{weekStats.pay.toLocaleString()}</p>
                 <p className="text-xs text-stone-400 mt-1">見積もり報酬</p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {clockHistory.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+            <p className="text-xs text-stone-400 mb-3">🕐 打刻履歴</p>
+            <div className="space-y-2">
+              {clockHistory.map((r, i) => {
+                const cin = new Date(r.clock_in)
+                const cout = r.clock_out ? new Date(r.clock_out) : null
+                const h = cout ? ((cout.getTime() - cin.getTime()) / 3600000).toFixed(1) : null
+                return (
+                  <div key={i} className="flex justify-between items-center text-sm">
+                    <div>
+                      <p className="text-stone-600">{cin.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' })}</p>
+                      <p className="text-xs text-stone-400">
+                        {cin.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                        〜{cout ? cout.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '退勤未記録'}
+                      </p>
+                    </div>
+                    <p className={h ? 'text-stone-700 font-medium' : 'text-amber-500 text-xs'}>{h ? h + 'h' : '勤務中'}</p>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
