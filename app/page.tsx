@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 type Staff = { id: string; name: string; role: string; hourly_rate: number }
+type ClockStatus = 'not_clocked' | 'clocked_in' | 'clocked_out'
 
 function getSb() {
   return createBrowserClient(
@@ -18,12 +19,14 @@ function getSb() {
 export default function HomePage() {
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [selected, setSelected] = useState<Staff | null>(null)
-  const [step, setStep] = useState<'select' | 'pin' | 'clock' | 'dashboard'>('select')
+  const [step, setStep] = useState<'select' | 'pin' | 'main'>('select')
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState(false)
   const [loading, setLoading] = useState(false)
   const [now, setNow] = useState(new Date())
+  const [clockStatus, setClockStatus] = useState<ClockStatus>('not_clocked')
   const [clockInTime, setClockInTime] = useState<Date | null>(null)
+  const [clockOutTime, setClockOutTime] = useState<Date | null>(null)
   const [weekStats, setWeekStats] = useState<{ hours: number; pay: number } | null>(null)
   const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
   const router = useRouter()
@@ -41,77 +44,90 @@ export default function HomePage() {
 
   function handleSelect(s: Staff) {
     if (s.role === 'admin') { router.push('/admin'); return }
-    setSelected(s)
-    setPin('')
-    setPinError(false)
-    setStep('pin')
+    setSelected(s); setPin(''); setPinError(false); setStep('pin')
   }
 
   function handlePinInput(n: string) {
-    if (pinError) { setPinError(false) }
+    setPinError(false)
     const next = pin + n
     setPin(next)
-    if (next.length === 4) {
-      verifyPin(next)
-    }
+    if (next.length === 4) verifyPin(next)
   }
 
   async function verifyPin(inputPin: string) {
     if (!selected) return
     const { data } = await getSb().from('staff').select('pin').eq('id', selected.id).single()
-    const correctPin = data?.pin || '1234'
-    if (inputPin === correctPin) {
-      setStep('clock')
-      loadWeekStats()
-    } else {
-      setPinError(true)
-      setTimeout(() => setPin(''), 600)
+    if (inputPin !== (data?.pin || '1234')) {
+      setPinError(true); setTimeout(() => setPin(''), 600); return
     }
+    // 今日の打刻状況を確認
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: records } = await getSb().from('timeclock')
+      .select('id, clock_in, clock_out')
+      .eq('staff_id', selected.id)
+      .gte('clock_in', today + 'T00:00:00')
+      .order('clock_in', { ascending: false })
+      .limit(1)
+    const latest = records?.[0]
+    if (!latest) {
+      setClockStatus('not_clocked')
+    } else if (!latest.clock_out) {
+      setClockStatus('clocked_in')
+      setClockInTime(new Date(latest.clock_in))
+    } else {
+      setClockStatus('clocked_out')
+      setClockInTime(new Date(latest.clock_in))
+      setClockOutTime(new Date(latest.clock_out))
+    }
+    await loadWeekStats(selected)
+    setStep('main')
   }
 
-  async function loadWeekStats() {
-    if (!selected) return
+  async function loadWeekStats(staff: Staff) {
     const monday = new Date()
     monday.setDate(monday.getDate() - monday.getDay() + 1)
     monday.setHours(0,0,0,0)
     const { data } = await getSb().from('timeclock')
-      .select('clock_in, clock_out')
-      .eq('staff_id', selected.id)
+      .select('clock_in, clock_out').eq('staff_id', staff.id)
       .gte('clock_in', monday.toISOString())
     const hours = (data ?? []).reduce((sum, r) => {
       if (!r.clock_out) return sum
       return sum + (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
     }, 0)
-    setWeekStats({ hours: Math.round(hours * 10) / 10, pay: Math.round(hours * (selected.hourly_rate || 1300)) })
+    setWeekStats({ hours: Math.round(hours * 10) / 10, pay: Math.round(hours * (staff.hourly_rate || 1300)) })
   }
 
-  async function handleClock(type: 'in' | 'out') {
+  async function clockIn() {
     if (!selected) return
     setLoading(true)
-    const sb = getSb()
-    const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
-    if (type === 'in') {
-      await sb.from('timeclock').insert({ staff_id: selected.id, clock_in: new Date().toISOString() })
-      setClockInTime(new Date())
-      toast.success(selected.name.split(' ')[0] + 'さん、おはようございます')
-      setStep('dashboard')
-      const today = new Date().toISOString().slice(0, 10)
-      const { data } = await sb.from('timeclock').select('id').gte('clock_in', today + 'T00:00:00')
-      if (data && data.length <= 1) setTimeout(() => setShowCheckPrompt('opening'), 2000)
-    } else {
-      await sb.from('timeclock').update({ clock_out: new Date().toISOString() })
-        .eq('staff_id', selected.id).is('clock_out', null)
-      toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした')
-      await loadWeekStats()
-      setStep('dashboard')
-      setTimeout(() => setShowCheckPrompt('closing'), 2000)
-    }
+    await getSb().from('timeclock').insert({ staff_id: selected.id, clock_in: new Date().toISOString() })
+    setClockInTime(new Date())
+    setClockStatus('clocked_in')
+    toast.success(selected.name.split(' ')[0] + 'さん、おはようございます')
     setLoading(false)
+    // 今日最初か確認
+    const today = new Date().toISOString().slice(0, 10)
+    const { data } = await getSb().from('timeclock').select('id').gte('clock_in', today + 'T00:00:00')
+    if (data && data.length <= 1) setTimeout(() => setShowCheckPrompt('opening'), 1500)
+  }
+
+  async function clockOut() {
+    if (!selected) return
+    setLoading(true)
+    await getSb().from('timeclock').update({ clock_out: new Date().toISOString() })
+      .eq('staff_id', selected.id).is('clock_out', null)
+    setClockOutTime(new Date())
+    setClockStatus('clocked_out')
+    toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした')
+    await loadWeekStats(selected)
+    setLoading(false)
+    setTimeout(() => setShowCheckPrompt('closing'), 1500)
   }
 
   function reset() {
     setSelected(null); setStep('select'); setPin('')
-    setClockInTime(null); setWeekStats(null); setShowCheckPrompt(null)
+    setClockStatus('not_clocked'); setClockInTime(null); setClockOutTime(null)
+    setWeekStats(null); setShowCheckPrompt(null)
   }
 
   const H = String(now.getHours()).padStart(2,'0')
@@ -139,42 +155,93 @@ export default function HomePage() {
     </main>
   )
 
-  // マイダッシュボード
-  if (step === 'dashboard' && selected) {
-    const workedMins = clockInTime ? Math.floor((now.getTime() - clockInTime.getTime()) / 60000) : 0
+  // メイン画面（PIN認証後）
+  if (step === 'main' && selected) {
+    const workedMins = clockInTime && clockStatus === 'clocked_in'
+      ? Math.floor((now.getTime() - clockInTime.getTime()) / 60000) : 0
     const workedH = Math.floor(workedMins / 60)
     const workedM = workedMins % 60
+
     return (
-      <main className="min-h-screen p-6 pb-24" style={{ backgroundColor: '#F5F0E8' }}>
-        <div className="flex items-center justify-between mb-6">
+      <main className="min-h-screen p-5 pb-24" style={{ backgroundColor: '#F5F0E8' }}>
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <p className="text-xs tracking-widest text-stone-400 uppercase">勤務中</p>
             <p className="text-xl font-medium text-stone-800">{selected.name}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className={`w-2 h-2 rounded-full ${
+                clockStatus === 'clocked_in' ? 'bg-teal-500 animate-pulse' :
+                clockStatus === 'clocked_out' ? 'bg-stone-400' : 'bg-amber-400'
+              }`} />
+              <p className="text-xs text-stone-400">
+                {clockStatus === 'clocked_in' ? '勤務中' : clockStatus === 'clocked_out' ? '退勤済み' : '未出勤'}
+              </p>
+            </div>
           </div>
-          <button onClick={reset} className="text-stone-400 text-xs px-3 py-1 bg-white rounded-xl shadow-sm">戻る</button>
+          <button onClick={reset} className="text-xs text-stone-400 px-3 py-1.5 bg-white rounded-xl shadow-sm">
+            戻る
+          </button>
         </div>
 
-        {clockInTime && (
-          <div className="bg-white rounded-2xl shadow-sm p-6 mb-4 text-center">
-            <p className="text-xs text-stone-400 mb-1">本日の勤務時間</p>
-            <p className="text-5xl font-light text-stone-800 tabular-nums" style={{ fontFamily: 'Georgia, serif' }}>
-              {String(workedH).padStart(2,'0')}:{String(workedM).padStart(2,'0')}
-            </p>
-            <p className="text-xs text-stone-400 mt-2">
-              {clockInTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} 出勤
-            </p>
+        {/* 時計 */}
+        <div className="bg-white rounded-2xl shadow-sm p-5 mb-4 text-center">
+          <p className="text-xs text-stone-400 mb-1">{dateStr}</p>
+          <div className="flex items-end justify-center gap-1">
+            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize: '56px', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{H}</span>
+            <span className="font-light text-stone-300 mb-1" style={{ fontSize: '36px', fontFamily: 'Georgia, serif' }}>:</span>
+            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize: '56px', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{M}</span>
+            <span className="font-light text-stone-300 mb-1 ml-1" style={{ fontSize: '20px', fontFamily: 'Georgia, serif' }}>{S}</span>
+          </div>
+
+          {/* 打刻情報 */}
+          {clockInTime && (
+            <div className="flex justify-center gap-6 mt-3 text-xs text-stone-400">
+              <span>出勤 {clockInTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
+              {clockOutTime && <span>退勤 {clockOutTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>}
+            </div>
+          )}
+
+          {/* 勤務中の経過時間 */}
+          {clockStatus === 'clocked_in' && (
+            <div className="mt-3">
+              <p className="text-xs text-stone-400 mb-0.5">勤務時間</p>
+              <p className="text-2xl font-light text-teal-600 tabular-nums" style={{ fontFamily: 'Georgia, serif' }}>
+                {String(workedH).padStart(2,'0')}:{String(workedM).padStart(2,'0')}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* 打刻ボタン */}
+        {clockStatus === 'not_clocked' && (
+          <button onClick={clockIn} disabled={loading}
+            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest text-white mb-4 disabled:opacity-50 transition-all"
+            style={{ backgroundColor: '#1c1917' }}>
+            {loading ? '...' : '出 勤'}
+          </button>
+        )}
+        {clockStatus === 'clocked_in' && (
+          <button onClick={clockOut} disabled={loading}
+            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest border-2 border-stone-300 text-stone-600 mb-4 disabled:opacity-50 transition-all hover:border-stone-500">
+            {loading ? '...' : '退 勤'}
+          </button>
+        )}
+        {clockStatus === 'clocked_out' && (
+          <div className="w-full py-4 rounded-2xl bg-stone-100 text-center text-stone-400 text-sm mb-4">
+            本日の打刻は完了しています
           </div>
         )}
 
+        {/* 今週の実績 */}
         {weekStats && (
           <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
             <p className="text-xs text-stone-400 mb-3">📊 今週の実績</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center">
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div>
                 <p className="text-2xl font-medium text-stone-800">{weekStats.hours}h</p>
                 <p className="text-xs text-stone-400 mt-1">勤務時間</p>
               </div>
-              <div className="text-center">
+              <div>
                 <p className="text-2xl font-medium text-teal-600">¥{weekStats.pay.toLocaleString()}</p>
                 <p className="text-xs text-stone-400 mt-1">見積もり報酬</p>
               </div>
@@ -189,14 +256,14 @@ export default function HomePage() {
           </button>
           <button onClick={() => router.push('/staff/settings')}
             className="flex-1 py-3 bg-white rounded-2xl shadow-sm text-sm text-stone-600 font-medium">
-            ⚙️ 設定
+            🔐 PIN変更
           </button>
         </div>
       </main>
     )
   }
 
-  // PIN入力画面
+  // PIN入力
   if (step === 'pin' && selected) return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-6" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="text-center">
@@ -217,39 +284,17 @@ export default function HomePage() {
             if (n === '⌫') setPin(p => p.slice(0,-1))
             else if (n !== '') handlePinInput(n)
           }} className={`py-4 rounded-2xl text-xl font-medium transition-all ${
-            n === '' ? '' : 'bg-white text-stone-700 shadow-sm hover:shadow-md active:scale-95'
+            n === '' ? '' : 'bg-white text-stone-700 shadow-sm active:scale-95'
           }`}>{n}</button>
         ))}
       </div>
-      <button onClick={() => { setStep('select'); setSelected(null) }}
-        className="text-stone-400 text-xs">キャンセル</button>
+      <button onClick={() => { setStep('select'); setSelected(null) }} className="text-stone-400 text-xs">
+        キャンセル
+      </button>
     </main>
   )
 
-  // 出退勤ボタン画面
-  if (step === 'clock' && selected) return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-6" style={{ backgroundColor: '#F5F0E8' }}>
-      <div className="text-center">
-        <p className="text-xs tracking-widest text-stone-400 uppercase mb-1">打刻</p>
-        <p className="text-2xl font-medium text-stone-800">{selected.name}</p>
-        <p className="text-stone-400 text-sm mt-1">{H}:{M}</p>
-      </div>
-      <div className="flex flex-col gap-3 w-full max-w-xs">
-        <button onClick={() => handleClock('in')} disabled={loading}
-          className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest text-white disabled:opacity-50"
-          style={{ backgroundColor: '#1c1917' }}>
-          出 勤
-        </button>
-        <button onClick={() => handleClock('out')} disabled={loading}
-          className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest border-2 border-stone-300 text-stone-600 disabled:opacity-50">
-          退 勤
-        </button>
-        <button onClick={() => setStep('select')} className="text-stone-400 text-xs text-center mt-1">キャンセル</button>
-      </div>
-    </main>
-  )
-
-  // スタッフ選択画面
+  // スタッフ選択
   return (
     <main className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="flex flex-col items-center pt-10 pb-6 px-6">
