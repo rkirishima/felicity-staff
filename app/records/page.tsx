@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 export default function RecordsPage() {
   const [temps, setTemps] = useState<any[]>([])
   const [cleanings, setCleanings] = useState<any[]>([])
-  const [month, setMonth] = useState(new Date().toISOString().slice(0,7))
+  const [month, setMonth] = useState(() => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,7) })
   const [tab, setTab] = useState<'temp' | 'cleaning'>('temp')
   const router = useRouter()
   const supabase = createClient()
