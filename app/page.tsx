@@ -347,8 +347,9 @@ export default function HomePage() {
           }`}>{n}</button>
         ))}
       </div>
-      <button onClick={() => { setStep('select'); setSelected(null) }} className="text-stone-400 text-xs">
-        キャンセル
+      <button onClick={() => { setStep('select'); setSelected(null); setPin('') }}
+        className="flex items-center gap-1 text-stone-400 text-sm hover:text-stone-600 px-4 py-2 bg-white rounded-xl shadow-sm">
+        ← ホームに戻る
       </button>
     </main>
   )
