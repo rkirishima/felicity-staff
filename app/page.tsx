@@ -35,14 +35,14 @@ export default function HomePage() {
       .then(({ data }) => setStaffList(data ?? []))
   }, [])
 
-  function handleSelect(s) {
+  function handleSelect(s: any) {
     if (s.role === 'admin') { router.push('/admin'); return }
     setSelected(selected?.id === s.id ? null : s)
     setDone(null)
     setShowCheckPrompt(null)
   }
 
-  async function handleClock(type) {
+  async function handleClock(type: string) {
     if (!selected) return
     setLoading(true)
     const sb = getSupabase()
