@@ -80,6 +80,11 @@ export default function AdminPage() {
           <div className="text-2xl mb-2">💴</div>
           <div className="text-sm font-medium text-stone-700">シフト一括入力</div>
         </button>
+        <button onClick={() => router.push('/admin/live')}
+          className="bg-teal-50 hover:bg-teal-100 rounded-2xl p-6 text-center transition-all shadow-sm border border-teal-200 col-span-2">
+          <div className="text-2xl mb-2">👥</div>
+          <div className="text-sm font-medium text-teal-700">在籍状況（リアルタイム）</div>
+        </button>
       </div>
       <button onClick={() => router.push('/')} className="text-stone-400 text-xs hover:text-stone-600">← ホームに戻る</button>
     </main>
