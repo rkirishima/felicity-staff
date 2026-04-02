@@ -150,7 +150,7 @@ export default function SchedulePage() {
           return (
             <button key={i} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
               className={`relative rounded-xl p-1 text-center transition-all min-h-[52px] ${
-                isSelected ? 'ring-2 ring-teal-500 bg-teal-50' :
+                isSelected ? 'ring-2 ring-teal-500 bg-teal-100' :
                 holiday ? 'bg-rose-100 hover:bg-rose-200' :
                 foodtruck ? 'bg-amber-100 hover:bg-amber-200' :
                 weekend ? 'bg-white hover:bg-stone-50 border border-stone-200' :
