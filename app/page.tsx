@@ -292,9 +292,16 @@ export default function HomePage() {
             {loading ? '...' : '退 勤'}
           </button>
         )}
-        {clockStatus === 'clocked_out' && (
-          <div className="w-full py-4 rounded-2xl bg-stone-100 text-center text-stone-400 text-sm mb-4">
-            本日の打刻は完了しています
+        {clockStatus === 'clocked_out' && clockInTime && clockOutTime && (
+          <div className="w-full py-4 rounded-2xl bg-teal-50 border-2 border-teal-300 text-center mb-4">
+            <p className="text-3xl mb-1">✅</p>
+            <p className="text-teal-700 font-bold text-lg">退勤完了！</p>
+            <p className="text-teal-600 text-sm mt-1">
+              {clockInTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+              〜
+              {clockOutTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+            <p className="text-xs text-teal-500 mt-1">お疲れ様でした 🙌</p>
           </div>
         )}
 
