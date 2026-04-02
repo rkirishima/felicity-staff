@@ -258,7 +258,7 @@ export default function HomePage() {
               <div className="flex gap-1 bg-stone-100 rounded-lg p-0.5">
                 {(['week', 'month'] as const).map(p => (
                   <button key={p} onClick={() => { setStatsPeriod(p); loadWeekStats(selected, p) }}
-                    className={\`px-3 py-1 rounded-md text-xs font-medium transition-all \${statsPeriod === p ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-400'}\`}>
+                    className={'px-3 py-1 rounded-md text-xs font-medium transition-all ' + (statsPeriod === p ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-400')}>
                     {p === 'week' ? '今週' : '今月'}
                   </button>
                 ))}
