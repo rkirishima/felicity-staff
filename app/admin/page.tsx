@@ -77,8 +77,13 @@ export default function AdminPage() {
         </button>
         <button onClick={() => router.push('/admin/shifts')}
           className="bg-white hover:bg-stone-50 rounded-2xl p-6 text-center transition-all shadow-sm">
-          <div className="text-2xl mb-2">💴</div>
+          <div className="text-2xl mb-2">📝</div>
           <div className="text-sm font-medium text-stone-700">シフト一括入力</div>
+        </button>
+        <button onClick={() => router.push('/admin/payroll')}
+          className="bg-white hover:bg-stone-50 rounded-2xl p-6 text-center transition-all shadow-sm">
+          <div className="text-2xl mb-2">💴</div>
+          <div className="text-sm font-medium text-stone-700">給与管理</div>
         </button>
         <button onClick={() => router.push('/admin/live')}
           className="bg-teal-50 hover:bg-teal-100 rounded-2xl p-6 text-center transition-all shadow-sm border border-teal-200 col-span-2">
