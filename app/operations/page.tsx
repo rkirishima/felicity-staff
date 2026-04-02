@@ -42,7 +42,7 @@ const CLOSING = [
   '大きいボウルで布巾をゆすぐ・漂白剤にしっかりつける',
   '入り口鍵かける・キッチンのシャッター2つおろす',
   '1階のエアコン・お湯の電源を消す',
-  'キッチンのエアコンは除湿にしてつけておく（コーヒー豆管理）',
+  'キッチンのエアコンはオフ。ガレージのエアコンは除湿にしてつけておく（コーヒー豆管理）',
   '電気を消し・倉庫と表の鍵を閉める',
 ]
 
@@ -132,7 +132,7 @@ function OperationsContent() {
                 <span className="text-sm text-stone-500 w-32">{label}</span>
                 <input type="number" value={val} onChange={e => set(e.target.value)}
                   placeholder="0.0" step="0.1"
-                  className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-right" />
+                  className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-right text-stone-800" />
                 <span className="text-stone-400 text-sm">°C</span>
               </div>
             ))}
