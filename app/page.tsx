@@ -28,6 +28,7 @@ export default function HomePage() {
   const [clockInTime, setClockInTime] = useState<Date | null>(null)
   const [clockOutTime, setClockOutTime] = useState<Date | null>(null)
   const [weekStats, setWeekStats] = useState<{ hours: number; pay: number } | null>(null)
+  const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week')
   const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
   const router = useRouter()
 
@@ -83,13 +84,20 @@ export default function HomePage() {
     setStep('main')
   }
 
-  async function loadWeekStats(staff: Staff) {
-    const monday = new Date()
-    monday.setDate(monday.getDate() - monday.getDay() + 1)
-    monday.setHours(0,0,0,0)
+  async function loadWeekStats(staff: Staff, period: 'week' | 'month' = 'week') {
+    let from: Date
+    if (period === 'week') {
+      from = new Date()
+      from.setDate(from.getDate() - from.getDay() + 1)
+      from.setHours(0,0,0,0)
+    } else {
+      from = new Date()
+      from.setDate(1)
+      from.setHours(0,0,0,0)
+    }
     const { data } = await getSb().from('timeclock')
       .select('clock_in, clock_out').eq('staff_id', staff.id)
-      .gte('clock_in', monday.toISOString())
+      .gte('clock_in', from.toISOString())
     const hours = (data ?? []).reduce((sum, r) => {
       if (!r.clock_out) return sum
       return sum + (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
@@ -243,9 +251,19 @@ export default function HomePage() {
         )}
 
         {/* 今週の実績 */}
-        {weekStats && (
+        {weekStats && selected && (
           <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
-            <p className="text-xs text-stone-400 mb-3">📊 今週の実績</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-stone-400">📊 実績</p>
+              <div className="flex gap-1 bg-stone-100 rounded-lg p-0.5">
+                {(['week', 'month'] as const).map(p => (
+                  <button key={p} onClick={() => { setStatsPeriod(p); loadWeekStats(selected, p) }}
+                    className={\`px-3 py-1 rounded-md text-xs font-medium transition-all \${statsPeriod === p ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-400'}\`}>
+                    {p === 'week' ? '今週' : '今月'}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
                 <p className="text-2xl font-medium text-stone-800">{weekStats.hours}h</p>
