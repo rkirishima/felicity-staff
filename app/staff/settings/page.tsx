@@ -5,13 +5,30 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
+function PinInput({ label, value, onChange, error }: { label: string; value: string; onChange: (v: string) => void; error?: boolean }) {
+  return (
+    <div className="mb-4">
+      <p className="text-xs text-stone-400 mb-2">{label}</p>
+      <div className="flex gap-3 justify-center mb-3">
+        {[0,1,2,3].map(i => (
+          <div key={i} className={`w-4 h-4 rounded-full transition-all ${
+            value.length > i ? (error ? 'bg-red-400' : 'bg-stone-800') : 'bg-stone-300'
+          }`} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function SettingsContent() {
   const router = useRouter()
   const [staffList, setStaffList] = useState<any[]>([])
   const [staffId, setStaffId] = useState('')
+  const [step, setStep] = useState<'select' | 'current' | 'new' | 'confirm'>('select')
   const [currentPin, setCurrentPin] = useState('')
   const [newPin, setNewPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
+  const [error, setError] = useState(false)
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
 
@@ -21,53 +38,91 @@ function SettingsContent() {
       .then(({ data }) => setStaffList(data ?? []))
   }, [])
 
-  async function changePin() {
-    if (!staffId) { toast.error('スタッフを選択してください'); return }
-    if (newPin.length !== 4) { toast.error('PINは4桁で入力してください'); return }
-    if (newPin !== confirmPin) { toast.error('PINが一致しません'); return }
-    setLoading(true)
+  function handleKey(n: string, current: string, setter: (v: string) => void, onComplete: (v: string) => void) {
+    setError(false)
+    if (n === '⌫') { setter(current.slice(0,-1)); return }
+    const next = current + n
+    setter(next)
+    if (next.length === 4) onComplete(next)
+  }
+
+  async function verifyCurrentPin(pin: string) {
     const { data } = await supabase.from('staff').select('pin').eq('id', staffId).single()
-    if (currentPin !== (data?.pin || '1234')) {
-      toast.error('現在のPINが違います'); setLoading(false); return
+    if (pin !== (data?.pin || '1234')) {
+      setError(true)
+      setTimeout(() => { setCurrentPin(''); setError(false) }, 600)
+      toast.error('現在のPINが違います')
+    } else {
+      setStep('new')
     }
+  }
+
+  function verifyNewPin(pin: string) {
+    setStep('confirm')
+  }
+
+  async function verifyConfirmPin(pin: string) {
+    if (pin !== newPin) {
+      setError(true)
+      setTimeout(() => { setConfirmPin(''); setError(false) }, 600)
+      toast.error('PINが一致しません')
+      return
+    }
+    setLoading(true)
     await supabase.from('staff').update({ pin: newPin }).eq('id', staffId)
     toast.success('PINを変更しました！')
-    setCurrentPin(''); setNewPin(''); setConfirmPin('')
     setLoading(false)
+    router.back()
+  }
+
+  const activePin = step === 'current' ? currentPin : step === 'new' ? newPin : confirmPin
+  const activeSetter = step === 'current' ? setCurrentPin : step === 'new' ? setNewPin : setConfirmPin
+  const onComplete = step === 'current' ? verifyCurrentPin : step === 'new' ? verifyNewPin : verifyConfirmPin
+
+  const stepLabel = {
+    current: '現在のPIN',
+    new: '新しいPIN（4桁）',
+    confirm: '新しいPINを確認'
   }
 
   return (
-    <main className="min-h-screen p-4 max-w-lg mx-auto pb-24" style={{ backgroundColor: '#F5F0E8' }}>
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-stone-400">←</button>
-        <h1 className="text-lg font-bold tracking-widest text-stone-800">PIN変更</h1>
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-6" style={{ backgroundColor: '#F5F0E8' }}>
+      <div className="text-center">
+        <h1 className="text-xl font-bold tracking-widest text-stone-800">PIN変更</h1>
       </div>
-      <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
-        <div>
-          <p className="text-xs text-stone-400 mb-1">スタッフ</p>
-          <select value={staffId} onChange={e => setStaffId(e.target.value)}
-            className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white">
-            <option value="">選択してください</option>
-            {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+
+      {step === 'select' ? (
+        <div className="w-full max-w-xs space-y-3">
+          <p className="text-xs text-stone-400 text-center">スタッフを選んでください</p>
+          {staffList.map(s => (
+            <button key={s.id} onClick={() => { setStaffId(s.id); setStep('current') }}
+              className="w-full py-3 bg-white rounded-2xl shadow-sm text-stone-700 font-medium">
+              {s.name}
+            </button>
+          ))}
+          <button onClick={() => router.back()} className="w-full text-stone-400 text-xs text-center mt-2">
+            ← 戻る
+          </button>
         </div>
-        {[
-          { label: '現在のPIN', val: currentPin, set: setCurrentPin, ph: '現在の4桁PIN' },
-          { label: '新しいPIN', val: newPin, set: setNewPin, ph: '新しい4桁PIN' },
-          { label: '確認', val: confirmPin, set: setConfirmPin, ph: 'もう一度入力' },
-        ].map(({ label, val, set, ph }) => (
-          <div key={label}>
-            <p className="text-xs text-stone-400 mb-1">{label}</p>
-            <input type="password" inputMode="numeric" maxLength={4} value={val}
-              onChange={e => set(e.target.value)} placeholder={ph}
-              className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white" />
+      ) : (
+        <>
+          <PinInput label={stepLabel[step]} value={activePin} error={error} onChange={() => {}} />
+
+          <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
+            {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((n, i) => (
+              <button key={i}
+                onClick={() => n !== '' && handleKey(n, activePin, activeSetter, onComplete)}
+                disabled={loading}
+                className={`py-4 rounded-2xl text-xl font-medium transition-all ${
+                  n === '' ? '' : 'bg-white text-stone-700 shadow-sm active:scale-95'
+                }`}>{n}</button>
+            ))}
           </div>
-        ))}
-        <button onClick={changePin} disabled={loading}
-          className="w-full py-3 bg-stone-800 text-white rounded-xl font-medium disabled:opacity-50">
-          {loading ? '変更中...' : 'PINを変更する'}
-        </button>
-      </div>
+
+          <button onClick={() => { setStep('select'); setCurrentPin(''); setNewPin(''); setConfirmPin('') }}
+            className="text-stone-400 text-xs">← 戻る</button>
+        </>
+      )}
     </main>
   )
 }
