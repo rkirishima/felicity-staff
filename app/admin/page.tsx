@@ -70,11 +70,7 @@ export default function AdminPage() {
           <div className="text-2xl mb-2">📅</div>
           <div className="text-sm font-medium text-stone-700">シフト管理</div>
         </button>
-        <button onClick={() => router.push('/hygiene')}
-          className="bg-white hover:bg-stone-50 rounded-2xl p-6 text-center transition-all shadow-sm">
-          <div className="text-2xl mb-2">✅</div>
-          <div className="text-sm font-medium text-stone-700">衛生チェック</div>
-        </button>
+
         <button onClick={() => router.push('/admin/shifts')}
           className="bg-white hover:bg-stone-50 rounded-2xl p-6 text-center transition-all shadow-sm">
           <div className="text-2xl mb-2">📝</div>
