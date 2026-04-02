@@ -100,6 +100,17 @@ export default function HomePage() {
   async function clockIn() {
     if (!selected) return
     setLoading(true)
+    // 二重出勤防止チェック
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: existing } = await getSb().from('timeclock')
+      .select('id').eq('staff_id', selected.id)
+      .gte('clock_in', today + 'T00:00:00').is('clock_out', null).maybeSingle()
+    if (existing) {
+      setClockInTime(new Date())
+      setClockStatus('clocked_in')
+      setLoading(false)
+      return
+    }
     await getSb().from('timeclock').insert({ staff_id: selected.id, clock_in: new Date().toISOString() })
     setClockInTime(new Date())
     setClockStatus('clocked_in')
