@@ -123,10 +123,7 @@ export default function SchedulePage() {
         <h2 className="text-lg font-bold tracking-widest text-teal-600">{year}年{month + 1}月</h2>
         <div className="flex items-center gap-2">
           <button onClick={() => setViewMonth(new Date(year, month + 1))} className="text-stone-400 hover:text-stone-700 px-3 py-1">→</button>
-          <button onClick={() => setEditMode(!editMode)}
-            className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${editMode ? 'bg-red-500 text-white' : 'bg-stone-200 text-stone-600'}`}>
-            {editMode ? '✏️ 編集中' : '編集'}
-          </button>
+
         </div>
       </div>
       <div className="flex gap-3 mb-3 text-xs text-stone-400 flex-wrap">
@@ -200,7 +197,7 @@ export default function SchedulePage() {
                   <span className="text-stone-700">{(s.staff as any)?.name}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-stone-400">{s.start_time.slice(0,5)}〜{s.end_time.slice(0,5)}</span>
-                    {(editMode || s.staff_id === selectedStaff) && (
+                    {s.staff_id === selectedStaff && (
                       <button onClick={() => deleteShift(s.id)}
                         className="w-6 h-6 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center font-bold transition-all">×</button>
                     )}
