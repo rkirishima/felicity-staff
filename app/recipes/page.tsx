@@ -1,78 +1,114 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 
-type Manual = { id: string; category: string; title: string; content: string }
+const FREQ_LABEL: Record<string, string> = {
+  daily: '毎日',
+  weekly: '毎週',
+  monthly: '毎月',
+}
 
-const CATEGORIES = [
-  { key: 'drink_recipe', label: 'ドリンク', icon: '☕' },
-  { key: 'food_recipe', label: 'フード', icon: '🍳' },
-  { key: 'opening_ops', label: 'オープン', icon: '🌅' },
-  { key: 'closing_ops', label: 'クローズ', icon: '🌙' },
-]
+const FREQ_COLOR: Record<string, string> = {
+  daily: 'bg-teal-100 text-teal-700',
+  weekly: 'bg-amber-100 text-amber-700',
+  monthly: 'bg-purple-100 text-purple-700',
+}
+
+const CAT_LABEL: Record<string, string> = {
+  cleaning: '🧹 清掃',
+  machine: '⚙️ 機器操作',
+  food: '🍽️ フード',
+  drink: '☕ ドリンク',
+  other: '📋 その他',
+}
 
 export default function RecipesPage() {
-  const [category, setCategory] = useState('drink_recipe')
-  const [manuals, setManuals] = useState<Manual[]>([])
-  const [selected, setSelected] = useState<Manual | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  function getSupabase() {
-    return createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-  }
+  const [manuals, setManuals] = useState<any[]>([])
+  const [selectedCat, setSelectedCat] = useState<string>('all')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const supabase = createClient()
 
   useEffect(() => {
-    setLoading(true)
-    const sb = getSupabase()
-    sb.from('manuals').select('*').eq('category', category).eq('active', true).order('sort_order')
-      .then(({ data }) => { setManuals(data ?? []); setLoading(false); setSelected(null) })
-  }, [category])
+    supabase.from('manuals').select('*').order('category').order('title')
+      .then(({ data }) => setManuals(data ?? []))
+  }, [])
 
-  if (selected) return (
-    <main className="min-h-screen bg-zinc-950 p-4 max-w-lg mx-auto">
-      <button onClick={() => setSelected(null)} className="text-zinc-500 text-sm mb-4 hover:text-zinc-300">← 戻る</button>
-      <h2 className="text-xl font-bold text-teal-400 mb-4">{selected.title}</h2>
-      <div className="bg-zinc-900 rounded-2xl p-4 text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-        {selected.content}
-      </div>
-    </main>
-  )
+  const categories = ['all', ...Array.from(new Set(manuals.map(m => m.category)))]
+  const filtered = selectedCat === 'all' ? manuals : manuals.filter(m => m.category === selectedCat)
+
+  function getYoutubeId(url: string) {
+    const match = url?.match(/(?:v=|youtu\.be\/)([^&\s]+)/)
+    return match?.[1]
+  }
 
   return (
-    <main className="min-h-screen bg-zinc-950 p-4 max-w-lg mx-auto">
-      <h1 className="text-xl font-bold tracking-widest text-teal-400 mb-4">マニュアル・レシピ</h1>
+    <main className="min-h-screen p-4 max-w-lg mx-auto pb-24" style={{ backgroundColor: '#F5F0E8' }}>
+      <h1 className="text-lg font-bold tracking-widest text-stone-800 mb-4">マニュアル</h1>
 
-      <div className="grid grid-cols-4 gap-2 mb-6">
-        {CATEGORIES.map(c => (
-          <button key={c.key} onClick={() => setCategory(c.key)}
-            className={`flex flex-col items-center py-3 rounded-xl text-xs transition-all ${category === c.key ? 'bg-teal-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
-            <span className="text-xl mb-1">{c.icon}</span>
-            {c.label}
+      {/* カテゴリフィルター */}
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
+        {categories.map(cat => (
+          <button key={cat} onClick={() => setSelectedCat(cat)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+              selectedCat === cat ? 'bg-stone-800 text-white' : 'bg-white text-stone-500 shadow-sm'
+            }`}>
+            {cat === 'all' ? '📋 すべて' : CAT_LABEL[cat] || cat}
           </button>
         ))}
       </div>
 
-      {loading ? (
-        <p className="text-zinc-600 text-center">読み込み中...</p>
-      ) : manuals.length === 0 ? (
-        <div className="text-center text-zinc-600 py-12">
-          <p className="text-4xl mb-3">📝</p>
-          <p className="text-sm">まだコンテンツがありません</p>
+      {manuals.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center text-stone-400 shadow-sm">
+          <p className="text-2xl mb-2">📖</p>
+          <p className="text-sm">マニュアルはまだありません</p>
           <p className="text-xs mt-1">管理画面から追加できます</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {manuals.map(m => (
-            <button key={m.id} onClick={() => setSelected(m)}
-              className="w-full flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 rounded-xl px-4 py-3 text-left transition-all">
-              <span className="text-sm text-zinc-200">{m.title}</span>
-              <span className="text-zinc-600">→</span>
-            </button>
-          ))}
+          {filtered.map(m => {
+            const ytId = getYoutubeId(m.youtube_url || '')
+            const isOpen = expanded === m.id
+            return (
+              <div key={m.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                <button onClick={() => setExpanded(isOpen ? null : m.id)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-left">
+                  <div>
+                    <p className="font-medium text-stone-800 text-sm">{m.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {m.frequency && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${FREQ_COLOR[m.frequency] || 'bg-stone-100 text-stone-500'}`}>
+                          {FREQ_LABEL[m.frequency] || m.frequency}
+                        </span>
+                      )}
+                      <span className="text-xs text-stone-400">{CAT_LABEL[m.category] || m.category}</span>
+                    </div>
+                  </div>
+                  <span className="text-stone-400 text-lg">{isOpen ? '▲' : '▼'}</span>
+                </button>
+
+                {isOpen && (
+                  <div className="px-4 pb-4 space-y-3">
+                    {m.content && (
+                      <p className="text-sm text-stone-600 leading-relaxed">{m.content}</p>
+                    )}
+                    {ytId && (
+                      <div>
+                        <a href={m.youtube_url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-600 font-medium text-sm hover:bg-red-100 transition-all">
+                          <span className="text-xl">▶️</span>
+                          YouTubeで見る
+                        </a>
+                      </div>
+                    )}
+                    {!ytId && !m.content && (
+                      <p className="text-xs text-stone-400">詳細情報が登録されていません</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </main>
