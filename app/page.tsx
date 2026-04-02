@@ -21,6 +21,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false)
   const [now, setNow] = useState(new Date())
   const [done, setDone] = useState(null)
+  const [showCheckPrompt, setShowCheckPrompt] = useState(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function HomePage() {
     if (s.role === 'admin') { router.push('/admin'); return }
     setSelected(selected?.id === s.id ? null : s)
     setDone(null)
+    setShowCheckPrompt(null)
   }
 
   async function handleClock(type) {
@@ -45,24 +47,58 @@ export default function HomePage() {
     setLoading(true)
     const sb = getSupabase()
     const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+
     if (type === 'in') {
       await sb.from('timeclock').insert({ staff_id: selected.id, clock_in: new Date().toISOString() })
       setDone({ type: 'in', time: timeStr, name: selected.name.split(' ')[0] })
       toast.success(selected.name.split(' ')[0] + 'さん、おはようございます')
+      // 今日の最初の出勤者か確認
+      const today = new Date().toISOString().slice(0, 10)
+      const { data: todayRecords } = await sb.from('timeclock')
+        .select('id').gte('clock_in', today + 'T00:00:00').lte('clock_in', today + 'T23:59:59')
+      if (todayRecords && todayRecords.length <= 1) {
+        setTimeout(() => setShowCheckPrompt('opening'), 1500)
+      }
     } else {
       await sb.from('timeclock').update({ clock_out: new Date().toISOString() })
         .eq('staff_id', selected.id).is('clock_out', null)
       setDone({ type: 'out', time: timeStr, name: selected.name.split(' ')[0] })
       toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした')
+      setTimeout(() => setShowCheckPrompt('closing'), 1500)
     }
     setLoading(false)
-    setTimeout(() => { setSelected(null); setDone(null) }, 3000)
   }
 
   const H = String(now.getHours()).padStart(2,'0')
   const M = String(now.getMinutes()).padStart(2,'0')
   const S = String(now.getSeconds()).padStart(2,'0')
   const dateStr = now.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' })
+
+  // チェックリストに進むか確認
+  if (showCheckPrompt) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-6" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="text-4xl">{showCheckPrompt === 'opening' ? '🌅' : '🌙'}</div>
+        <div className="text-center">
+          <p className="text-xl font-medium text-stone-800 mb-1">
+            {showCheckPrompt === 'opening' ? 'オープン作業' : 'クローズ作業'}
+          </p>
+          <p className="text-stone-400 text-sm">チェックリストに進みますか？</p>
+        </div>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button onClick={() => router.push('/operations?type=' + showCheckPrompt)}
+            className="w-full py-4 rounded-2xl text-lg font-medium tracking-widest text-white transition-all"
+            style={{ backgroundColor: '#1c1917' }}>
+            チェックリストへ
+          </button>
+          <button onClick={() => { setSelected(null); setDone(null); setShowCheckPrompt(null) }}
+            className="w-full py-4 rounded-2xl text-sm border-2 border-stone-300 text-stone-500">
+            あとで
+          </button>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
@@ -89,9 +125,7 @@ export default function HomePage() {
             <div className="grid grid-cols-3 gap-2">
               {staffList.map(s => (
                 <button key={s.id} onClick={() => handleSelect(s)}
-                  className={`py-3 px-2 rounded-2xl text-sm font-medium transition-all shadow-sm ${
-                    s.role === 'admin' ? 'bg-white border-2 border-teal-300 text-teal-700' : 'bg-white text-stone-700 hover:shadow-md'
-                  }`}>
+                  className={"py-3 px-2 rounded-2xl text-sm font-medium transition-all shadow-sm " + (s.role === 'admin' ? 'bg-white border-2 border-teal-300 text-teal-700' : 'bg-white text-stone-700 hover:shadow-md')}>
                   <div className="text-xs font-normal text-stone-400">{s.name.split(' ')[0]}</div>
                   <div>{s.name.split(' ')[1] || ''}</div>
                 </button>
