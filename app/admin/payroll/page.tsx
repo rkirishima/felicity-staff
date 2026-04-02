@@ -21,7 +21,7 @@ export default function PayrollPage() {
   async function loadStaff() {
     const { data } = await supabase.from('staff')
       .select('id, name, hourly_rate, employment_type, skill')
-      .eq('active', true).not('role', 'eq', 'accountant').order('name')
+      .eq('active', true).not('role', 'in', '("accountant","admin")').order('name')
     setStaff(data ?? [])
   }
 
@@ -127,7 +127,7 @@ export default function PayrollPage() {
                   <p className="flex-1 font-medium text-stone-700">{s.name}</p>
                   <span className="text-stone-400 text-sm">¥</span>
                   <input type="number" value={editRate} onChange={e => setEditRate(e.target.value)}
-                    className="w-24 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right" />
+                    className="w-24 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right text-stone-800 bg-white" />
                   <button onClick={() => saveRate(s.id)}
                     className="px-3 py-1.5 bg-stone-800 text-white rounded-lg text-xs">保存</button>
                   <button onClick={() => setEditId(null)}
