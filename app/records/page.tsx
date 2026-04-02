@@ -67,15 +67,15 @@ export default function RecordsPage() {
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-xs text-stone-400">冷蔵庫</p>
-                  <p className="font-medium text-stone-800">{t.fridge_temp}°C</p>
+                  <p className="font-medium text-stone-800">{Math.round(t.fridge_temp)}°C</p>
                 </div>
                 <div>
                   <p className="text-xs text-stone-400">コールドテーブル</p>
-                  <p className="font-medium text-stone-800">{t.cold_table_temp}°C</p>
+                  <p className="font-medium text-stone-800">{Math.round(t.cold_table_temp)}°C</p>
                 </div>
                 <div>
                   <p className="text-xs text-stone-400">冷凍庫</p>
-                  <p className="font-medium text-stone-800">{t.freezer_temp}°C</p>
+                  <p className="font-medium text-stone-800">{Math.round(t.freezer_temp)}°C</p>
                 </div>
               </div>
             </div>
