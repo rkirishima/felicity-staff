@@ -16,12 +16,12 @@ function getSupabase() {
 }
 
 export default function HomePage() {
-  const [staffList, setStaffList] = useState([])
-  const [selected, setSelected] = useState(null)
+  const [staffList, setStaffList] = useState<any[]>([])
+  const [selected, setSelected] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [now, setNow] = useState(new Date())
-  const [done, setDone] = useState(null)
-  const [showCheckPrompt, setShowCheckPrompt] = useState(null)
+  const [done, setDone] = useState<any>(null)
+  const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
