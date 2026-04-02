@@ -124,18 +124,22 @@ function OperationsContent() {
           <p className="text-sm font-medium text-stone-700 mb-3">🌡️ 温度記録（必須）</p>
           <div className="space-y-2">
             {[
-              { label: '冷蔵庫', val: fridgeTemp, set: setFridgeTemp },
-              { label: 'コールドテーブル', val: coldTableTemp, set: setColdTableTemp },
-              { label: '冷凍庫', val: freezerTemp, set: setFreezerTemp },
-            ].map(({ label, val, set }) => (
-              <div key={label} className="flex items-center gap-3">
-                <span className="text-sm text-stone-500 w-32">{label}</span>
-                <input type="number" value={val} onChange={e => set(e.target.value)}
-                  placeholder="0.0" step="0.1"
-                  className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-right text-stone-800" />
-                <span className="text-stone-400 text-sm">°C</span>
-              </div>
-            ))}
+              { label: '冷蔵庫', val: fridgeTemp, set: setFridgeTemp, min: 0, max: 15 },
+              { label: 'コールドテーブル', val: coldTableTemp, set: setColdTableTemp, min: 0, max: 15 },
+              { label: '冷凍庫', val: freezerTemp, set: setFreezerTemp, min: -25, max: -10 },
+            ].map(({ label, val, set, min, max }) => {
+              const opts = Array.from({ length: max - min + 1 }, (_, i) => min + i)
+              return (
+                <div key={label} className="flex items-center gap-3">
+                  <span className="text-sm text-stone-500 w-32">{label}</span>
+                  <select value={val} onChange={e => set(e.target.value)}
+                    className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-stone-800">
+                    <option value="">選択</option>
+                    {opts.map(n => <option key={n} value={String(n)}>{n}°C</option>)}
+                  </select>
+                </div>
+              )
+            })}
           </div>
           <button onClick={saveTemps} disabled={tempSaved}
             className={`w-full mt-3 py-2.5 rounded-xl text-sm font-medium transition-all ${tempSaved ? 'bg-teal-100 text-teal-600' : 'bg-stone-800 text-white'}`}>
