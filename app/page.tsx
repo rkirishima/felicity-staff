@@ -62,12 +62,13 @@ export default function HomePage() {
     if (inputPin !== (data?.pin || '1234')) {
       setPinError(true); setTimeout(() => setPin(''), 600); return
     }
-    // 今日の打刻状況を確認
-    const today = new Date().toISOString().slice(0, 10)
+    // 今日の打刻状況を確認（JST基準）
+    const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    const today = nowJst.toISOString().slice(0, 10)
     const { data: records } = await getSb().from('timeclock')
       .select('id, clock_in, clock_out')
       .eq('staff_id', selected.id)
-      .gte('clock_in', today + 'T00:00:00')
+      .gte('clock_in', today + 'T00:00:00+09:00')
       .order('clock_in', { ascending: false })
       .limit(1)
     const latest = records?.[0]
@@ -150,10 +151,11 @@ export default function HomePage() {
       return
     }
     // 二重出勤防止チェック
-    const today = new Date().toISOString().slice(0, 10)
+    const nowJst2 = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    const today = nowJst2.toISOString().slice(0, 10)
     const { data: existing } = await getSb().from('timeclock')
       .select('id').eq('staff_id', selected.id)
-      .gte('clock_in', today + 'T00:00:00').is('clock_out', null).maybeSingle()
+      .gte('clock_in', today + 'T00:00:00+09:00').is('clock_out', null).maybeSingle()
     if (existing) {
       setClockInTime(new Date())
       setClockStatus('clocked_in')
