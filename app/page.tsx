@@ -293,15 +293,19 @@ export default function HomePage() {
           </button>
         )}
         {clockStatus === 'clocked_out' && clockInTime && clockOutTime && (
-          <div className="w-full py-4 rounded-2xl bg-teal-50 border-2 border-teal-300 text-center mb-4">
-            <p className="text-3xl mb-1">✅</p>
-            <p className="text-teal-700 font-bold text-lg">退勤完了！</p>
+          <div className="w-full rounded-2xl bg-teal-50 border-2 border-teal-300 text-center mb-4 p-5">
+            <p className="text-4xl mb-2">✅</p>
+            <p className="text-teal-700 font-bold text-xl">退勤完了！</p>
             <p className="text-teal-600 text-sm mt-1">
               {clockInTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
               〜
               {clockOutTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
             </p>
-            <p className="text-xs text-teal-500 mt-1">お疲れ様でした 🙌</p>
+            <p className="text-xs text-teal-500 mt-1 mb-4">お疲れ様でした 🙌</p>
+            <button onClick={reset}
+              className="w-full py-3 bg-stone-800 text-white rounded-xl font-medium text-sm tracking-wider">
+              ← ホームに戻る
+            </button>
           </div>
         )}
 
