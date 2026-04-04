@@ -189,7 +189,9 @@ export default function HomePage() {
     toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした')
     await loadWeekStats(selected)
     setLoading(false)
+    // 5秒後に自動でホームに戻る
     setTimeout(() => setShowCheckPrompt('closing'), 1500)
+    setTimeout(() => reset(), 5000)
   }
 
   function reset() {
