@@ -24,10 +24,12 @@ export default function LivePage() {
   }, [])
 
   async function loadRecords() {
-    const today = new Date().toISOString().slice(0, 10)
+    const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    const today = nowJst.toISOString().slice(0, 10)
     const { data } = await supabase.from('timeclock')
       .select('*, staff(name, skill)')
-      .gte('clock_in', `${today}T00:00:00`)
+      .gte('clock_in', `${today}T00:00:00+09:00`)
+      .lte('clock_in', `${today}T23:59:59+09:00`)
       .order('clock_in')
     setRecords(data ?? [])
   }
