@@ -79,7 +79,7 @@ export default function SchedulePage() {
     const y = viewMonth.getFullYear()
     const m = String(viewMonth.getMonth() + 1).padStart(2, '0')
     const lastDay = new Date(y, viewMonth.getMonth() + 1, 0).getDate()
-    supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status')
+    supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status, staff!shifts_staff_id_fkey(name)')
       .gte('date', y + '-' + m + '-01')
       .lte('date', y + '-' + m + '-' + lastDay)
       .in('status', ['approved', 'pending'])
