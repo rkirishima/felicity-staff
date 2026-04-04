@@ -1,6 +1,6 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -16,6 +16,11 @@ function getSb() {
   )
 }
 
+// JST今日の日付を返す
+function todayJST() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
 export default function HomePage() {
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [selected, setSelected] = useState<Staff | null>(null)
@@ -28,9 +33,10 @@ export default function HomePage() {
   const [clockInTime, setClockInTime] = useState<Date | null>(null)
   const [clockOutTime, setClockOutTime] = useState<Date | null>(null)
   const [weekStats, setWeekStats] = useState<{ hours: number; pay: number } | null>(null)
-  const [clockHistory, setClockHistory] = useState<any[]>([])
   const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week')
+  const [clockHistory, setClockHistory] = useState<any[]>([])
   const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
+  const autoResetRef = useRef<NodeJS.Timeout | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -44,9 +50,38 @@ export default function HomePage() {
       .then(({ data }) => setStaffList((data ?? []) as Staff[]))
   }, [])
 
+  function cancelAutoReset() {
+    if (autoResetRef.current) {
+      clearTimeout(autoResetRef.current)
+      autoResetRef.current = null
+    }
+  }
+
+  function reset() {
+    cancelAutoReset()
+    setSelected(null)
+    setStep('select')
+    setPin('')
+    setPinError(false)
+    setClockStatus('not_clocked')
+    setClockInTime(null)
+    setClockOutTime(null)
+    setWeekStats(null)
+    setClockHistory([])
+    setShowCheckPrompt(null)
+    setStatsPeriod('week')
+  }
+
   function handleSelect(s: Staff) {
+    cancelAutoReset()
     if (s.role === 'admin') { router.push('/admin'); return }
-    setSelected(s); setPin(''); setPinError(false); setStep('pin')
+    setSelected(s)
+    setPin('')
+    setPinError(false)
+    setClockStatus('not_clocked')
+    setClockInTime(null)
+    setClockOutTime(null)
+    setStep('pin')
   }
 
   function handlePinInput(n: string) {
@@ -60,15 +95,17 @@ export default function HomePage() {
     if (!selected) return
     const { data } = await getSb().from('staff').select('pin').eq('id', selected.id).single()
     if (inputPin !== (data?.pin || '1234')) {
-      setPinError(true); setTimeout(() => setPin(''), 600); return
+      setPinError(true)
+      setTimeout(() => setPin(''), 600)
+      return
     }
-    // 今日の打刻状況を確認（JST基準）
-    const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000)
-    const today = nowJst.toISOString().slice(0, 10)
+    // 今日(JST)の打刻状況を確認
+    const today = todayJST()
     const { data: records } = await getSb().from('timeclock')
       .select('id, clock_in, clock_out')
       .eq('staff_id', selected.id)
       .gte('clock_in', today + 'T00:00:00+09:00')
+      .lte('clock_in', today + 'T23:59:59+09:00')
       .order('clock_in', { ascending: false })
       .limit(1)
     const latest = records?.[0]
@@ -82,122 +119,126 @@ export default function HomePage() {
       setClockInTime(new Date(latest.clock_in))
       setClockOutTime(new Date(latest.clock_out))
     }
-    await loadWeekStats(selected)
+    await loadStats(selected, 'week')
     setStep('main')
   }
 
-  async function loadWeekStats(staff: Staff, period: 'week' | 'month' = 'week') {
-    let from: Date
+  async function loadStats(staff: Staff, period: 'week' | 'month') {
+    const from = new Date()
     if (period === 'week') {
-      from = new Date()
       from.setDate(from.getDate() - from.getDay() + 1)
-      from.setHours(0,0,0,0)
     } else {
-      from = new Date()
       from.setDate(1)
-      from.setHours(0,0,0,0)
     }
+    from.setHours(0, 0, 0, 0)
     const { data } = await getSb().from('timeclock')
-      .select('clock_in, clock_out').eq('staff_id', staff.id)
+      .select('clock_in, clock_out')
+      .eq('staff_id', staff.id)
       .gte('clock_in', from.toISOString())
     const hours = (data ?? []).reduce((sum, r) => {
       if (!r.clock_out) return sum
       return sum + (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
     }, 0)
     setWeekStats({ hours: Math.round(hours * 10) / 10, pay: Math.round(hours * (staff.hourly_rate || 1300)) })
-    // 直近の打刻履歴も取得
+    // 打刻履歴
     const { data: hist } = await getSb().from('timeclock')
-      .select('clock_in, clock_out').eq('staff_id', staff.id)
-      .order('clock_in', { ascending: false }).limit(10)
+      .select('clock_in, clock_out')
+      .eq('staff_id', staff.id)
+      .order('clock_in', { ascending: false })
+      .limit(7)
     setClockHistory(hist ?? [])
-  }
-
-
-  // Felicity Cafe座標
-  const CAFE_LAT = 35.267359
-  const CAFE_LNG = 139.610321
-  const CAFE_RADIUS_M = 300 // 半径300m
-
-  function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
-    const R = 6371000
-    const dLat = (lat2 - lat1) * Math.PI / 180
-    const dLng = (lng2 - lng1) * Math.PI / 180
-    const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2) ** 2
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-  }
-
-  async function checkLocation(): Promise<boolean> {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) { resolve(false); return }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const dist = calcDistance(pos.coords.latitude, pos.coords.longitude, CAFE_LAT, CAFE_LNG)
-          resolve(dist <= CAFE_RADIUS_M)
-        },
-        () => resolve(false),
-        { timeout: 8000, maximumAge: 60000 }
-      )
-    })
   }
 
   async function clockIn() {
     if (!selected) return
     setLoading(true)
-    // GPS位置確認
+    // GPS確認
     const nearby = await checkLocation()
     if (!nearby) {
       toast.error('店舗の近くにいる時のみ出勤できます📍')
       setLoading(false)
       return
     }
-    // 二重出勤防止チェック
-    const nowJst2 = new Date(Date.now() + 9 * 60 * 60 * 1000)
-    const today = nowJst2.toISOString().slice(0, 10)
+    // 二重出勤防止
+    const today = todayJST()
     const { data: existing } = await getSb().from('timeclock')
-      .select('id').eq('staff_id', selected.id)
-      .gte('clock_in', today + 'T00:00:00+09:00').is('clock_out', null).maybeSingle()
+      .select('id')
+      .eq('staff_id', selected.id)
+      .gte('clock_in', today + 'T00:00:00+09:00')
+      .lte('clock_in', today + 'T23:59:59+09:00')
+      .is('clock_out', null)
+      .maybeSingle()
     if (existing) {
-      setClockInTime(new Date())
       setClockStatus('clocked_in')
       setLoading(false)
       return
     }
-    await getSb().from('timeclock').insert({ staff_id: selected.id, clock_in: new Date().toISOString() })
+    const { error } = await getSb().from('timeclock').insert({
+      staff_id: selected.id,
+      clock_in: new Date().toISOString()
+    })
+    if (error) { toast.error('エラーが発生しました'); setLoading(false); return }
     setClockInTime(new Date())
     setClockStatus('clocked_in')
-    toast.success(selected.name.split(' ')[0] + 'さん、おはようございます')
+    toast.success(selected.name.split(' ')[0] + 'さん、おはようございます！')
     setLoading(false)
-    // 今日最初か確認
-    const { data } = await getSb().from('timeclock').select('id').gte('clock_in', today + 'T00:00:00')
-    if (data && data.length <= 1) setTimeout(() => setShowCheckPrompt('opening'), 1500)
+    // 最初の出勤者ならオープンチェックへ
+    const { data: todayAll } = await getSb().from('timeclock')
+      .select('id').gte('clock_in', today + 'T00:00:00+09:00')
+    if (todayAll && todayAll.length <= 1) {
+      setTimeout(() => setShowCheckPrompt('opening'), 1500)
+    }
   }
 
   async function clockOut() {
     if (!selected) return
     setLoading(true)
-    // GPS位置確認
-    const nearbyOut = await checkLocation()
-    if (!nearbyOut) {
+    // GPS確認
+    const nearby = await checkLocation()
+    if (!nearby) {
       toast.error('店舗の近くにいる時のみ退勤できます📍')
       setLoading(false)
       return
     }
-    await getSb().from('timeclock').update({ clock_out: new Date().toISOString() })
-      .eq('staff_id', selected.id).is('clock_out', null)
-    setClockOutTime(new Date())
+    const { error } = await getSb().from('timeclock')
+      .update({ clock_out: new Date().toISOString() })
+      .eq('staff_id', selected.id)
+      .is('clock_out', null)
+    if (error) { toast.error('エラーが発生しました'); setLoading(false); return }
+    const outTime = new Date()
+    setClockOutTime(outTime)
     setClockStatus('clocked_out')
-    toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした')
-    await loadWeekStats(selected)
+    toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした！')
+    await loadStats(selected, statsPeriod)
     setLoading(false)
-    // 5秒後に自動でホームに戻る
+    // クローズチェックへ誘導
     setTimeout(() => setShowCheckPrompt('closing'), 1500)
-    setTimeout(() => reset(), 5000)
+    // 10秒後に自動でホームに戻る
+    autoResetRef.current = setTimeout(() => reset(), 10000)
   }
 
-  function reset() {
-    setSelected(null); setStep('select'); setPin('')
-    setClockStatus('not_clocked'); setClockInTime(null); setClockOutTime(null)
-    setWeekStats(null); setShowCheckPrompt(null)
+  // GPS
+  const CAFE_LAT = 35.267359
+  const CAFE_LNG = 139.610321
+  const CAFE_RADIUS = 300
+
+  function calcDist(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const R = 6371000
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLng = (lng2 - lng1) * Math.PI / 180
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  }
+
+  async function checkLocation(): Promise<boolean> {
+    return new Promise(resolve => {
+      if (!navigator.geolocation) { resolve(false); return }
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve(calcDist(pos.coords.latitude, pos.coords.longitude, CAFE_LAT, CAFE_LNG) <= CAFE_RADIUS),
+        () => resolve(false),
+        { timeout: 8000, maximumAge: 60000 }
+      )
+    })
   }
 
   const H = String(now.getHours()).padStart(2,'0')
@@ -205,7 +246,7 @@ export default function HomePage() {
   const S = String(now.getSeconds()).padStart(2,'0')
   const dateStr = now.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' })
 
-  // チェックリスト促進
+  // チェックリスト促進画面
   if (showCheckPrompt) return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-6" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="text-5xl">{showCheckPrompt === 'opening' ? '🌅' : '🌙'}</div>
@@ -214,7 +255,7 @@ export default function HomePage() {
         <p className="text-stone-400 text-sm">チェックリストに進みますか？</p>
       </div>
       <div className="flex flex-col gap-3 w-full max-w-xs">
-        <button onClick={() => router.push('/operations?type=' + showCheckPrompt)}
+        <button onClick={() => { cancelAutoReset(); router.push('/operations?type=' + showCheckPrompt) }}
           className="w-full py-4 rounded-2xl text-lg font-medium text-white" style={{ backgroundColor: '#1c1917' }}>
           チェックリストへ
         </button>
@@ -225,7 +266,7 @@ export default function HomePage() {
     </main>
   )
 
-  // メイン画面（PIN認証後）
+  // メイン打刻画面（PIN認証後）
   if (step === 'main' && selected) {
     const workedMins = clockInTime && clockStatus === 'clocked_in'
       ? Math.floor((now.getTime() - clockInTime.getTime()) / 60000) : 0
@@ -234,15 +275,14 @@ export default function HomePage() {
 
     return (
       <main className="min-h-screen p-5 pb-24" style={{ backgroundColor: '#F5F0E8' }}>
-        {/* ヘッダー */}
         <div className="flex items-center justify-between mb-5">
           <div>
             <p className="text-xl font-medium text-stone-800">{selected.name}</p>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <div className={`w-2 h-2 rounded-full ${
+              <div className={'w-2 h-2 rounded-full ' + (
                 clockStatus === 'clocked_in' ? 'bg-teal-500 animate-pulse' :
                 clockStatus === 'clocked_out' ? 'bg-stone-400' : 'bg-amber-400'
-              }`} />
+              )} />
               <p className="text-xs text-stone-400">
                 {clockStatus === 'clocked_in' ? '勤務中' : clockStatus === 'clocked_out' ? '退勤済み' : '未出勤'}
               </p>
@@ -257,25 +297,21 @@ export default function HomePage() {
         <div className="bg-white rounded-2xl shadow-sm p-5 mb-4 text-center">
           <p className="text-xs text-stone-400 mb-1">{dateStr}</p>
           <div className="flex items-end justify-center gap-1">
-            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize: '56px', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{H}</span>
-            <span className="font-light text-stone-300 mb-1" style={{ fontSize: '36px', fontFamily: 'Georgia, serif' }}>:</span>
-            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize: '56px', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{M}</span>
-            <span className="font-light text-stone-300 mb-1 ml-1" style={{ fontSize: '20px', fontFamily: 'Georgia, serif' }}>{S}</span>
+            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'56px', lineHeight:1, fontFamily:'Georgia, serif' }}>{H}</span>
+            <span className="font-light text-stone-300 mb-1" style={{ fontSize:'36px', fontFamily:'Georgia, serif' }}>:</span>
+            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'56px', lineHeight:1, fontFamily:'Georgia, serif' }}>{M}</span>
+            <span className="font-light text-stone-300 mb-1 ml-1" style={{ fontSize:'20px', fontFamily:'Georgia, serif' }}>{S}</span>
           </div>
-
-          {/* 打刻情報 */}
           {clockInTime && (
             <div className="flex justify-center gap-6 mt-3 text-xs text-stone-400">
-              <span>出勤 {clockInTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
-              {clockOutTime && <span>退勤 {clockOutTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>}
+              <span>出勤 {clockInTime.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}</span>
+              {clockOutTime && <span>退勤 {clockOutTime.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}</span>}
             </div>
           )}
-
-          {/* 勤務中の経過時間 */}
           {clockStatus === 'clocked_in' && (
             <div className="mt-3">
               <p className="text-xs text-stone-400 mb-0.5">勤務時間</p>
-              <p className="text-2xl font-light text-teal-600 tabular-nums" style={{ fontFamily: 'Georgia, serif' }}>
+              <p className="text-2xl font-light text-teal-600 tabular-nums" style={{ fontFamily:'Georgia, serif' }}>
                 {String(workedH).padStart(2,'0')}:{String(workedM).padStart(2,'0')}
               </p>
             </div>
@@ -285,15 +321,15 @@ export default function HomePage() {
         {/* 打刻ボタン */}
         {clockStatus === 'not_clocked' && (
           <button onClick={clockIn} disabled={loading}
-            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest text-white mb-4 disabled:opacity-50 transition-all"
+            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest text-white mb-4 disabled:opacity-50"
             style={{ backgroundColor: '#1c1917' }}>
-            {loading ? '...' : '出 勤'}
+            {loading ? '確認中...' : '出 勤'}
           </button>
         )}
         {clockStatus === 'clocked_in' && (
           <button onClick={clockOut} disabled={loading}
-            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest border-2 border-stone-300 text-stone-600 mb-4 disabled:opacity-50 transition-all hover:border-stone-500">
-            {loading ? '...' : '退 勤'}
+            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest border-2 border-stone-300 text-stone-600 mb-4 disabled:opacity-50 hover:border-stone-500">
+            {loading ? '処理中...' : '退 勤'}
           </button>
         )}
         {clockStatus === 'clocked_out' && clockInTime && clockOutTime && (
@@ -301,9 +337,7 @@ export default function HomePage() {
             <p className="text-4xl mb-2">✅</p>
             <p className="text-teal-700 font-bold text-xl">退勤完了！</p>
             <p className="text-teal-600 text-sm mt-1">
-              {clockInTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-              〜
-              {clockOutTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+              {clockInTime.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}〜{clockOutTime.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}
             </p>
             <p className="text-xs text-teal-500 mt-1 mb-4">お疲れ様でした 🙌</p>
             <button onClick={reset}
@@ -313,14 +347,14 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* 今週の実績 */}
-        {weekStats && selected && (
+        {/* 今週/今月実績 */}
+        {weekStats && (
           <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs text-stone-400">📊 実績</p>
               <div className="flex gap-1 bg-stone-100 rounded-lg p-0.5">
                 {(['week', 'month'] as const).map(p => (
-                  <button key={p} onClick={() => { setStatsPeriod(p); loadWeekStats(selected, p) }}
+                  <button key={p} onClick={() => { setStatsPeriod(p); loadStats(selected, p) }}
                     className={'px-3 py-1 rounded-md text-xs font-medium transition-all ' + (statsPeriod === p ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-400')}>
                     {p === 'week' ? '今週' : '今月'}
                   </button>
@@ -340,6 +374,7 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* 打刻履歴 */}
         {clockHistory.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
             <p className="text-xs text-stone-400 mb-3">🕐 打刻履歴</p>
@@ -351,10 +386,9 @@ export default function HomePage() {
                 return (
                   <div key={i} className="flex justify-between items-center text-sm">
                     <div>
-                      <p className="text-stone-600">{cin.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' })}</p>
+                      <p className="text-stone-600">{cin.toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', weekday:'short' })}</p>
                       <p className="text-xs text-stone-400">
-                        {cin.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                        〜{cout ? cout.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '退勤未記録'}
+                        {cin.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}〜{cout ? cout.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : '退勤未記録'}
                       </p>
                     </div>
                     <p className={h ? 'text-stone-700 font-medium' : 'text-amber-500 text-xs'}>{h ? h + 'h' : '勤務中'}</p>
@@ -379,7 +413,7 @@ export default function HomePage() {
     )
   }
 
-  // PIN入力
+  // PIN入力画面
   if (step === 'pin' && selected) return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-6" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="text-center">
@@ -388,9 +422,9 @@ export default function HomePage() {
       </div>
       <div className="flex gap-3">
         {[0,1,2,3].map(i => (
-          <div key={i} className={`w-4 h-4 rounded-full transition-all ${
+          <div key={i} className={'w-4 h-4 rounded-full transition-all ' + (
             pin.length > i ? (pinError ? 'bg-red-400' : 'bg-stone-800') : 'bg-stone-300'
-          }`} />
+          )} />
         ))}
       </div>
       {pinError && <p className="text-xs text-red-400 -mt-3">PINが違います</p>}
@@ -399,19 +433,19 @@ export default function HomePage() {
           <button key={i} onClick={() => {
             if (n === '⌫') setPin(p => p.slice(0,-1))
             else if (n !== '') handlePinInput(n)
-          }} className={`py-4 rounded-2xl text-xl font-medium transition-all ${
-            n === '' ? '' : 'bg-white text-stone-700 shadow-sm active:scale-95'
-          }`}>{n}</button>
+          }} className={'py-4 rounded-2xl text-xl font-medium transition-all ' + (n === '' ? '' : 'bg-white text-stone-700 shadow-sm active:scale-95')}>
+            {n}
+          </button>
         ))}
       </div>
       <button onClick={() => { setStep('select'); setSelected(null); setPin('') }}
-        className="flex items-center gap-1 text-stone-400 text-sm hover:text-stone-600 px-4 py-2 bg-white rounded-xl shadow-sm">
+        className="flex items-center gap-1 text-stone-400 text-sm px-4 py-2 bg-white rounded-xl shadow-sm">
         ← ホームに戻る
       </button>
     </main>
   )
 
-  // スタッフ選択
+  // スタッフ選択画面
   return (
     <main className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="flex flex-col items-center pt-10 pb-6 px-6">
@@ -419,10 +453,10 @@ export default function HomePage() {
           width={110} height={42} className="object-contain mb-6 opacity-80" unoptimized />
         <div className="text-center">
           <div className="flex items-end justify-center gap-1">
-            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize: '72px', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{H}</span>
-            <span className="font-light text-stone-300 mb-2" style={{ fontSize: '48px', fontFamily: 'Georgia, serif' }}>:</span>
-            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize: '72px', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{M}</span>
-            <span className="font-light text-stone-300 mb-2 ml-1 tabular-nums" style={{ fontSize: '24px', fontFamily: 'Georgia, serif' }}>{S}</span>
+            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'72px', lineHeight:1, fontFamily:'Georgia, serif' }}>{H}</span>
+            <span className="font-light text-stone-300 mb-2" style={{ fontSize:'48px', fontFamily:'Georgia, serif' }}>:</span>
+            <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'72px', lineHeight:1, fontFamily:'Georgia, serif' }}>{M}</span>
+            <span className="font-light text-stone-300 mb-2 ml-1 tabular-nums" style={{ fontSize:'24px', fontFamily:'Georgia, serif' }}>{S}</span>
           </div>
           <p className="text-xs tracking-widest text-stone-400 mt-2">{dateStr}</p>
         </div>
@@ -433,9 +467,9 @@ export default function HomePage() {
         <div className="grid grid-cols-3 gap-2">
           {staffList.map(s => (
             <button key={s.id} onClick={() => handleSelect(s)}
-              className={`py-3 px-2 rounded-2xl text-sm font-medium transition-all shadow-sm ${
+              className={'py-3 px-2 rounded-2xl text-sm font-medium transition-all shadow-sm ' + (
                 s.role === 'admin' ? 'bg-white border-2 border-teal-300 text-teal-700' : 'bg-white text-stone-700 hover:shadow-md'
-              }`}>
+              )}>
               <div className="text-xs font-normal text-stone-400">{s.name.split(' ')[0]}</div>
               <div>{s.name.split(' ')[1] || ''}</div>
             </button>
