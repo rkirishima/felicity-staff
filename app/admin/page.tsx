@@ -32,9 +32,7 @@ export default function AdminPage() {
       </div>
       <div className="flex gap-3">
         {[0,1,2,3].map(i => (
-          <div key={i} className={`w-4 h-4 rounded-full transition-all ${
-            pin.length > i ? (error ? 'bg-red-400' : 'bg-stone-800') : 'bg-stone-300'
-          }`} />
+          <div key={i} className={`w-4 h-4 rounded-full transition-all ${pin.length > i ? (error ? 'bg-red-400' : 'bg-stone-800') : 'bg-stone-300'}`} />
         ))}
       </div>
       <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
@@ -42,16 +40,22 @@ export default function AdminPage() {
           <button key={i} onClick={() => {
             if (n === '⌫') setPin(p => p.slice(0,-1))
             else if (n !== '') handlePin(n)
-          }}
-            className={`py-4 rounded-2xl text-xl font-medium transition-all ${
-              n === '' ? '' : 'bg-white text-stone-700 hover:bg-stone-100 shadow-sm active:scale-95'
-            }`}>
+          }} className={`py-4 rounded-2xl text-xl font-medium transition-all ${n === '' ? '' : 'bg-white text-stone-700 shadow-sm active:scale-95'}`}>
             {n}
           </button>
         ))}
       </div>
+      <button onClick={() => router.push('/')} className="text-stone-400 text-xs">← 戻る</button>
     </main>
   )
+
+  const sections = [
+    { label: '👥 在籍状況', sub: 'リアルタイム', path: '/admin/live', color: 'bg-teal-50 border border-teal-200' },
+    { label: '⏱ タイムカード', sub: '打刻修正・記録', path: '/admin/timeclock', color: 'bg-white' },
+    { label: '💴 給与管理', sub: '月次・時給設定', path: '/admin/payroll', color: 'bg-white' },
+    { label: '📋 シフト申請', sub: '承認・却下', path: '/admin/shifts', color: 'bg-white' },
+    { label: '📅 シフト管理', sub: 'カレンダー', path: '/schedule', color: 'bg-white' },
+  ]
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-6" style={{ backgroundColor: '#F5F0E8' }}>
@@ -59,33 +63,17 @@ export default function AdminPage() {
         <h1 className="text-3xl font-bold tracking-[0.3em] text-stone-800">FELICITY</h1>
         <p className="text-stone-400 text-xs mt-1 tracking-widest">ADMIN</p>
       </div>
-      <div className="w-full max-w-sm grid grid-cols-2 gap-3">
-        <button onClick={() => router.push('/admin/timeclock')}
-          className="bg-white hover:bg-stone-50 rounded-2xl p-6 text-center transition-all shadow-sm">
-          <div className="text-2xl mb-2">⏱</div>
-          <div className="text-sm font-medium text-stone-700">出勤記録</div>
-        </button>
-        <button onClick={() => router.push('/schedule')}
-          className="bg-white hover:bg-stone-50 rounded-2xl p-6 text-center transition-all shadow-sm">
-          <div className="text-2xl mb-2">📅</div>
-          <div className="text-sm font-medium text-stone-700">シフト管理</div>
-        </button>
-
-        <button onClick={() => router.push('/admin/shifts')}
-          className="bg-teal-50 hover:bg-teal-100 rounded-2xl p-6 text-center transition-all shadow-sm border border-teal-100">
-          <div className="text-2xl mb-2">📋</div>
-          <div className="text-sm font-medium text-teal-700">シフト申請管理</div>
-        </button>
-        <button onClick={() => router.push('/admin/payroll')}
-          className="bg-white hover:bg-stone-50 rounded-2xl p-6 text-center transition-all shadow-sm">
-          <div className="text-2xl mb-2">💴</div>
-          <div className="text-sm font-medium text-stone-700">給与管理</div>
-        </button>
-        <button onClick={() => router.push('/admin/live')}
-          className="bg-teal-50 hover:bg-teal-100 rounded-2xl p-6 text-center transition-all shadow-sm border border-teal-200 col-span-2">
-          <div className="text-2xl mb-2">👥</div>
-          <div className="text-sm font-medium text-teal-700">在籍状況（リアルタイム）</div>
-        </button>
+      <div className="w-full max-w-sm space-y-2">
+        {sections.map(s => (
+          <button key={s.path} onClick={() => router.push(s.path)}
+            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all shadow-sm ${s.color}`}>
+            <div className="text-left">
+              <p className="font-medium text-stone-700">{s.label}</p>
+              <p className="text-xs text-stone-400">{s.sub}</p>
+            </div>
+            <span className="text-stone-300">→</span>
+          </button>
+        ))}
       </div>
       <button onClick={() => router.push('/')} className="text-stone-400 text-xs hover:text-stone-600">← ホームに戻る</button>
     </main>
