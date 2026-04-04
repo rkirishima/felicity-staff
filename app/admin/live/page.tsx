@@ -72,11 +72,18 @@ export default function LivePage() {
           <div className="space-y-2">
             {active.map(r => (
               <div key={r.id} className="bg-white rounded-2xl shadow-sm px-4 py-3 flex items-center justify-between">
-                <div>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const n = (r.staff as any)?.name ?? ''
+                    const isKitchen = ['荒波','竹内'].some(k => n.includes(k))
+                    return <div className={'w-2.5 h-2.5 rounded-full flex-shrink-0 ' + (isKitchen ? 'bg-orange-400' : 'bg-teal-500')} />
+                  })()}
+                  <div>
                   <p className="font-medium text-stone-800">{(r.staff as any)?.name}</p>
                   <p className="text-xs text-stone-400 mt-0.5">
                     {new Date(r.clock_in).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} 出勤
                   </p>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className={`text-lg font-medium ${parseFloat(calcHours(r.clock_in, null)) >= 7 ? 'text-amber-500' : 'text-teal-600'}`}>
