@@ -15,12 +15,17 @@ export default function AdminShiftsPage() {
 
   async function loadPending() {
     const { data, error } = await supabase.from('shifts')
-      .select('*, staff(name)')
+      .select('*')
       .eq('status', 'pending')
       .order('date')
-    if (error) console.error('shifts error:', error)
-    console.log('pending shifts:', data)
-    setPending(data ?? [])
+    if (error) { console.error('shifts error:', error); return }
+    // スタッフ名を別途取得
+    const { data: staffData } = await supabase.from('staff').select('id, name')
+    const staffMap: Record<string, string> = {}
+    ;(staffData ?? []).forEach((s: any) => { staffMap[s.id] = s.name })
+    const withNames = (data ?? []).map((s: any) => ({ ...s, staff: { name: staffMap[s.staff_id] || '' } }))
+    console.log('pending shifts:', withNames)
+    setPending(withNames)
   }
 
   async function approve(id: string) {
