@@ -11,7 +11,7 @@ const OPENING = [
   '布巾をよく洗いカウンターとキッチンに置いておく',
   '1・2階に掃除機・モップがけ（階段・洗面所も忘れずに）',
   '椅子を下ろして机を拭く',
-  '2階のトイレ確認',
+  '2階のトイレ確認（トイレチェックシートに記入）',
   'ゴミ箱の袋を開く',
   'グラインダーの電源をつけ、豆をセットする',
   'ジャグとポット・ケトル2つに水を入れる（消毒してから）',
@@ -35,14 +35,13 @@ const CLOSING = [
   '食洗機の上の台をスポンジで綺麗に・水気を布巾で拭く',
   '2つあるシンクの生ゴミネット確認',
   'エスプレッソかすのゴミ箱を綺麗にする（袋を閉じて布巾をかける）',
-  '2階トイレ清掃・ペーパータオル補充・ゴミ箱確認',
   '在庫管理の連絡',
   'キッチンとカウンターのモップがけ',
   '最終確認（布巾全て集める・かす落ち・汚れチェック）',
   '大きいボウルで布巾をゆすぐ・漂白剤にしっかりつける',
   '入り口鍵かける・キッチンのシャッター2つおろす',
   '1階のエアコン・お湯の電源を消す',
-  'キッチンのエアコンはオフ。ガレージのエアコンは除湿にしてつけておく（コーヒー豆管理）',
+  'キッチンのエアコンは除湿にしてつけておく（コーヒー豆管理）',
   '電気を消し・倉庫と表の鍵を閉める',
 ]
 
@@ -63,12 +62,6 @@ function OperationsContent() {
 
   function toggle(key: string) {
     setChecked(prev => ({ ...prev, [key]: !prev[key] }))
-  }
-
-  function checkAll() {
-    const all: Record<string, boolean> = {}
-    items.forEach((_, i) => { all[`${type}-${i}`] = true })
-    setChecked(prev => ({ ...prev, ...all }))
   }
 
   async function saveTemps() {
@@ -98,19 +91,26 @@ function OperationsContent() {
         ))}
       </div>
 
-      <div className="mb-3">
+      <div className="mb-4">
         <div className="flex justify-between text-xs text-stone-400 mb-1">
           <span>{doneCount} / {items.length} 完了</span>
           <span>{progress}%</span>
         </div>
         <div className="w-full bg-stone-200 rounded-full h-2">
-          <div className="bg-teal-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+          <div className="bg-teal-500 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }} />
         </div>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        <button onClick={checkAll}
-          className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
+      {type === 'opening' && (
+        <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+          <p className="text-sm font-medium text-stone-700 mb-3">🌡️ 温度記録（必須）</p>
+          <div className="flex gap-2 mb-3">
+        <button onClick={() => {
+          const allKeys: Record<string, boolean> = {}
+          items.forEach((_, i) => { allKeys[`${type}-${i}`] = true })
+          setChecked(prev => ({ ...prev, ...allKeys }))
+        }} className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
           ✅ 全部OK
         </button>
         <button onClick={() => setChecked({})}
@@ -119,27 +119,20 @@ function OperationsContent() {
         </button>
       </div>
 
-      {type === 'opening' && (
-        <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
-          <p className="text-sm font-medium text-stone-700 mb-3">🌡️ 温度記録（必須）</p>
-          <div className="space-y-2">
+      <div className="space-y-2">
             {[
-              { label: '冷蔵庫', val: fridgeTemp, set: setFridgeTemp, min: 0, max: 15 },
-              { label: 'コールドテーブル', val: coldTableTemp, set: setColdTableTemp, min: 0, max: 15 },
-              { label: '冷凍庫', val: freezerTemp, set: setFreezerTemp, min: -25, max: -10 },
-            ].map(({ label, val, set, min, max }) => {
-              const opts = Array.from({ length: max - min + 1 }, (_, i) => min + i)
-              return (
-                <div key={label} className="flex items-center gap-3">
-                  <span className="text-sm text-stone-500 w-32">{label}</span>
-                  <select value={val} onChange={e => set(e.target.value)}
-                    className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-stone-800">
-                    <option value="">選択</option>
-                    {opts.map(n => <option key={n} value={String(n)}>{n}°C</option>)}
-                  </select>
-                </div>
-              )
-            })}
+              { label: '冷蔵庫', val: fridgeTemp, set: setFridgeTemp },
+              { label: 'コールドテーブル', val: coldTableTemp, set: setColdTableTemp },
+              { label: '冷凍庫', val: freezerTemp, set: setFreezerTemp },
+            ].map(({ label, val, set }) => (
+              <div key={label} className="flex items-center gap-3">
+                <span className="text-sm text-stone-500 w-32">{label}</span>
+                <input type="number" value={val} onChange={e => set(e.target.value)}
+                  placeholder="0.0" step="0.1"
+                  className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-right" />
+                <span className="text-stone-400 text-sm">°C</span>
+              </div>
+            ))}
           </div>
           <button onClick={saveTemps} disabled={tempSaved}
             className={`w-full mt-3 py-2.5 rounded-xl text-sm font-medium transition-all ${tempSaved ? 'bg-teal-100 text-teal-600' : 'bg-stone-800 text-white'}`}>
@@ -147,6 +140,20 @@ function OperationsContent() {
           </button>
         </div>
       )}
+
+      <div className="flex gap-2 mb-3">
+        <button onClick={() => {
+          const allKeys: Record<string, boolean> = {}
+          items.forEach((_, i) => { allKeys[`${type}-${i}`] = true })
+          setChecked(prev => ({ ...prev, ...allKeys }))
+        }} className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
+          ✅ 全部OK
+        </button>
+        <button onClick={() => setChecked({})}
+          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-500">
+          リセット
+        </button>
+      </div>
 
       <div className="space-y-2">
         {items.map((item, i) => {
