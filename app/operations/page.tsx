@@ -81,59 +81,7 @@ function OperationsContent() {
   }
 
   return (
-    <main className="min-h-screen p-4 max-w-lg mx-auto pb-24" style={{ backgroundColor: '#F5F0E8' }}>
-      <div className="flex gap-2 mb-4">
-        {(['opening', 'closing'] as const).map(t => (
-          <button key={t} onClick={() => { setType(t); setChecked({}) }}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${type === t ? 'bg-stone-800 text-white' : 'bg-white text-stone-500 shadow-sm'}`}>
-            {t === 'opening' ? '🌅 オープン' : '🌙 クローズ'}
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-4">
-        <div className="flex justify-between text-xs text-stone-400 mb-1">
-          <span>{doneCount} / {items.length} 完了</span>
-          <span>{progress}%</span>
-        </div>
-        <div className="w-full bg-stone-200 rounded-full h-2">
-          <div className="bg-teal-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }} />
-        </div>
-      </div>
-
-      {type === 'opening' && (
-        <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
-          <p className="text-sm font-medium text-stone-700 mb-3">🌡️ 温度記録（必須）</p>
-          <div className="flex gap-2 mb-3">
-        <button onClick={() => {
-          const allKeys: Record<string, boolean> = {}
-          items.forEach((_, i) => { allKeys[`${type}-${i}`] = true })
-          setChecked(prev => ({ ...prev, ...allKeys }))
-        }} className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
-          ✅ 全部OK
-        </button>
-        <button onClick={() => setChecked({})}
-          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-500">
-          リセット
-        </button>
-      </div>
-
-      <div className="flex gap-2 mb-3">
-        <button onClick={() => {
-          const allKeys: Record<string, boolean> = {}
-          items.forEach((_, i) => { allKeys[`${type}-${i}`] = true })
-          setChecked(prev => ({ ...prev, ...allKeys }))
-        }} className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
-          ✅ 全部OK
-        </button>
-        <button onClick={() => setChecked({})}
-          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-500">
-          リセット
-        </button>
-      </div>
-
-      <div className="space-y-2">
+    <main className="min-h-screen p-4 max-w-lg mx-auto pb-24" style={{ backgroundColor: '#F5F0E8' }}><div className="space-y-2">
             {[
               { label: '冷蔵庫', val: fridgeTemp, set: setFridgeTemp },
               { label: 'コールドテーブル', val: coldTableTemp, set: setColdTableTemp },
@@ -153,37 +101,7 @@ function OperationsContent() {
             {tempSaved ? '✅ 温度記録済み' : '温度を記録する'}
           </button>
         </div>
-      )}
-
-      <div className="flex gap-2 mb-3">
-        <button onClick={() => {
-          const allKeys: Record<string, boolean> = {}
-          items.forEach((_, i) => { allKeys[`${type}-${i}`] = true })
-          setChecked(prev => ({ ...prev, ...allKeys }))
-        }} className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
-          ✅ 全部OK
-        </button>
-        <button onClick={() => setChecked({})}
-          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-500">
-          リセット
-        </button>
-      </div>
-
-      <div className="flex gap-2 mb-3">
-        <button onClick={() => {
-          const allKeys: Record<string, boolean> = {}
-          items.forEach((_, i) => { allKeys[`${type}-${i}`] = true })
-          setChecked(prev => ({ ...prev, ...allKeys }))
-        }} className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
-          ✅ 全部OK
-        </button>
-        <button onClick={() => setChecked({})}
-          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-500">
-          リセット
-        </button>
-      </div>
-
-      <div className="space-y-2">
+      )}<div className="space-y-2">
         {items.map((item, i) => {
           const key = `${type}-${i}`
           const done = checked[key]
