@@ -101,7 +101,9 @@ function OperationsContent() {
             {tempSaved ? '✅ 温度記録済み' : '温度を記録する'}
           </button>
         </div>
-      )}<div className="space-y-2">
+      }
+
+      <div className="space-y-2">
         {items.map((item, i) => {
           const key = `${type}-${i}`
           const done = checked[key]
