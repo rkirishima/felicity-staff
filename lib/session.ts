@@ -15,10 +15,8 @@ function todayJST() {
 export function saveSession(staff: { id: string; name: string; role: string; hourly_rate: number }) {
   if (typeof window === 'undefined') return
   localStorage.setItem(SESSION_KEY, JSON.stringify({
-    staffId: staff.id,
-    staffName: staff.name,
-    staffRole: staff.role,
-    hourlyRate: staff.hourly_rate,
+    staffId: staff.id, staffName: staff.name,
+    staffRole: staff.role, hourlyRate: staff.hourly_rate,
     date: todayJST(),
   }))
 }
