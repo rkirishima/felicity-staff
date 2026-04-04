@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { getHolidaysOf } from 'japanese-holidays'
+import { getSession, saveSession } from '@/lib/session'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
 type Shift = { id: string; staff_id: string; date: string; start_time: string; end_time: string; status: string; staff: { name: string } }
@@ -44,6 +45,16 @@ export default function SchedulePage() {
   const [pinError, setPinError] = useState(false)
   const supabase = createClient()
   const isAdmin = authStaff?.role === 'admin'
+
+  useEffect(() => {
+    // セッションチェック
+    const session = getSession()
+    if (session) {
+      setAuthStaff({ id: session.staffId, name: session.staffName, role: session.staffRole, pin: '' })
+      setSelectedStaff(session.staffRole === 'admin' ? '' : session.staffId)
+      setAuthStep('done')
+    }
+  }, [])
 
   useEffect(() => {
     const year = viewMonth.getFullYear()
