@@ -14,10 +14,12 @@ export default function AdminShiftsPage() {
   useEffect(() => { loadPending() }, [])
 
   async function loadPending() {
-    const { data } = await supabase.from('shifts')
+    const { data, error } = await supabase.from('shifts')
       .select('*, staff(name)')
       .eq('status', 'pending')
       .order('date')
+    if (error) console.error('shifts error:', error)
+    console.log('pending shifts:', data)
     setPending(data ?? [])
   }
 
