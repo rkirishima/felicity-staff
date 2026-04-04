@@ -103,6 +103,7 @@ function OperationsContent() {
         </div>
       }
 
+      <div className="flex gap-2 mb-3"><button onClick={checkAll} className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">✅ 全部OK</button><button onClick={() => setChecked({})} className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-500">リセット</button></div>
       <div className="space-y-2">
         {items.map((item, i) => {
           const key = `${type}-${i}`
