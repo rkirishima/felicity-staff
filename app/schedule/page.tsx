@@ -270,7 +270,7 @@ export default function SchedulePage() {
                   return (
                     <div key={j} className={'w-4 h-4 rounded-full flex items-center justify-center ' + (isKitchen?'bg-amber-400':'bg-teal-500')}
                       style={{ fontSize:'7px', color:'white', fontWeight:'bold' }}>
-                      {n.slice(0,1)}
+                      {n.slice(-1)}
                     </div>
                   )
                 })}

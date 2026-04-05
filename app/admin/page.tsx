@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveSession, getAdminSession } from '@/lib/session'
 
@@ -10,6 +10,10 @@ export default function AdminPage() {
   const [unlocked, setUnlocked] = useState(false)
   const [error, setError] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    if (getAdminSession()) setUnlocked(true)
+  }, [])
 
   function handlePin(n: string) {
     const next = pin + n
