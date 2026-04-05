@@ -15,9 +15,13 @@ const items = [
 
 export default function AdminNav() {
   const path = usePathname()
+  const [mounted, setMounted] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
-  useEffect(() => { setIsAdmin(!!getAdminSession()) }, [path])
-  if (!path.startsWith('/admin') && !isAdmin) return null
+  useEffect(() => {
+    setMounted(true)
+    setIsAdmin(!!getAdminSession())
+  }, [path])
+  if (!mounted || (!path.startsWith('/admin') && !isAdmin)) return null
   return (
     <nav className="fixed bottom-0 left-0 right-0 flex z-50"
       style={{ backgroundColor: '#1c1917', borderTop: '1px solid #292524' }}>

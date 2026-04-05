@@ -15,8 +15,13 @@ const items = [
 
 export default function BottomNav() {
   const path = usePathname()
-  const [isAdmin, setIsAdmin] = useState(true) // 初期値trueで非表示→確認後に更新
-  useEffect(() => { setIsAdmin(!!getAdminSession()) }, [path])
+  const [mounted, setMounted] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+    setIsAdmin(!!getAdminSession())
+  }, [path])
+  if (!mounted) return null
   if (path.startsWith('/admin') || isAdmin) return null
   return (
     <nav className="fixed bottom-0 left-0 right-0 flex z-50"
