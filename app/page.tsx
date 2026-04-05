@@ -44,6 +44,15 @@ export default function HomePage() {
     return () => clearInterval(t)
   }, [])
 
+
+  useEffect(() => {
+    const session = getSession()
+    if (session) {
+      const s = staffList.find(x => x.id === session.staffId)
+      if (s) { setSelected(s); setStep('main') }
+    }
+  }, [staffList])
+
   useEffect(() => {
     getSb().from('staff').select('id, name, role, hourly_rate')
       .eq('active', true).not('role', 'eq', 'accountant').order('name')
