@@ -53,8 +53,17 @@ export default function RecordsPage() {
             🧹 清掃
           </button>
         </div>
-        <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-          className="border border-stone-200 rounded-lg px-2 py-1 text-xs bg-white" />
+        <div className="flex items-center gap-1">
+          <button onClick={() => {
+            const d = new Date(month + '-01'); d.setMonth(d.getMonth()-1);
+            setMonth(d.toISOString().slice(0,7))
+          }} className="w-7 h-7 rounded-lg bg-white shadow-sm text-stone-500 text-sm flex items-center justify-center">←</button>
+          <span className="text-sm font-medium text-stone-700 min-w-[80px] text-center">{month.replace('-','年')}月</span>
+          <button onClick={() => {
+            const d = new Date(month + '-01'); d.setMonth(d.getMonth()+1);
+            setMonth(d.toISOString().slice(0,7))
+          }} className="w-7 h-7 rounded-lg bg-white shadow-sm text-stone-500 text-sm flex items-center justify-center">→</button>
+        </div>
       </div>
 
       {tab === 'temp' && (
