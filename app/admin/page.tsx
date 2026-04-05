@@ -22,6 +22,7 @@ export default function AdminPage() {
     if (next.length === 4) {
       if (next === ADMIN_PIN) {
         saveSession({ id: 'admin', name: '桐島', role: 'admin', hourly_rate: 0 })
+        window.dispatchEvent(new Event('admin-session-changed'))
         setUnlocked(true)
       } else {
         setError(true)

@@ -1,9 +1,8 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect } from 'react'
 import { LayoutDashboard, CalendarDays, Clock, BookOpen, Users } from 'lucide-react'
-import { getAdminSession } from '@/lib/session'
+import { useIsAdmin } from '@/lib/admin-context'
 
 const items = [
   { href: '/admin', label: 'ホーム', icon: LayoutDashboard },
@@ -15,13 +14,8 @@ const items = [
 
 export default function AdminNav() {
   const path = usePathname()
-  const [mounted, setMounted] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
-  useEffect(() => {
-    setMounted(true)
-    setIsAdmin(!!getAdminSession())
-  }, [path])
-  if (!mounted || (!path.startsWith('/admin') && !isAdmin)) return null
+  const isAdmin = useIsAdmin()
+  if (!path.startsWith('/admin') && !isAdmin) return null
   return (
     <nav className="fixed bottom-0 left-0 right-0 flex z-50"
       style={{ backgroundColor: '#1c1917', borderTop: '1px solid #292524' }}>
