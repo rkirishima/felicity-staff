@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Clock, CalendarDays, ClipboardList, BookOpen, Archive } from 'lucide-react'
 import { getAdminSession } from '@/lib/session'
 
@@ -15,8 +15,8 @@ const items = [
 
 export default function BottomNav() {
   const path = usePathname()
-  const [isAdmin, setIsAdmin] = useState(false)
-  useEffect(() => { setIsAdmin(!!getAdminSession()) }, [])
+  const [isAdmin, setIsAdmin] = useState(true) // 初期値trueで非表示→確認後に更新
+  useEffect(() => { setIsAdmin(!!getAdminSession()) }, [path])
   if (path.startsWith('/admin') || isAdmin) return null
   return (
     <nav className="fixed bottom-0 left-0 right-0 flex z-50"
