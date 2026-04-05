@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { getSession, saveSession } from '@/lib/session'
 import Image from 'next/image'
 
 type Staff = { id: string; name: string; role: string; hourly_rate: number }
