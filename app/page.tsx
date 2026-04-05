@@ -120,6 +120,7 @@ export default function HomePage() {
       setClockOutTime(new Date(latest.clock_out))
     }
     await loadStats(selected, 'week')
+    saveSession(selected)
     setStep('main')
   }
 
