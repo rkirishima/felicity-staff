@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { saveSession, getAdminSession } from '@/lib/session'
 
 const ADMIN_PIN = '4499'
 
@@ -16,6 +17,7 @@ export default function AdminPage() {
     setError(false)
     if (next.length === 4) {
       if (next === ADMIN_PIN) {
+        saveSession({ id: 'admin', name: '桐島', role: 'admin', hourly_rate: 0 })
         setUnlocked(true)
       } else {
         setError(true)
