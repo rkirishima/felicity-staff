@@ -1,6 +1,6 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -8,6 +8,8 @@ import { toast } from 'sonner'
 export default function PayrollPage() {
   const [staff, setStaff] = useState<any[]>([])
   const [summary, setSummary] = useState<any[]>([])
+  const [todayData, setTodayData] = useState<any[]>([])
+  const [now, setNow] = useState(new Date())
   const [month, setMonth] = useState(new Date().toISOString().slice(0,7))
   const [editId, setEditId] = useState<string | null>(null)
   const [editRate, setEditRate] = useState('')
@@ -17,6 +19,11 @@ export default function PayrollPage() {
 
   useEffect(() => { loadStaff() }, [])
   useEffect(() => { loadSummary() }, [month])
+  useEffect(() => {
+    loadToday()
+    const t = setInterval(() => { setNow(new Date()); loadToday() }, 60000)
+    return () => clearInterval(t)
+  }, [])
 
   async function loadStaff() {
     const { data } = await supabase.from('staff')
@@ -25,12 +32,20 @@ export default function PayrollPage() {
     setStaff(data ?? [])
   }
 
+  async function loadToday() {
+    const todayJST = new Date(Date.now() + 9*60*60*1000).toISOString().slice(0,10)
+    const { data } = await supabase.from('timeclock')
+      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate)')
+      .gte('clock_in', todayJST + 'T00:00:00+09:00')
+      .lte('clock_in', todayJST + 'T23:59:59+09:00')
+    setTodayData(data ?? [])
+  }
+
   async function loadSummary() {
     const { data: records } = await supabase.from('timeclock')
       .select('staff_id, clock_in, clock_out, staff(name, hourly_rate)')
       .gte('clock_in', `${month}-01T00:00:00`)
       .lte('clock_in', `${month}-31T23:59:59`)
-    
     const map: Record<string, any> = {}
     for (const r of (records ?? [])) {
       const sid = r.staff_id
@@ -60,11 +75,60 @@ export default function PayrollPage() {
 
   const total = summary.reduce((sum, s) => sum + Math.round(s.hours * s.hourly_rate), 0)
 
+  // 今日のリアルタイム計算
+  const todayRows = todayData.map(r => {
+    const cin = new Date(r.clock_in)
+    const cout = r.clock_out ? new Date(r.clock_out) : now
+    const h = (cout.getTime() - cin.getTime()) / 3600000
+    const rate = (r.staff as any)?.hourly_rate || 1300
+    return {
+      name: (r.staff as any)?.name,
+      hours: h,
+      rate,
+      pay: Math.round(h * rate),
+      active: !r.clock_out,
+    }
+  })
+  const todayTotal = todayRows.reduce((s, r) => s + r.pay, 0)
+  const activeCount = todayRows.filter(r => r.active).length
+
   return (
     <main className="min-h-screen p-4 max-w-lg mx-auto pb-24" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="flex items-center gap-3 mb-4">
         <button onClick={() => router.push('/admin')} className="text-stone-400">←</button>
         <h1 className="text-lg font-bold tracking-widest text-stone-800">給与管理</h1>
+      </div>
+
+      {/* 今日のリアルタイム */}
+      <div className="bg-stone-800 rounded-2xl p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-stone-400 tracking-wider">TODAY — LIVE</p>
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+            <p className="text-xs text-stone-400">{activeCount}名勤務中</p>
+          </div>
+        </div>
+        <p className="text-3xl font-light text-white mb-3">¥{todayTotal.toLocaleString()}</p>
+        {todayRows.length > 0 && (
+          <div className="space-y-1.5 border-t border-stone-700 pt-3">
+            {todayRows.map((r, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {r.active && <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />}
+                  {!r.active && <div className="w-1.5 h-1.5 rounded-full bg-stone-600" />}
+                  <span className="text-sm text-stone-300">{r.name}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-stone-500">{r.hours.toFixed(1)}h</span>
+                  <span className="text-sm text-stone-300">¥{r.pay.toLocaleString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {todayRows.length === 0 && (
+          <p className="text-sm text-stone-500">本日の出勤記録なし</p>
+        )}
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -88,29 +152,21 @@ export default function PayrollPage() {
               CSV
             </button>
           </div>
-
           <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 mb-4 text-center">
             <p className="text-xs text-teal-600 mb-1">{month} 支払総額</p>
             <p className="text-3xl font-medium text-teal-700">¥{total.toLocaleString()}</p>
           </div>
-
           <div className="space-y-2">
             {summary.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 text-center text-stone-400 text-sm shadow-sm">
-                データがありません
-              </div>
+              <div className="bg-white rounded-2xl p-8 text-center text-stone-400 text-sm shadow-sm">データがありません</div>
             ) : summary.map(s => (
               <div key={s.name} className="bg-white rounded-2xl shadow-sm px-4 py-3">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-medium text-stone-800">{s.name}</p>
-                    <p className="text-xs text-stone-400 mt-0.5">
-                      {s.days}日 / {s.hours.toFixed(1)}h / ¥{s.hourly_rate.toLocaleString()}/h
-                    </p>
+                    <p className="text-xs text-stone-400 mt-0.5">{s.days}日 / {s.hours.toFixed(1)}h / ¥{s.hourly_rate.toLocaleString()}/h</p>
                   </div>
-                  <p className="text-lg font-medium text-stone-800">
-                    ¥{Math.round(s.hours * s.hourly_rate).toLocaleString()}
-                  </p>
+                  <p className="text-lg font-medium text-stone-800">¥{Math.round(s.hours * s.hourly_rate).toLocaleString()}</p>
                 </div>
               </div>
             ))}
