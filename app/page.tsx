@@ -449,7 +449,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="flex flex-col items-center pt-10 pb-6 px-6">
-        <div className="flex flex-col items-center mb-6"><Image src="https://felicity.cafe/felicity-logo.png" alt="Felicity" width={110} height={42} className="object-contain opacity-80" unoptimized /><span className="text-xs text-stone-300 tracking-widest mt-1">v1.3.0</span></div>
+        <div className="flex flex-col items-center mb-6"><Image src="https://felicity.cafe/felicity-logo.png" alt="Felicity" width={110} height={42} className="object-contain opacity-80" unoptimized /><span className="text-xs text-stone-300 tracking-widest mt-1">v1.3.1</span></div>
         <div className="text-center">
           <div className="flex items-end justify-center gap-1">
             <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'72px', lineHeight:1, fontFamily:'Georgia, serif' }}>{H}</span>
