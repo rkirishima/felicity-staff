@@ -12,11 +12,9 @@ type Staff = { id: string; name: string; role: string; pin: string }
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
 const TIME_OPTIONS: string[] = []
-for (let i = 0; i <= 20; i++) {
-  const total = 9 * 60 + i * 30
-  const h = String(Math.floor(total / 60)).padStart(2, '0')
-  const m = String(total % 60).padStart(2, '0')
-  TIME_OPTIONS.push(h + ':' + m)
+for (let h = 7; h <= 19; h++) {
+  TIME_OPTIONS.push(String(h).padStart(2,'0') + ':00')
+  if (h < 19) TIME_OPTIONS.push(String(h).padStart(2,'0') + ':30')
 }
 
 function isWeekend(d: Date) { return d.getDay() === 0 || d.getDay() === 6 }
