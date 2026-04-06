@@ -58,6 +58,7 @@ export default function AdminPage() {
 
   const sections = [
     { label: '👥 在籍状況', sub: 'リアルタイム', path: '/admin/live', color: 'bg-teal-50 border border-teal-200' },
+    { label: '📦 発送管理', sub: '追跡番号・発送通知', path: '/admin/shipping', color: 'bg-white' },
     { label: '⏱ タイムカード', sub: '打刻修正・記録', path: '/admin/timeclock', color: 'bg-white' },
     { label: '💴 給与管理', sub: '月次・時給設定', path: '/admin/payroll', color: 'bg-white' },
     { label: '📋 シフト申請', sub: '承認・却下', path: '/admin/shifts', color: 'bg-white' },
