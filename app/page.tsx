@@ -306,7 +306,7 @@ export default function HomePage() {
 
         {/* 時計 */}
         <div className="bg-white rounded-2xl shadow-sm p-5 mb-4 text-center">
-          <p className="text-xs text-stone-400 mb-1">{dateStr}</p>
+          <p className="text-xs text-stone-400 mb-1" suppressHydrationWarning>{dateStr}</p>
           <div className="flex items-end justify-center gap-1">
             <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'56px', lineHeight:1, fontFamily:'Georgia, serif' }}>{H}</span>
             <span className="font-light text-stone-300 mb-1" style={{ fontSize:'36px', fontFamily:'Georgia, serif' }}>:</span>
@@ -468,7 +468,7 @@ export default function HomePage() {
             <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'72px', lineHeight:1, fontFamily:'Georgia, serif' }}>{M}</span>
             <span className="font-light text-stone-300 mb-2 ml-1 tabular-nums" style={{ fontSize:'24px', fontFamily:'Georgia, serif' }}>{S}</span>
           </div>
-          <p className="text-xs tracking-widest text-stone-400 mt-2">{dateStr}</p>
+          <p className="text-xs tracking-widest text-stone-400 mt-2" suppressHydrationWarning>{dateStr}</p>
         </div>
       </div>
       <div className="mx-8 border-t border-stone-200 mb-6" />
