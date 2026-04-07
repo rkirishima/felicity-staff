@@ -5,6 +5,7 @@ import BottomNav from '@/components/BottomNav'
 import AdminNav from '@/components/AdminNav'
 import { AdminProvider } from '@/lib/admin-context'
 import { Toaster } from '@/components/ui/sonner'
+import OrderNotification from '@/components/OrderNotification'
 
 const geist = Geist({ subsets: ['latin'] })
 
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <BottomNav />
           <AdminNav />
           <Toaster />
+          <OrderNotification />
         </AdminProvider>
       </body>
     </html>
