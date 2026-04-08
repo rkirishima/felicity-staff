@@ -13,6 +13,7 @@ export default function AdminTimeclockPage() {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
   })
+  const [filterDate, setFilterDate] = useState('')
   const [editId, setEditId] = useState<string | null>(null)
   const [editIn, setEditIn] = useState('')
   const [editOut, setEditOut] = useState('')
@@ -161,8 +162,8 @@ export default function AdminTimeclockPage() {
       {/* 打刻記録タブ */}
       {tab === 'records' && (
         <>
-          <div className="flex gap-2 mb-3">
-            <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+          <div className="flex gap-2 mb-2">
+            <input type="month" value={month} onChange={e => { setMonth(e.target.value); setFilterDate('') }}
               className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-stone-800" />
             <button onClick={exportCSV}
               className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-600 shadow-sm font-medium">
@@ -172,6 +173,20 @@ export default function AdminTimeclockPage() {
               className="px-4 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
               ＋追加
             </button>
+          </div>
+          <div className="flex gap-2 mb-3">
+            <input type="date" value={filterDate} onChange={e => {
+              const d = e.target.value
+              setFilterDate(d)
+              if (d) setMonth(d.slice(0, 7))
+            }}
+              className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-stone-800" />
+            {filterDate && (
+              <button onClick={() => setFilterDate('')}
+                className="px-3 py-2 bg-stone-100 text-stone-500 rounded-xl text-sm">
+                クリア
+              </button>
+            )}
           </div>
 
           {/* 追加フォーム */}
@@ -208,11 +223,21 @@ export default function AdminTimeclockPage() {
 
           {/* 記録一覧 */}
           <div className="space-y-2">
+            {(() => {
+              const filtered = filterDate
+                ? records.filter(r => new Date(r.clock_in).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }) === filterDate)
+                : records
+              return filtered
+            })().length === 0 && records.length > 0 ? (
+              <div className="bg-white rounded-2xl p-8 text-center text-stone-400 text-sm shadow-sm">
+                {filterDate}の記録はありません
+              </div>
+            ) : null}
             {records.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center text-stone-400 text-sm shadow-sm">
                 記録がありません
               </div>
-            ) : records.map(r => {
+            ) : (filterDate ? records.filter(r => new Date(r.clock_in).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }) === filterDate) : records).map(r => {
               const cin = new Date(r.clock_in)
               const cout = r.clock_out ? new Date(r.clock_out) : null
               const hours = cout ? ((cout.getTime() - cin.getTime()) / 3600000).toFixed(1) : null

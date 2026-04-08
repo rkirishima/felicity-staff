@@ -1,6 +1,10 @@
 import type { NextConfig } from 'next'
+import path from 'path'
 
-const nextConfig = {
+const nextConfig: NextConfig = {
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
   headers: async () => [
     {
       source: '/(.*)',
@@ -9,6 +13,7 @@ const nextConfig = {
         { key: 'Pragma', value: 'no-cache' },
       ],
     },
-  ],}
+  ],
+}
 
 export default nextConfig

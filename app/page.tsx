@@ -50,7 +50,7 @@ export default function HomePage() {
     const session = getSession()
     if (session) {
       const s = staffList.find(x => x.id === session.staffId)
-      if (s) { setSelected(s); setStep('main') }
+      if (s) { setSelected(s); setStep('main'); loadStats(s, 'week') }
     }
   }, [staffList])
 
@@ -142,18 +142,27 @@ export default function HomePage() {
       from.setDate(1)
     }
     from.setHours(0, 0, 0, 0)
+    
     const { data } = await getSb().from('timeclock')
       .select('clock_in, clock_out')
       .eq('staff_id', staff.id)
       .gte('clock_in', from.toISOString())
+    
     const hours = (data ?? []).reduce((sum, r) => {
       if (!r.clock_out) return sum
       return sum + (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
     }, 0)
     setWeekStats({ hours: Math.round(hours * 10) / 10, pay: Math.round(hours * (staff.hourly_rate || 1300)) })
-    // 打刻履歴
+    
+    // 打刻履歴（shifts との JOIN）
     const { data: hist } = await getSb().from('timeclock')
-      .select('clock_in, clock_out')
+      .select(`
+        id,
+        clock_in,
+        clock_out,
+        shift_id,
+        shifts(id, start_time, end_time, date)
+      `)
       .eq('staff_id', staff.id)
       .order('clock_in', { ascending: false })
       .limit(7)
@@ -184,18 +193,20 @@ export default function HomePage() {
       setLoading(false)
       return
     }
+    
+    const now = new Date()
     const { error } = await getSb().from('timeclock').insert({
       staff_id: selected.id,
-      clock_in: new Date().toISOString()
+      clock_in: now.toISOString()
     })
     if (error) { toast.error('エラーが発生しました'); setLoading(false); return }
-    setClockInTime(new Date())
+    setClockInTime(now)
     setClockStatus('clocked_in')
     toast.success(selected.name.split(' ')[0] + 'さん、おはようございます！')
     setLoading(false)
     // 最初の出勤者ならオープンチェックへ
     const { data: todayAll } = await getSb().from('timeclock')
-      .select('id').gte('clock_in', today + 'T00:00:00+09:00')
+      .select('id').gte('clock_in', today + 'T00:00:00+09:00').lte('clock_in', today + 'T23:59:59+09:00')
     if (todayAll && todayAll.length <= 1) {
       setTimeout(() => setShowCheckPrompt('opening'), 1500)
     }
@@ -211,12 +222,12 @@ export default function HomePage() {
       setLoading(false)
       return
     }
+    const outTime = new Date()
     const { error } = await getSb().from('timeclock')
-      .update({ clock_out: new Date().toISOString() })
+      .update({ clock_out: outTime.toISOString() })
       .eq('staff_id', selected.id)
       .is('clock_out', null)
     if (error) { toast.error('エラーが発生しました'); setLoading(false); return }
-    const outTime = new Date()
     setClockOutTime(outTime)
     setClockStatus('clocked_out')
     toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした！')
@@ -390,19 +401,27 @@ export default function HomePage() {
           <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
             <p className="text-xs text-stone-400 mb-3">🕐 打刻履歴</p>
             <div className="space-y-2">
-              {clockHistory.map((r, i) => {
+              {clockHistory.map((r: any, i) => {
                 const cin = new Date(r.clock_in)
                 const cout = r.clock_out ? new Date(r.clock_out) : null
                 const h = cout ? ((cout.getTime() - cin.getTime()) / 3600000).toFixed(1) : null
+                const shiftStart = r.shifts?.start_time ? new Date('2000-01-01T' + r.shifts.start_time).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : null
+                const shiftEnd = r.shifts?.end_time ? new Date('2000-01-01T' + r.shifts.end_time).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : null
+                const shiftDate = r.shifts?.date ? new Date(r.shifts.date).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric' }) : null
                 return (
                   <div key={i} className="flex justify-between items-center text-sm">
-                    <div>
+                    <div className="flex-1">
                       <p className="text-stone-600">{cin.toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', weekday:'short' })}</p>
                       <p className="text-xs text-stone-400">
-                        {cin.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}〜{cout ? cout.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : '退勤未記録'}
+                        🕐 {cin.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}〜{cout ? cout.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : '退勤未記録'}
                       </p>
+                      {shiftStart && shiftEnd && (
+                        <p className="text-xs text-stone-300">
+                          📅 {shiftDate || ''} {shiftStart}〜{shiftEnd}
+                        </p>
+                      )}
                     </div>
-                    <p className={h ? 'text-stone-700 font-medium' : 'text-amber-500 text-xs'}>{h ? h + 'h' : '勤務中'}</p>
+                    <p className={h ? 'text-stone-700 font-medium text-right' : 'text-amber-500 text-xs text-right'}>{h ? h + 'h' : '勤務中'}</p>
                   </div>
                 )
               })}
@@ -460,7 +479,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="flex flex-col items-center pt-10 pb-6 px-6">
-        <div className="flex flex-col items-center mb-6"><Image src="https://felicity.cafe/felicity-logo.png" alt="Felicity" width={110} height={42} className="object-contain opacity-80" unoptimized /><span className="text-xs text-stone-300 tracking-widest mt-1">v1.4.0</span></div>
+        <div className="flex flex-col items-center mb-6"><Image src="https://felicity.cafe/felicity-logo.png" alt="Felicity" width={110} height={42} className="object-contain opacity-80" unoptimized /><span className="text-xs text-stone-300 tracking-widest mt-1">v1.5.0</span></div>
         <div className="text-center">
           <div className="flex items-end justify-center gap-1">
             <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'72px', lineHeight:1, fontFamily:'Georgia, serif' }}>{H}</span>
