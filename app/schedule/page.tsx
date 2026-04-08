@@ -5,10 +5,11 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { getHolidaysOf } from 'japanese-holidays'
 import { getSession, saveSession, getAdminSession } from '@/lib/session'
+import { verifyStaffPin } from '@/app/admin/actions'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
 type Shift = { id: string; staff_id: string; date: string; start_time: string; end_time: string; status: string; staff: { name: string } }
-type Staff = { id: string; name: string; role: string; pin: string }
+type Staff = { id: string; name: string; role: string }
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
 const TIME_OPTIONS: string[] = []
@@ -48,14 +49,14 @@ export default function SchedulePage() {
     // adminセッション優先
     const adminSession = getAdminSession()
     if (adminSession) {
-      setAuthStaff({ id: adminSession.staffId, name: adminSession.staffName, role: 'admin', pin: '' })
+      setAuthStaff({ id: adminSession.staffId, name: adminSession.staffName, role: 'admin' })
       setSelectedStaff('')
       setAuthStep('done')
       return
     }
     const session = getSession()
     if (session) {
-      setAuthStaff({ id: session.staffId, name: session.staffName, role: session.staffRole, pin: '' })
+      setAuthStaff({ id: session.staffId, name: session.staffName, role: session.staffRole })
       setSelectedStaff(session.staffRole === 'admin' ? '' : session.staffId)
       setAuthStep('done')
     }
@@ -74,7 +75,7 @@ export default function SchedulePage() {
       .then(({ data }) => setSpecialDays((data ?? []).filter((d: any) => d.day_type === 'weekend').map((d: any) => d.date)))
     supabase.from('shift_templates').select('*').order('day_type')
       .then(({ data }) => setTemplates(data ?? []))
-    supabase.from('staff').select('id, name, role, pin').eq('active', true)
+    supabase.from('staff').select('id, name, role').eq('active', true)
       .not('role', 'eq', 'accountant').order('name')
       .then(({ data }) => setStaffList((data ?? []) as Staff[]))
     loadShifts()
@@ -99,15 +100,16 @@ export default function SchedulePage() {
       })
   }
 
-  function handlePinInput(n: string) {
+  async function handlePinInput(n: string) {
     setPinError(false)
     const next = pinInput + n
     setPinInput(next)
     if (next.length === 4) {
-      const correct = authStaff?.pin || '1234'
-      if (next === correct) {
+      if (!authStaff) return
+      const ok = await verifyStaffPin(authStaff.id, next)
+      if (ok) {
         setAuthStep('done')
-        setSelectedStaff(authStaff?.id || '')
+        setSelectedStaff(authStaff.id)
       } else {
         setPinError(true)
         setTimeout(() => setPinInput(''), 600)

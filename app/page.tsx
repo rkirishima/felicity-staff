@@ -6,8 +6,9 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { getSession, saveSession } from '@/lib/session'
 import Image from 'next/image'
+import { verifyStaffPin } from '@/app/admin/actions'
 
-type Staff = { id: string; name: string; role: string; hourly_rate: number }
+type Staff = { id: string; name: string; role: string; hourly_rate?: number }
 type ClockStatus = 'not_clocked' | 'clocked_in' | 'clocked_out'
 
 function getSb() {
@@ -51,12 +52,19 @@ export default function HomePage() {
     const session = getSession()
     if (session) {
       const s = staffList.find(x => x.id === session.staffId)
-      if (s) { setSelected(s); setStep('main'); loadStats(s, 'week') }
+      if (s) {
+        getSb().from('staff').select('hourly_rate').eq('id', s.id).single().then(({ data: rd }) => {
+          const staffWithRate: Staff = { ...s, hourly_rate: rd?.hourly_rate ?? 1300 }
+          setSelected(staffWithRate)
+          setStep('main')
+          loadStats(staffWithRate, 'week')
+        })
+      }
     }
   }, [staffList])
 
   useEffect(() => {
-    getSb().from('staff').select('id, name, role, hourly_rate')
+    getSb().from('staff').select('id, name, role')
       .eq('active', true).not('role', 'eq', 'accountant').order('name')
       .then(({ data }) => setStaffList((data ?? []) as Staff[]))
   }, [])
@@ -104,12 +112,16 @@ export default function HomePage() {
 
   async function verifyPin(inputPin: string) {
     if (!selected) return
-    const { data } = await getSb().from('staff').select('pin').eq('id', selected.id).single()
-    if (inputPin !== (data?.pin || '1234')) {
+    const ok = await verifyStaffPin(selected.id, inputPin)
+    if (!ok) {
       setPinError(true)
       setTimeout(() => setPin(''), 600)
       return
     }
+    // PINが正しければ hourly_rate を取得
+    const { data: rateData } = await getSb().from('staff').select('hourly_rate').eq('id', selected.id).single()
+    const staffWithRate: Staff = { ...selected, hourly_rate: rateData?.hourly_rate ?? 1300 }
+    setSelected(staffWithRate)
     // 今日(JST)の打刻状況を確認
     const today = todayJST()
     const { data: records } = await getSb().from('timeclock')
@@ -130,8 +142,8 @@ export default function HomePage() {
       setClockInTime(new Date(latest.clock_in))
       setClockOutTime(new Date(latest.clock_out))
     }
-    await loadStats(selected, 'week')
-    saveSession(selected)
+    await loadStats(staffWithRate, 'week')
+    saveSession(staffWithRate)
     setStep('main')
   }
 

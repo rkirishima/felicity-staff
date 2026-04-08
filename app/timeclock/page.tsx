@@ -17,7 +17,6 @@ for (let i = 0; i <= 28; i++) {
 function TimeclockContent() {
   const [staffId, setStaffId] = useState('')
   const [staffName, setStaffName] = useState('')
-  const [staffList, setStaffList] = useState<any[]>([])
   const [date, setDate] = useState('')
   const [clockIn, setClockIn] = useState('')
   const [clockOut, setClockOut] = useState('')
@@ -36,10 +35,9 @@ function TimeclockContent() {
       setStaffName(session.staffName)
       loadMyRequests(session.staffId)
     } else {
-      // セッションがない場合はスタッフ一覧を表示
-      supabase.from('staff').select('id, name').eq('active', true)
-        .not('role', 'in', '("accountant","admin")').order('name')
-        .then(({ data }) => setStaffList(data ?? []))
+      // セッションがない場合はホームにリダイレクト
+      router.replace('/')
+      return
     }
     // 今日の日付をデフォルトに
     const today = new Date(Date.now() + 9*60*60*1000).toISOString().slice(0, 10)
@@ -99,18 +97,6 @@ function TimeclockContent() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4 mb-6">
-        {/* スタッフ（セッションなしの場合） */}
-        {!staffId && (
-          <div>
-            <p className="text-xs text-stone-400 mb-2">スタッフ</p>
-            <select onChange={e => { setStaffId(e.target.value); loadMyRequests(e.target.value) }}
-              className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-stone-800">
-              <option value="">選択してください</option>
-              {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-        )}
-
         {staffName && (
           <p className="text-sm font-medium text-stone-700">{staffName}</p>
         )}
