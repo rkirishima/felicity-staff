@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const today = new Date()
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000) // JST
   const nextMonday = new Date(today)
   nextMonday.setDate(today.getDate() + (8 - today.getDay()) % 7 || 7)
   const nextSunday = new Date(nextMonday)
