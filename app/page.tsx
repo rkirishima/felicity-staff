@@ -38,6 +38,7 @@ export default function HomePage() {
   const [clockHistory, setClockHistory] = useState<any[]>([])
   const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
   const autoResetRef = useRef<NodeJS.Timeout | null>(null)
+  const clockingRef = useRef(false) // 二重タップ防止ロック
   const router = useRouter()
 
   useEffect(() => {
@@ -170,7 +171,8 @@ export default function HomePage() {
   }
 
   async function clockIn() {
-    if (!selected) return
+    if (!selected || clockingRef.current) return
+    clockingRef.current = true
     setLoading(true)
     // GPS確認
     const nearby = await checkLocation()
@@ -199,11 +201,12 @@ export default function HomePage() {
       staff_id: selected.id,
       clock_in: now.toISOString()
     })
-    if (error) { toast.error('エラーが発生しました'); setLoading(false); return }
+    if (error) { toast.error('エラーが発生しました'); setLoading(false); clockingRef.current = false; return }
     setClockInTime(now)
     setClockStatus('clocked_in')
     toast.success(selected.name.split(' ')[0] + 'さん、おはようございます！')
     setLoading(false)
+    clockingRef.current = false
     // 最初の出勤者ならオープンチェックへ
     const { data: todayAll } = await getSb().from('timeclock')
       .select('id').gte('clock_in', today + 'T00:00:00+09:00').lte('clock_in', today + 'T23:59:59+09:00')
@@ -213,7 +216,8 @@ export default function HomePage() {
   }
 
   async function clockOut() {
-    if (!selected) return
+    if (!selected || clockingRef.current) return
+    clockingRef.current = true
     setLoading(true)
     // GPS確認
     const nearby = await checkLocation()
@@ -227,12 +231,13 @@ export default function HomePage() {
       .update({ clock_out: outTime.toISOString() })
       .eq('staff_id', selected.id)
       .is('clock_out', null)
-    if (error) { toast.error('エラーが発生しました'); setLoading(false); return }
+    if (error) { toast.error('エラーが発生しました'); setLoading(false); clockingRef.current = false; return }
     setClockOutTime(outTime)
     setClockStatus('clocked_out')
     toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした！')
     await loadStats(selected, statsPeriod)
     setLoading(false)
+    clockingRef.current = false
     // クローズチェックへ誘導
     setTimeout(() => setShowCheckPrompt('closing'), 1500)
     // 10秒後に自動でホームに戻る

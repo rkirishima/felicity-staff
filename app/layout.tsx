@@ -6,6 +6,7 @@ import AdminNav from '@/components/AdminNav'
 import { AdminProvider } from '@/lib/admin-context'
 import { Toaster } from '@/components/ui/sonner'
 import OrderNotification from '@/components/OrderNotification'
+import VersionChecker from '@/components/VersionChecker'
 
 const geist = Geist({ subsets: ['latin'] })
 
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AdminNav />
           <Toaster />
           <OrderNotification />
+          <VersionChecker />
         </AdminProvider>
       </body>
     </html>
