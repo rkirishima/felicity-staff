@@ -15,6 +15,8 @@ export default function PayrollPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [editRate, setEditRate] = useState('')
   const [tab, setTab] = useState<'summary' | 'rates'>('summary')
+  const [expandedStaff, setExpandedStaff] = useState<string | null>(null)
+  const [staffRecords, setStaffRecords] = useState<Record<string, any[]>>({})
   const supabase = createClient()
   const router = useRouter()
 
@@ -50,9 +52,11 @@ export default function PayrollPage() {
     const currentMonth = new Date().toISOString().slice(0, 7)
     const nowMs = Date.now()
     const map: Record<string, any> = {}
+    const recMap: Record<string, any[]> = {}
     for (const r of (records ?? [])) {
       const sid = r.staff_id
-      if (!map[sid]) map[sid] = { name: (r.staff as any)?.name, hourly_rate: (r.staff as any)?.hourly_rate || 1300, hours: 0, days: 0 }
+      if (!map[sid]) map[sid] = { staffId: sid, name: (r.staff as any)?.name, hourly_rate: (r.staff as any)?.hourly_rate || 1300, hours: 0, days: 0 }
+      if (!recMap[sid]) recMap[sid] = []
       const endMs = r.clock_out
         ? new Date(r.clock_out).getTime()
         : (month === currentMonth ? nowMs : null)
@@ -60,9 +64,12 @@ export default function PayrollPage() {
         const h = (endMs - new Date(r.clock_in).getTime()) / 3600000
         map[sid].hours += h
         if (r.clock_out) map[sid].days += 1
+        recMap[sid].push({ ...r, h })
       }
     }
     setSummary(Object.values(map).sort((a,b) => a.name.localeCompare(b.name, 'ja')))
+    setStaffRecords(recMap)
+    setExpandedStaff(null)
   }
 
   async function saveRate(id: string) {
@@ -165,17 +172,47 @@ export default function PayrollPage() {
           <div className="space-y-2">
             {summary.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center text-stone-400 text-sm shadow-sm">データがありません</div>
-            ) : summary.map(s => (
-              <div key={s.name} className="bg-white rounded-2xl shadow-sm px-4 py-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-stone-800">{s.name}</p>
-                    <p className="text-xs text-stone-400 mt-0.5">{s.days}日 / {s.hours.toFixed(1)}h / ¥{s.hourly_rate.toLocaleString()}/h</p>
-                  </div>
-                  <p className="text-lg font-medium text-stone-800">¥{Math.round(s.hours * s.hourly_rate).toLocaleString()}</p>
+            ) : summary.map(s => {
+              const isOpen = expandedStaff === s.staffId
+              const recs = (staffRecords[s.staffId] ?? []).slice().sort((a: any, b: any) =>
+                new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime()
+              )
+              return (
+                <div key={s.name} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <button onClick={() => setExpandedStaff(isOpen ? null : s.staffId)}
+                    className="w-full px-4 py-3 flex justify-between items-center text-left">
+                    <div>
+                      <p className="font-medium text-stone-800">{s.name}</p>
+                      <p className="text-xs text-stone-400 mt-0.5">{s.days}日 / {s.hours.toFixed(1)}h / ¥{s.hourly_rate.toLocaleString()}/h</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-lg font-medium text-stone-800">¥{Math.round(s.hours * s.hourly_rate).toLocaleString()}</p>
+                      <span className="text-stone-300 text-sm">{isOpen ? '▲' : '▼'}</span>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="border-t border-stone-100 px-4 pb-3 pt-2 space-y-1.5">
+                      {recs.map((r: any, i: number) => {
+                        const cin = new Date(r.clock_in)
+                        const cout = r.clock_out ? new Date(r.clock_out) : null
+                        return (
+                          <div key={i} className="flex justify-between text-xs text-stone-500">
+                            <span>{cin.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', timeZone: 'Asia/Tokyo' })}</span>
+                            <span>
+                              {cin.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' })}
+                              〜{cout ? cout.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' }) : '勤務中'}
+                            </span>
+                            <span className="text-teal-600 font-medium w-20 text-right">
+                              {r.h.toFixed(1)}h / ¥{Math.round(r.h * s.hourly_rate).toLocaleString()}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </>
       )}
