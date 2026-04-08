@@ -153,7 +153,7 @@ export default function AdminShiftsPage() {
             {cells.map((day, i) => {
               if (!day) return <div key={i} />
               const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
-              const dayShifts = shifts.filter(s => s.date === dateStr && s.status === 'approved')
+              const dayShifts = shifts.filter(s => s.date === dateStr && (s.status === 'approved' || s.status === 'absent'))
               const dow = new Date(y, m, day).getDay()
               const isWeekend = dow === 0 || dow === 6
               const isSelected = selectedDate === dateStr
@@ -167,8 +167,9 @@ export default function AdminShiftsPage() {
                   <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                     {dayShifts.slice(0,4).map((s,j) => {
                       const isKit = KITCHEN.some(k => s.staffName.includes(k))
+                      const isAbsent = s.status === 'absent'
                       return (
-                        <div key={j} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${isKit?'bg-orange-400':'bg-teal-500'}`}
+                        <div key={j} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${isAbsent?'bg-red-400':isKit?'bg-orange-400':'bg-teal-500'}`}
                           style={{fontSize:'6px', color:'white', fontWeight:'bold'}}>
                           {s.staffName.slice(-1)}
                         </div>
@@ -189,15 +190,17 @@ export default function AdminShiftsPage() {
               </h3>
 
               {/* 既存シフト */}
-              {shifts.filter(s => s.date === selectedDate && s.status === 'approved').length > 0 && (
+              {shifts.filter(s => s.date === selectedDate && (s.status === 'approved' || s.status === 'absent')).length > 0 && (
                 <div className="space-y-1.5">
-                  {shifts.filter(s => s.date === selectedDate && s.status === 'approved').map(s => {
+                  {shifts.filter(s => s.date === selectedDate && (s.status === 'approved' || s.status === 'absent')).map(s => {
                     const isKit = KITCHEN.some(k => s.staffName.includes(k))
+                    const isAbsent = s.status === 'absent'
                     return (
-                      <div key={s.id} className="flex items-center justify-between bg-stone-50 rounded-xl px-3 py-2">
+                      <div key={s.id} className={`flex items-center justify-between rounded-xl px-3 py-2 ${isAbsent?'bg-red-50':'bg-stone-50'}`}>
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${isKit?'bg-orange-400':'bg-teal-500'}`} />
-                          <span className="text-sm text-stone-700">{s.staffName}</span>
+                          <div className={`w-2 h-2 rounded-full ${isAbsent?'bg-red-400':isKit?'bg-orange-400':'bg-teal-500'}`} />
+                          <span className={`text-sm ${isAbsent?'text-red-500 line-through':'text-stone-700'}`}>{s.staffName}</span>
+                          {isAbsent && <span className="text-xs text-red-400">欠勤</span>}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-stone-400">{s.start_time?.slice(0,5)}〜{s.end_time?.slice(0,5)}</span>

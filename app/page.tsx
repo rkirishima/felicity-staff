@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { getSession, saveSession } from '@/lib/session'
 import Image from 'next/image'
-import { verifyStaffPin } from '@/app/admin/actions'
+import { verifyStaffPin, reportAbsence } from '@/app/admin/actions'
 
 type Staff = { id: string; name: string; role: string; hourly_rate?: number }
 type ClockStatus = 'not_clocked' | 'clocked_in' | 'clocked_out'
@@ -37,6 +37,8 @@ export default function HomePage() {
   const [weekStats, setWeekStats] = useState<{ hours: number; pay: number } | null>(null)
   const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week')
   const [clockHistory, setClockHistory] = useState<any[]>([])
+  const [upcomingShifts, setUpcomingShifts] = useState<any[]>([])
+  const [absenceConfirm, setAbsenceConfirm] = useState<string | null>(null)
   const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
   const autoResetRef = useRef<NodeJS.Timeout | null>(null)
   const clockingRef = useRef(false) // 二重タップ防止ロック
@@ -58,6 +60,7 @@ export default function HomePage() {
           setSelected(staffWithRate)
           setStep('main')
           loadStats(staffWithRate, 'week')
+          loadUpcomingShifts(s.id)
         })
       }
     }
@@ -143,8 +146,30 @@ export default function HomePage() {
       setClockOutTime(new Date(latest.clock_out))
     }
     await loadStats(staffWithRate, 'week')
+    loadUpcomingShifts(staffWithRate.id)
     saveSession(staffWithRate)
     setStep('main')
+  }
+
+  async function loadUpcomingShifts(staffId: string) {
+    const today = todayJST()
+    const in7days = new Date(Date.now() + 9*60*60*1000 + 7*24*60*60*1000).toISOString().slice(0,10)
+    const { data } = await getSb().from('shifts')
+      .select('id, date, start_time, end_time, status')
+      .eq('staff_id', staffId)
+      .eq('status', 'approved')
+      .gte('date', today)
+      .lte('date', in7days)
+      .order('date')
+    setUpcomingShifts(data ?? [])
+  }
+
+  async function handleAbsence(shift: any) {
+    if (!selected) return
+    setAbsenceConfirm(null)
+    await reportAbsence(shift.id, selected.name, shift.date, shift.start_time, shift.end_time)
+    toast.success('LINEグループに通知しました')
+    if (selected) loadUpcomingShifts(selected.id)
   }
 
   async function loadStats(staff: Staff, period: 'week' | 'month') {
@@ -439,6 +464,38 @@ export default function HomePage() {
                       )}
                     </div>
                     <p className={h ? 'text-stone-700 font-medium text-right' : 'text-amber-500 text-xs text-right'}>{h ? h + 'h' : '勤務中'}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 今後のシフト */}
+        {upcomingShifts.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+            <p className="text-xs text-stone-400 mb-3">📅 今後のシフト</p>
+            <div className="space-y-2">
+              {upcomingShifts.map(s => {
+                const d = new Date(s.date + 'T12:00:00')
+                const weekday = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
+                const label = `${d.getMonth()+1}/${d.getDate()}(${weekday}) ${s.start_time.slice(0,5)}〜${s.end_time.slice(0,5)}`
+                return (
+                  <div key={s.id} className="flex items-center justify-between">
+                    <span className="text-sm text-stone-700">{label}</span>
+                    {absenceConfirm === s.id ? (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleAbsence(s)}
+                          className="px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-bold">送信</button>
+                        <button onClick={() => setAbsenceConfirm(null)}
+                          className="px-3 py-1 bg-stone-100 text-stone-500 rounded-lg text-xs">戻る</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setAbsenceConfirm(s.id)}
+                        className="px-3 py-1 bg-red-50 text-red-500 border border-red-200 rounded-lg text-xs font-medium">
+                        入れません
+                      </button>
+                    )}
                   </div>
                 )
               })}
