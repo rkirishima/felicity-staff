@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { nextMonthFirstDay } from '@/lib/utils'
 
 export default function RecordsPage() {
   const [temps, setTemps] = useState<any[]>([])
@@ -14,11 +15,11 @@ export default function RecordsPage() {
 
   useEffect(() => {
     supabase.from('temperature_logs')
-      .select('*').gte('date', `${month}-01`).lte('date', `${month}-31`)
+      .select('*').gte('date', `${month}-01`).lt('date', nextMonthFirstDay(month))
       .order('date', { ascending: false })
       .then(({ data }) => setTemps(data ?? []))
     supabase.from('cleaning_logs')
-      .select('*, staff(name)').gte('date', `${month}-01`).lte('date', `${month}-31`)
+      .select('*, staff(name)').gte('date', `${month}-01`).lt('date', nextMonthFirstDay(month))
       .order('date', { ascending: false })
       .then(({ data }) => setCleanings(data ?? []))
   }, [month])

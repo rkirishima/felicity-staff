@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { nextMonthFirstDay } from '@/lib/utils'
 
 export default function PayrollPage() {
   const [staff, setStaff] = useState<any[]>([])
@@ -44,16 +45,21 @@ export default function PayrollPage() {
   async function loadSummary() {
     const { data: records } = await supabase.from('timeclock')
       .select('staff_id, clock_in, clock_out, staff(name, hourly_rate)')
-      .gte('clock_in', `${month}-01T00:00:00`)
-      .lte('clock_in', `${month}-31T23:59:59`)
+      .gte('clock_in', `${month}-01T00:00:00+09:00`)
+      .lt('clock_in', `${nextMonthFirstDay(month)}T00:00:00+09:00`)
+    const currentMonth = new Date().toISOString().slice(0, 7)
+    const nowMs = Date.now()
     const map: Record<string, any> = {}
     for (const r of (records ?? [])) {
       const sid = r.staff_id
       if (!map[sid]) map[sid] = { name: (r.staff as any)?.name, hourly_rate: (r.staff as any)?.hourly_rate || 1300, hours: 0, days: 0 }
-      if (r.clock_out) {
-        const h = (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
+      const endMs = r.clock_out
+        ? new Date(r.clock_out).getTime()
+        : (month === currentMonth ? nowMs : null)
+      if (endMs) {
+        const h = (endMs - new Date(r.clock_in).getTime()) / 3600000
         map[sid].hours += h
-        map[sid].days += 1
+        if (r.clock_out) map[sid].days += 1
       }
     }
     setSummary(Object.values(map).sort((a,b) => a.name.localeCompare(b.name, 'ja')))

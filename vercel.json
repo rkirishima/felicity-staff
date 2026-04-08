@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/timeclock-alert",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

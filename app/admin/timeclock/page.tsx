@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { nextMonthFirstDay } from '@/lib/utils'
 
 export default function AdminTimeclockPage() {
   const [requests, setRequests] = useState<any[]>([])
   const [records, setRecords] = useState<any[]>([])
-  const [tab, setTab] = useState<'requests' | 'records'>('records')
+  const [tab, setTab] = useState<'requests' | 'records' | 'cost'>('records')
   const [month, setMonth] = useState(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
@@ -24,18 +25,28 @@ export default function AdminTimeclockPage() {
   const [addDate, setAddDate] = useState('')
   const [addIn, setAddIn] = useState('')
   const [addOut, setAddOut] = useState('')
+  const [costMonth, setCostMonth] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+  })
+  const [costSummary, setCostSummary] = useState<any[]>([])
+  const [allTimeCost, setAllTimeCost] = useState(0)
+  const [allTimeSummary, setAllTimeSummary] = useState<any[]>([])
+  const [showAllTime, setShowAllTime] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
   useEffect(() => {
     loadRequests()
     loadRecords()
+    loadAllTimeCost()
     supabase.from('staff').select('id, name').eq('active', true)
       .not('role', 'in', '("accountant","admin")').order('name')
       .then(({ data }) => setStaffList(data ?? []))
   }, [])
 
   useEffect(() => { loadRecords() }, [month])
+  useEffect(() => { loadCostSummary(costMonth) }, [costMonth])
 
   async function loadRequests() {
     const { data } = await supabase.from('timeclock_requests')
@@ -47,9 +58,47 @@ export default function AdminTimeclockPage() {
     const { data } = await supabase.from('timeclock')
       .select('*, staff(name)')
       .gte('clock_in', `${month}-01T00:00:00+09:00`)
-      .lte('clock_in', `${month}-31T23:59:59+09:00`)
+      .lt('clock_in', `${nextMonthFirstDay(month)}T00:00:00+09:00`)
       .order('clock_in', { ascending: false })
     setRecords(data ?? [])
+  }
+
+  async function loadCostSummary(targetMonth: string) {
+    const { data: rows } = await supabase.from('timeclock')
+      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate)')
+      .gte('clock_in', `${targetMonth}-01T00:00:00+09:00`)
+      .lt('clock_in', `${nextMonthFirstDay(targetMonth)}T00:00:00+09:00`)
+    const map: Record<string, any> = {}
+    for (const r of (rows ?? [])) {
+      const sid = r.staff_id
+      if (!map[sid]) map[sid] = { name: (r.staff as any)?.name, hourly_rate: (r.staff as any)?.hourly_rate || 1300, hours: 0, days: 0 }
+      if (r.clock_out) {
+        const h = (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
+        map[sid].hours += h
+        map[sid].days += 1
+      }
+    }
+    setCostSummary(Object.values(map).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'ja')))
+  }
+
+  async function loadAllTimeCost() {
+    const { data: rows } = await supabase.from('timeclock')
+      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate)')
+      .not('clock_out', 'is', null)
+    const map: Record<string, any> = {}
+    let total = 0
+    for (const r of (rows ?? [])) {
+      const sid = r.staff_id
+      const rate = (r.staff as any)?.hourly_rate || 1300
+      if (!map[sid]) map[sid] = { name: (r.staff as any)?.name, rate, hours: 0 }
+      if (r.clock_out) {
+        const h = (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
+        map[sid].hours += h
+        total += h * rate
+      }
+    }
+    setAllTimeCost(Math.round(total))
+    setAllTimeSummary(Object.values(map).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'ja')))
   }
 
   async function approveRequest(r: any) {
@@ -150,12 +199,16 @@ export default function AdminTimeclockPage() {
         </button>
         <button onClick={() => setTab('requests')}
           className={`flex-1 py-2 rounded-xl text-sm font-medium relative ${tab === 'requests' ? 'bg-stone-800 text-white' : 'bg-white text-stone-500 shadow-sm'}`}>
-          修正リクエスト
+          修正
           {requests.length > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
               {requests.length}
             </span>
           )}
+        </button>
+        <button onClick={() => { setTab('cost'); loadCostSummary(costMonth) }}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium ${tab === 'cost' ? 'bg-stone-800 text-white' : 'bg-white text-stone-500 shadow-sm'}`}>
+          コスト
         </button>
       </div>
 
@@ -296,6 +349,73 @@ export default function AdminTimeclockPage() {
                 </div>
               )
             })}
+          </div>
+        </>
+      )}
+
+      {/* コスト集計タブ */}
+      {tab === 'cost' && (
+        <>
+          {/* 累計コスト */}
+          <div className="bg-stone-800 rounded-2xl p-4 mb-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-stone-400 tracking-wider">累計勤怠コスト（全期間）</p>
+              <button onClick={() => setShowAllTime(!showAllTime)}
+                className="text-xs text-stone-400 underline">
+                {showAllTime ? '閉じる' : 'スタッフ別'}
+              </button>
+            </div>
+            <p className="text-3xl font-light text-white mb-2">¥{allTimeCost.toLocaleString()}</p>
+            {showAllTime && allTimeSummary.length > 0 && (
+              <div className="border-t border-stone-700 pt-3 space-y-1.5">
+                {allTimeSummary.map((s, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className="text-sm text-stone-300">{s.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-stone-500">{s.hours.toFixed(1)}h</span>
+                      <span className="text-sm text-stone-300">¥{Math.round(s.hours * s.rate).toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 月別内訳 */}
+          <div className="flex gap-2 mb-3">
+            <input type="month" value={costMonth} onChange={e => setCostMonth(e.target.value)}
+              className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm bg-white text-stone-800" />
+          </div>
+
+          {costSummary.length > 0 && (
+            <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 mb-3 text-center">
+              <p className="text-xs text-teal-600 mb-1">{costMonth} 月次コスト</p>
+              <p className="text-2xl font-medium text-teal-700">
+                ¥{costSummary.reduce((sum, s) => sum + Math.round(s.hours * s.hourly_rate), 0).toLocaleString()}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {costSummary.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 text-center text-stone-400 text-sm shadow-sm">
+                データがありません
+              </div>
+            ) : costSummary.map((s, i) => (
+              <div key={i} className="bg-white rounded-2xl shadow-sm px-4 py-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-medium text-stone-800">{s.name}</p>
+                    <p className="text-xs text-stone-400 mt-0.5">
+                      {s.days}日 · {s.hours.toFixed(1)}h · ¥{(s.hourly_rate || 1300).toLocaleString()}/h
+                    </p>
+                  </div>
+                  <p className="text-lg font-medium text-stone-800">
+                    ¥{Math.round(s.hours * s.hourly_rate).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}

@@ -1,26 +1,62 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveSession, getAdminSession } from '@/lib/session'
-
-const ADMIN_PIN = '4499'
+import { createClient } from '@/lib/supabase/client'
+import { verifyAdminPin } from './actions'
 
 export default function AdminPage() {
   const [pin, setPin] = useState('')
   const [unlocked, setUnlocked] = useState(false)
   const [error, setError] = useState(false)
+  const [todayCost, setTodayCost] = useState(0)
+  const [activeCount, setActiveCount] = useState(0)
+  const [now, setNow] = useState(new Date())
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
     if (getAdminSession()) setUnlocked(true)
   }, [])
 
-  function handlePin(n: string) {
+  useEffect(() => {
+    if (!unlocked) return
+    loadTodayCost()
+    timerRef.current = setInterval(() => {
+      setNow(new Date())
+      loadTodayCost()
+    }, 60000)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [unlocked])
+
+  async function loadTodayCost() {
+    const todayJST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const { data } = await supabase.from('timeclock')
+      .select('clock_in, clock_out, staff(hourly_rate)')
+      .gte('clock_in', todayJST + 'T00:00:00+09:00')
+      .lte('clock_in', todayJST + 'T23:59:59+09:00')
+    const nowMs = Date.now()
+    let cost = 0
+    let active = 0
+    for (const r of (data ?? [])) {
+      const rate = (r.staff as any)?.hourly_rate || 1300
+      const cout = r.clock_out ? new Date(r.clock_out).getTime() : nowMs
+      const h = (cout - new Date(r.clock_in).getTime()) / 3600000
+      cost += h * rate
+      if (!r.clock_out) active++
+    }
+    setTodayCost(Math.round(cost))
+    setActiveCount(active)
+  }
+
+  async function handlePin(n: string) {
     const next = pin + n
     setPin(next)
     setError(false)
     if (next.length === 4) {
-      if (next === ADMIN_PIN) {
+      const ok = await verifyAdminPin(next)
+      if (ok) {
         saveSession({ id: 'admin', name: '桐島', role: 'admin', hourly_rate: 0 })
         window.dispatchEvent(new Event('admin-session-changed'))
         setUnlocked(true)
@@ -70,7 +106,22 @@ export default function AdminPage() {
       <div className="text-center">
         <h1 className="text-3xl font-bold tracking-[0.3em] text-stone-800">FELICITY</h1>
         <p className="text-stone-400 text-xs mt-1 tracking-widest">ADMIN</p>
+        <p className="text-stone-300 text-xs mt-0.5 tracking-widest">v1.6</p>
       </div>
+
+      {/* 今日のリアルタイムコスト */}
+      <div className="w-full max-w-sm bg-stone-800 rounded-2xl px-5 py-4">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs text-stone-400 tracking-wider">TODAY — LIVE</p>
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+            <p className="text-xs text-stone-400">{activeCount}名勤務中</p>
+          </div>
+        </div>
+        <p className="text-3xl font-light text-white">¥{todayCost.toLocaleString()}</p>
+        <p className="text-xs text-stone-500 mt-1">{now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' })} 現在</p>
+      </div>
+
       <div className="w-full max-w-sm space-y-2">
         {sections.map(s => (
           <button key={s.path} onClick={() => router.push(s.path)}
