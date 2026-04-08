@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/timeclock-alert",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/attendance-audit",
+      "schedule": "0 13 * * *"
     }
   ],
   "headers": [
