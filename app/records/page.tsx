@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { nextMonthFirstDay } from '@/lib/utils'
+import { getSession, getAdminSession } from '@/lib/session'
 
 export default function RecordsPage() {
   const [temps, setTemps] = useState<any[]>([])
@@ -14,6 +15,10 @@ export default function RecordsPage() {
   const supabase = createClient()
 
   useEffect(() => {
+    if (!getSession() && !getAdminSession()) {
+      router.replace('/')
+      return
+    }
     supabase.from('temperature_logs')
       .select('*').gte('date', `${month}-01`).lt('date', nextMonthFirstDay(month))
       .order('date', { ascending: false })
@@ -28,18 +33,12 @@ export default function RecordsPage() {
     <main className="min-h-screen p-4 max-w-lg mx-auto pb-24" style={{ backgroundColor: '#F5F0E8' }}>
       <h1 className="text-lg font-bold tracking-widest text-stone-800 mb-4">記録</h1>
 
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className="mb-5">
         <button onClick={() => router.push('/timeclock')}
-          className="bg-white rounded-2xl p-4 shadow-sm text-left">
+          className="w-full bg-white rounded-2xl p-4 shadow-sm text-left">
           <div className="text-xl mb-1">🕐</div>
           <p className="text-sm font-medium text-stone-700">打刻修正リクエスト</p>
           <p className="text-xs text-stone-400 mt-0.5">押し忘れはこちら</p>
-        </button>
-        <button onClick={() => router.push('/admin/timeclock')}
-          className="bg-white rounded-2xl p-4 shadow-sm text-left">
-          <div className="text-xl mb-1">📊</div>
-          <p className="text-sm font-medium text-stone-700">勤怠記録</p>
-          <p className="text-xs text-stone-400 mt-0.5">月次・CSV出力</p>
         </button>
       </div>
 

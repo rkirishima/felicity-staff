@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { getAdminSession } from '@/lib/session'
 
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 const DAYS = ['日','月','火','水','木','金','土']
@@ -31,6 +32,7 @@ export default function AdminShiftsPage() {
   const router = useRouter()
 
   useEffect(() => {
+    if (!getAdminSession()) { router.replace('/admin'); return }
     supabase.from('staff').select('id, name, role')
       .eq('active', true).not('role', 'in', '("accountant")')
       .order('name').then(({ data }) => setStaffList(data ?? []))

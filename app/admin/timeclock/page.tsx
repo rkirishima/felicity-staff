@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { nextMonthFirstDay } from '@/lib/utils'
+import { getAdminSession } from '@/lib/session'
 
 export default function AdminTimeclockPage() {
   const [requests, setRequests] = useState<any[]>([])
@@ -37,6 +38,10 @@ export default function AdminTimeclockPage() {
   const router = useRouter()
 
   useEffect(() => {
+    if (!getAdminSession()) {
+      router.replace('/admin')
+      return
+    }
     loadRequests()
     loadRecords()
     loadAllTimeCost()

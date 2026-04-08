@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { nextMonthFirstDay } from '@/lib/utils'
+import { getAdminSession } from '@/lib/session'
 
 export default function PayrollPage() {
   const [staff, setStaff] = useState<any[]>([])
@@ -20,7 +21,10 @@ export default function PayrollPage() {
   const supabase = createClient()
   const router = useRouter()
 
-  useEffect(() => { loadStaff() }, [])
+  useEffect(() => {
+    if (!getAdminSession()) { router.replace('/admin'); return }
+    loadStaff()
+  }, [])
   useEffect(() => { loadSummary() }, [month])
   useEffect(() => {
     loadToday()

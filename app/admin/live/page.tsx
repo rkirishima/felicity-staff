@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { getAdminSession } from '@/lib/session'
 
 export default function LivePage() {
   const [records, setRecords] = useState<any[]>([])
@@ -11,11 +12,13 @@ export default function LivePage() {
   const supabase = createClient()
 
   useEffect(() => {
+    if (!getAdminSession()) { router.replace('/admin'); return }
     const timer = setInterval(() => setNow(new Date()), 30000)
     return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
+    if (!getAdminSession()) return
     loadRecords()
     const channel = supabase.channel('timeclock-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'timeclock' }, loadRecords)
