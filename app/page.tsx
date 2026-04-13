@@ -40,6 +40,8 @@ export default function HomePage() {
   const [upcomingShifts, setUpcomingShifts] = useState<any[]>([])
   const [absenceConfirm, setAbsenceConfirm] = useState<string | null>(null)
   const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
+  const [prepAlerts, setPrepAlerts] = useState<{ eventTitle: string; date: string; startTime?: string; tasks: { task: string }[] }[]>([])
+  const [todayEvents, setTodayEvents] = useState<{ title: string; startTime?: string; endTime?: string; floor?: string }[]>([])
   const autoResetRef = useRef<NodeJS.Timeout | null>(null)
   const clockingRef = useRef(false) // 二重タップ防止ロック
   const router = useRouter()
@@ -147,8 +149,20 @@ export default function HomePage() {
     }
     await loadStats(staffWithRate, 'week')
     loadUpcomingShifts(staffWithRate.id)
+    loadPrepAlerts()
     saveSession(staffWithRate)
     setStep('main')
+  }
+
+  async function loadPrepAlerts() {
+    try {
+      const res = await fetch('/api/events/prep-alert')
+      if (res.ok) {
+        const data = await res.json()
+        setPrepAlerts(data.prepAlerts || [])
+        setTodayEvents(data.todayEvents || [])
+      }
+    } catch {}
   }
 
   async function loadUpcomingShifts(staffId: string) {
@@ -357,6 +371,46 @@ export default function HomePage() {
           </button>
         </div>
 
+        {/* 明日の準備アラート */}
+        {prepAlerts.length > 0 && (
+          <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 mb-4">
+            <p className="text-xs font-bold text-amber-700 mb-2">🧹 明日の準備</p>
+            {prepAlerts.map((alert, idx) => (
+              <div key={idx} className="mb-2 last:mb-0">
+                <p className="text-sm font-medium text-stone-700">
+                  {alert.eventTitle}
+                  {alert.startTime && <span className="text-stone-400 font-normal ml-1">{alert.startTime.slice(0, 5)}〜</span>}
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {alert.tasks.map((t, i) => (
+                    <li key={i} className="text-sm text-amber-800 flex items-start gap-1.5">
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                      {t.task}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 本日のイベント */}
+        {todayEvents.length > 0 && (
+          <div className="rounded-2xl border-2 border-teal-200 bg-teal-50 p-4 mb-4">
+            <p className="text-xs font-bold text-teal-700 mb-2">🎉 本日のイベント</p>
+            {todayEvents.map((ev, idx) => (
+              <div key={idx} className="flex items-center justify-between text-sm">
+                <span className="text-stone-700 font-medium">{ev.title}</span>
+                <span className="text-stone-400 text-xs">
+                  {ev.startTime && `${ev.startTime.slice(0, 5)}`}
+                  {ev.endTime && `〜${ev.endTime.slice(0, 5)}`}
+                  {ev.floor && ` ${ev.floor}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* 時計 */}
         <div className="bg-white rounded-2xl shadow-sm p-5 mb-4 text-center">
           <p className="text-xs text-stone-400 mb-1" suppressHydrationWarning>{dateStr}</p>
@@ -553,7 +607,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="flex flex-col items-center pt-10 pb-6 px-6">
-        <div className="flex flex-col items-center mb-6"><Image src="https://felicity.cafe/felicity-logo.png" alt="Felicity" width={110} height={42} className="object-contain opacity-80" unoptimized /><span className="text-xs text-stone-300 tracking-widest mt-1">v1.6</span></div>
+        <div className="flex flex-col items-center mb-6"><Image src="https://felicity.cafe/felicity-logo.png" alt="Felicity" width={110} height={42} className="object-contain opacity-80" unoptimized /><span className="text-xs text-stone-300 tracking-widest mt-1">v1.7</span></div>
         <div className="text-center">
           <div className="flex items-end justify-center gap-1">
             <span className="font-light text-stone-800 tabular-nums" style={{ fontSize:'72px', lineHeight:1, fontFamily:'Georgia, serif' }}>{H}</span>

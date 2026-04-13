@@ -99,6 +99,8 @@ export default function AdminPage() {
     { label: '💴 給与管理', sub: '月次・時給設定', path: '/admin/payroll', color: 'bg-white' },
     { label: '📋 シフト申請', sub: '承認・却下', path: '/admin/shifts', color: 'bg-white' },
     { label: '📅 シフト管理', sub: 'カレンダー', path: '/schedule', color: 'bg-white' },
+    { label: '🏷 ラベル印刷', sub: 'ドリップ・業販ラベル', path: '/label', color: 'bg-white' },
+    { label: '🎉 イベント管理', sub: '準備タスク・GCal連携', path: '/admin/events', color: 'bg-white' },
   ]
 
   return (
@@ -106,7 +108,7 @@ export default function AdminPage() {
       <div className="text-center">
         <h1 className="text-3xl font-bold tracking-[0.3em] text-stone-800">FELICITY</h1>
         <p className="text-stone-400 text-xs mt-1 tracking-widest">ADMIN</p>
-        <p className="text-stone-300 text-xs mt-0.5 tracking-widest">v1.6</p>
+        <p className="text-stone-300 text-xs mt-0.5 tracking-widest">v1.7</p>
       </div>
 
       {/* 今日のリアルタイムコスト */}

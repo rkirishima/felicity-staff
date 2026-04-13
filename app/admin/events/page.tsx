@@ -30,12 +30,15 @@ interface Vote {
   id: string; event_date_id: string; voter_name: string; voter_email: string; response: string;
 }
 
+interface PrepTask { task: string; task_en?: string }
+
 interface Event {
   id: string; title: string; title_en: string; description: string | null;
   description_en: string | null; photo: string | null; min_votes: number;
   status: string; confirmed_date: string | null; created_at: string;
   event_type: string; recurrence_rule: string | null;
   floor_block: string | null; seats_blocked: number; time_relation: string;
+  prep_tasks: PrepTask[] | null;
   event_dates: EventDate[]; event_votes: Vote[];
 }
 
@@ -44,6 +47,7 @@ export default function AdminEventsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [gcalConnected, setGcalConnected] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
@@ -52,6 +56,7 @@ export default function AdminEventsPage() {
     min_votes: 3, event_type: 'one_off', time_relation: 'during',
     floor_block: '', seats_blocked: 0,
     recurrence_rule: '',
+    prep_tasks: [] as { task: string; task_en?: string }[],
   })
   const [newDates, setNewDates] = useState<{ date: string; start_time: string; end_time: string }[]>([
     { date: '', start_time: '', end_time: '' },
@@ -60,6 +65,7 @@ export default function AdminEventsPage() {
   useEffect(() => {
     if (!getAdminSession()) { router.replace('/admin'); return }
     loadEvents()
+    fetch('/api/google/status').then(r => r.json()).then(d => setGcalConnected(d.connected)).catch(() => {})
   }, [])
 
   async function loadEvents() {
@@ -93,6 +99,7 @@ export default function AdminEventsPage() {
       floor_block: form.floor_block || null,
       seats_blocked: form.seats_blocked,
       recurrence_rule: form.recurrence_rule || null,
+      prep_tasks: form.prep_tasks.length > 0 ? form.prep_tasks : [],
     }).select().single()
 
     if (error || !event) { toast.error('イベント作成失敗: ' + error?.message); return }
@@ -111,7 +118,7 @@ export default function AdminEventsPage() {
 
     toast.success('イベントを作成しました')
     setShowForm(false)
-    setForm({ title: '', title_en: '', description: '', description_en: '', min_votes: 3, event_type: 'one_off', time_relation: 'during', floor_block: '', seats_blocked: 0, recurrence_rule: '' })
+    setForm({ title: '', title_en: '', description: '', description_en: '', min_votes: 3, event_type: 'one_off', time_relation: 'during', floor_block: '', seats_blocked: 0, recurrence_rule: '', prep_tasks: [] })
     setNewDates([{ date: '', start_time: '', end_time: '' }])
     loadEvents()
   }
@@ -177,6 +184,20 @@ export default function AdminEventsPage() {
   return (
     <main className="min-h-screen p-4 pb-24" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="max-w-lg mx-auto">
+        {/* Google Calendar status */}
+        <div className="mb-4 flex items-center justify-between">
+          {gcalConnected ? (
+            <span className="text-xs px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 border border-teal-200">
+              ✓ Google Calendar 連携済み
+            </span>
+          ) : (
+            <a href="/api/google/auth"
+              className="text-xs px-3 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-600 hover:bg-stone-50">
+              📅 Google Calendar を連携
+            </a>
+          )}
+        </div>
+
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-lg font-medium" style={{ color: '#292524' }}>イベント管理</h1>
           <button onClick={() => setShowForm(!showForm)}
@@ -320,6 +341,27 @@ export default function AdminEventsPage() {
                   className="text-xs font-medium mt-1" style={{ color: '#14b8a6' }}>+ 候補日を追加</button>
               </div>
 
+              {/* Prep tasks */}
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: '#78716c' }}>🧹 前日準備タスク（16時にLINEリマインド）</label>
+                {form.prep_tasks.map((t, i) => (
+                  <div key={i} className="flex gap-1 mb-1.5">
+                    <input value={t.task} onChange={e => {
+                      const u = [...form.prep_tasks]; u[i] = { ...u[i], task: e.target.value }; setForm({...form, prep_tasks: u})
+                    }} placeholder="タスク（日本語）" className="flex-1 px-2 py-2 rounded-lg text-xs border"
+                      style={{ backgroundColor: '#F5F0E8', borderColor: '#E8E0D4' }} />
+                    <input value={t.task_en || ''} onChange={e => {
+                      const u = [...form.prep_tasks]; u[i] = { ...u[i], task_en: e.target.value }; setForm({...form, prep_tasks: u})
+                    }} placeholder="Task (EN)" className="flex-1 px-2 py-2 rounded-lg text-xs border"
+                      style={{ backgroundColor: '#F5F0E8', borderColor: '#E8E0D4' }} />
+                    <button onClick={() => setForm({...form, prep_tasks: form.prep_tasks.filter((_, j) => j !== i)})}
+                      className="px-2"><Trash2 size={14} color="#A8A29E" /></button>
+                  </div>
+                ))}
+                <button onClick={() => setForm({...form, prep_tasks: [...form.prep_tasks, { task: '', task_en: '' }]})}
+                  className="text-xs font-medium mt-1" style={{ color: '#14b8a6' }}>+ タスクを追加</button>
+              </div>
+
               <button onClick={createEvent}
                 className="w-full py-3 rounded-xl text-sm font-medium"
                 style={{ backgroundColor: '#14b8a6', color: 'white' }}>
@@ -413,6 +455,9 @@ export default function AdminEventsPage() {
                       </div>
                     )}
 
+                    {/* Prep tasks */}
+                    <PrepTasksEditor eventId={event.id} tasks={event.prep_tasks || []} supabase={supabase} onUpdate={loadEvents} />
+
                     {/* Actions */}
                     <div className="flex flex-wrap gap-2 mb-3">
                       {event.status === 'open' && (
@@ -459,6 +504,56 @@ export default function AdminEventsPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+function PrepTasksEditor({ eventId, tasks, supabase, onUpdate }: { eventId: string; tasks: PrepTask[]; supabase: any; onUpdate: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [items, setItems] = useState(tasks)
+
+  async function save() {
+    const filtered = items.filter(t => t.task.trim())
+    await supabase.from('events').update({ prep_tasks: filtered }).eq('id', eventId)
+    toast.success('準備タスクを更新しました')
+    setEditing(false)
+    onUpdate()
+  }
+
+  if (!editing) {
+    return (
+      <div className="mb-3">
+        {tasks.length > 0 ? (
+          <div className="text-xs px-2 py-1.5 rounded-lg flex items-center justify-between" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>
+            <span>🧹 {tasks.map(t => t.task).join('、')}</span>
+            <button onClick={() => { setItems(tasks); setEditing(true) }} className="ml-2 underline">編集</button>
+          </div>
+        ) : (
+          <button onClick={() => { setItems([{ task: '', task_en: '' }]); setEditing(true) }}
+            className="text-xs font-medium" style={{ color: '#14b8a6' }}>+ 準備タスクを追加</button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-3 p-2 rounded-lg border" style={{ borderColor: '#FCD34D', backgroundColor: '#FFFBEB' }}>
+      <p className="text-xs font-medium mb-2" style={{ color: '#92400E' }}>🧹 準備タスク</p>
+      {items.map((t, i) => (
+        <div key={i} className="flex gap-1 mb-1">
+          <input value={t.task} onChange={e => { const u = [...items]; u[i] = { ...u[i], task: e.target.value }; setItems(u) }}
+            placeholder="タスク" className="flex-1 px-2 py-1.5 rounded-lg text-xs border"
+            style={{ backgroundColor: '#fff', borderColor: '#E8E0D4' }} />
+          <button onClick={() => setItems(items.filter((_, j) => j !== i))} className="px-1"><Trash2 size={12} color="#A8A29E" /></button>
+        </div>
+      ))}
+      <div className="flex gap-2 mt-2">
+        <button onClick={() => setItems([...items, { task: '', task_en: '' }])}
+          className="text-xs" style={{ color: '#14b8a6' }}>+ 追加</button>
+        <button onClick={save} className="px-3 py-1 rounded-lg text-xs font-medium"
+          style={{ backgroundColor: '#14b8a6', color: 'white' }}>保存</button>
+        <button onClick={() => setEditing(false)} className="text-xs" style={{ color: '#78716c' }}>キャンセル</button>
+      </div>
+    </div>
   )
 }
 
