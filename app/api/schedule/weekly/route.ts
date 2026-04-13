@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import dayjs from 'dayjs'
 
 export async function GET(req: NextRequest) {
@@ -13,29 +14,49 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    // 今週のスケジュールを生成（デモ用）
+    const supabase = createServiceClient()
+
     const today = dayjs()
-    const startOfWeek = today.startOf('week')
-    
+    const startOfWeek = today.startOf('week') // Sunday
+    const endOfWeek = startOfWeek.add(6, 'day')
+
+    const startDate = startOfWeek.format('YYYY-MM-DD')
+    const endDate = endOfWeek.format('YYYY-MM-DD')
+
+    // Fetch shifts for this user in this week
+    const { data: shifts } = await supabase
+      .from('shifts')
+      .select('*')
+      .eq('staff_id', user_id)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+
+    const dayNames = ['日', '月', '火', '水', '木', '金', '土']
     const schedule = []
+
     for (let i = 0; i < 7; i++) {
       const date = startOfWeek.add(i, 'day')
-      const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.day()]
-      
-      // デモ: 月〜金は9:00-18:00、土日は休み
-      let status = 'off'
-      let shift_start = undefined
-      let shift_end = undefined
+      const dateStr = date.format('YYYY-MM-DD')
+      const shift = shifts?.find(s => s.date === dateStr)
 
-      if (date.day() !== 0 && date.day() !== 6) { // 平日
-        status = 'scheduled'
-        shift_start = date.hour(9).minute(0).toISOString()
-        shift_end = date.hour(18).minute(0).toISOString()
+      let status: 'scheduled' | 'off' | 'pending' = 'off'
+      let shift_start: string | undefined
+      let shift_end: string | undefined
+
+      if (shift) {
+        status = shift.status === 'approved' ? 'scheduled' : shift.status === 'pending' ? 'pending' : 'off'
+        if (shift.start_time) {
+          shift_start = `${dateStr}T${shift.start_time}`
+        }
+        if (shift.end_time) {
+          shift_end = `${dateStr}T${shift.end_time}`
+        }
       }
 
       schedule.push({
         date: date.format('MM/DD'),
-        day: dayOfWeek,
+        day: dayNames[date.day()],
         shift_start,
         shift_end,
         status,
