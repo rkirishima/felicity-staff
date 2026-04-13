@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ApprovalTable } from '@/components/admin/ApprovalTable'
 import { CSVExport } from '@/components/admin/CSVExport'
 import { TimecardEditor } from '@/components/admin/TimecardEditor'
+import { EventManager } from '@/components/admin/EventManager'
 import { ChevronLeft } from 'lucide-react'
 
 export default function AdminPage() {
@@ -22,6 +23,8 @@ export default function AdminPage() {
 
         <div className="space-y-6">
           <TimecardEditor />
+
+          <EventManager />
 
           <ApprovalTable
             refreshKey={refreshKey}
