@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
-import { PartyPopper, MapPin, Clock } from 'lucide-react'
+import { PartyPopper, MapPin, Clock, AlertTriangle } from 'lucide-react'
 
 interface EventInfo {
   id: string
@@ -13,6 +13,7 @@ interface EventInfo {
   floor_block?: string
   seats_blocked?: number
   time_relation?: string
+  prep_tasks?: PrepTask[]
 }
 
 interface EventDate {
@@ -28,10 +29,23 @@ interface EventInstance {
   events: EventInfo
 }
 
+interface PrepTask {
+  task: string
+  task_en?: string
+}
+
+interface PrepAlert {
+  eventTitle: string
+  date: string
+  startTime?: string
+  tasks: PrepTask[]
+}
+
 interface TodayEvents {
   confirmedEvents: EventInfo[]
   eventDates: EventDate[]
   eventInstances: EventInstance[]
+  prepAlerts: PrepAlert[]
 }
 
 export function EventAlert() {
@@ -51,9 +65,11 @@ export function EventAlert() {
     events.eventDates.length > 0 ||
     events.eventInstances.length > 0
 
-  if (!hasEvents) return null
+  const hasPrep = events.prepAlerts && events.prepAlerts.length > 0
 
-  // Collect all events into a flat list
+  if (!hasEvents && !hasPrep) return null
+
+  // Collect today's events into a flat list
   const items: { title: string; description?: string; floor?: string; startTime?: string; endTime?: string; seats?: number }[] = []
 
   for (const e of events.confirmedEvents) {
@@ -101,41 +117,72 @@ export function EventAlert() {
     return true
   })
 
-  if (unique.length === 0) return null
-
   return (
-    <Card className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-300 border-2">
-      <div className="flex items-center gap-2 mb-3">
-        <PartyPopper className="w-5 h-5 text-orange-500" />
-        <h3 className="font-bold text-orange-800">本日のイベント</h3>
-      </div>
-      <div className="space-y-2">
-        {unique.map((item, idx) => (
-          <div key={idx} className="bg-white/70 rounded-lg p-3">
-            <p className="font-bold text-gray-800">{item.title}</p>
-            {item.description && (
-              <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-            )}
-            <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
-              {item.startTime && (
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {item.startTime}{item.endTime ? ` 〜 ${item.endTime}` : ''}
-                </span>
-              )}
-              {item.floor && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {item.floor}
-                </span>
-              )}
-              {item.seats && item.seats > 0 && (
-                <span>席ブロック: {item.seats}席</span>
-              )}
-            </div>
+    <>
+      {/* Prep alerts — shown the day before an event */}
+      {hasPrep && (
+        <Card className="p-4 bg-gradient-to-r from-red-50 to-orange-50 border-red-300 border-2">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+            <h3 className="font-bold text-red-800">明日の準備</h3>
           </div>
-        ))}
-      </div>
-    </Card>
+          <div className="space-y-2">
+            {events.prepAlerts.map((alert, idx) => (
+              <div key={idx} className="bg-white/70 rounded-lg p-3">
+                <p className="text-sm font-bold text-gray-700">
+                  {alert.eventTitle}
+                  {alert.startTime && <span className="text-gray-500 font-normal ml-2">{alert.startTime}〜</span>}
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {alert.tasks.map((t, i) => (
+                    <li key={i} className="text-sm text-red-700 flex items-start gap-1.5">
+                      <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                      {t.task}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Today's events */}
+      {unique.length > 0 && (
+        <Card className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-300 border-2">
+          <div className="flex items-center gap-2 mb-3">
+            <PartyPopper className="w-5 h-5 text-orange-500" />
+            <h3 className="font-bold text-orange-800">本日のイベント</h3>
+          </div>
+          <div className="space-y-2">
+            {unique.map((item, idx) => (
+              <div key={idx} className="bg-white/70 rounded-lg p-3">
+                <p className="font-bold text-gray-800">{item.title}</p>
+                {item.description && (
+                  <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                )}
+                <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
+                  {item.startTime && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {item.startTime}{item.endTime ? ` 〜 ${item.endTime}` : ''}
+                    </span>
+                  )}
+                  {item.floor && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {item.floor}
+                    </span>
+                  )}
+                  {item.seats && item.seats > 0 && (
+                    <span>席ブロック: {item.seats}席</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </>
   )
 }

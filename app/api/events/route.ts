@@ -29,12 +29,14 @@ export async function POST(request: NextRequest) {
       description,
       description_en,
       event_type,
+      recurrence_rule,
       floor_block,
       seats_blocked,
       max_attendees,
       time_relation,
       confirmed_date,
       dates, // array of { date, start_time, end_time }
+      prep_tasks,
     } = body
 
     if (!title) {
@@ -50,11 +52,13 @@ export async function POST(request: NextRequest) {
         description: description || '',
         description_en: description_en || '',
         event_type: event_type || 'one_off',
+        recurrence_rule: recurrence_rule || null,
         floor_block: floor_block || null,
         seats_blocked: seats_blocked || 0,
         max_attendees: max_attendees || 0,
         time_relation: time_relation || 'during',
         confirmed_date: confirmed_date || null,
+        prep_tasks: prep_tasks || [],
         status: 'open',
       })
       .select()
