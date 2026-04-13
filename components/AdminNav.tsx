@@ -1,14 +1,16 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CalendarDays, Clock, BookOpen, Users } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Clock, Tag, Users, CalendarCheck, Sparkles } from 'lucide-react'
 import { useIsAdmin } from '@/lib/admin-context'
 
 const items = [
   { href: '/admin', label: 'ホーム', icon: LayoutDashboard },
+  { href: '/admin/reservations', label: '予約', icon: CalendarCheck },
+  { href: '/admin/events', label: 'イベント', icon: Sparkles },
   { href: '/admin/shifts', label: 'シフト', icon: CalendarDays },
   { href: '/admin/timeclock', label: 'タイムカード', icon: Clock },
-  { href: '/recipes', label: 'レシピ', icon: BookOpen },
+  { href: '/label', label: 'ラベル', icon: Tag },
   { href: '/admin/payroll', label: 'スタッフ', icon: Users },
 ]
 
