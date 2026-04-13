@@ -5,50 +5,70 @@ import { TimeclockWidget } from '@/components/home/TimeclockWidget'
 import { WeeklyScheduleWidget } from '@/components/home/WeeklyScheduleWidget'
 import { EventAlert } from '@/components/home/EventAlert'
 import { VersionChecker } from '@/components/VersionChecker'
-import { Card } from '@/components/ui/card'
 import { CalendarDays, ClipboardList, Settings, Clock, UserCircle } from 'lucide-react'
 
 interface Staff {
   id: string
   name: string
+  role?: string
 }
 
 const STORAGE_KEY = 'felicity_staff_id'
 const STORAGE_NAME_KEY = 'felicity_staff_name'
+const STORAGE_ROLE_KEY = 'felicity_staff_role'
 
 export default function Home() {
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
+  const [selectedRole, setSelectedRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const savedId = localStorage.getItem(STORAGE_KEY)
     const savedName = localStorage.getItem(STORAGE_NAME_KEY)
+    const savedRole = localStorage.getItem(STORAGE_ROLE_KEY)
     if (savedId && savedName) {
       setSelectedId(savedId)
       setSelectedName(savedName)
+      setSelectedRole(savedRole)
     }
 
     fetch('/api/staff')
       .then(r => r.json())
-      .then(data => setStaffList(data || []))
+      .then(data => {
+        setStaffList(data || [])
+        // Update role from server if user already selected
+        if (savedId && data) {
+          const match = data.find((s: Staff) => s.id === savedId)
+          if (match?.role) {
+            setSelectedRole(match.role)
+            localStorage.setItem(STORAGE_ROLE_KEY, match.role)
+          }
+        }
+      })
       .finally(() => setLoading(false))
   }, [])
 
   function selectStaff(staff: Staff) {
     setSelectedId(staff.id)
     setSelectedName(staff.name)
+    setSelectedRole(staff.role || 'staff')
     localStorage.setItem(STORAGE_KEY, staff.id)
     localStorage.setItem(STORAGE_NAME_KEY, staff.name)
+    localStorage.setItem(STORAGE_ROLE_KEY, staff.role || 'staff')
   }
 
   function signOut() {
     setSelectedId(null)
     setSelectedName(null)
+    setSelectedRole(null)
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(STORAGE_NAME_KEY)
+    localStorage.removeItem(STORAGE_ROLE_KEY)
   }
+
+  const isAdmin = selectedRole === 'admin' || selectedRole === 'manager'
 
   if (loading) {
     return (
@@ -134,10 +154,12 @@ export default function Home() {
               <ClipboardList className="w-5 h-5" />
               申請
             </a>
-            <a href="/admin" className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-purple-600 text-xs font-medium py-1 px-3">
-              <Settings className="w-5 h-5" />
-              管理
-            </a>
+            {isAdmin && (
+              <a href="/admin" className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-purple-600 text-xs font-medium py-1 px-3">
+                <Settings className="w-5 h-5" />
+                管理
+              </a>
+            )}
           </div>
         </nav>
 
