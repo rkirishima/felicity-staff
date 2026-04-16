@@ -28,21 +28,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No customer email on record' }, { status: 400 })
   }
 
-  // Update DB first — prevents duplicate notifications if email step fails
-  const { error: updateError } = await sb
-    .from('orders')
-    .update({ status: 'shipped', tracking_number: trackingNumber, shipped_at: new Date().toISOString() })
-    .eq('id', orderId)
-
-  if (updateError) {
-    console.error('Supabase update error:', updateError)
-    return NextResponse.json({ error: 'Failed to update order status' }, { status: 500 })
-  }
-
   const itemsList = Array.isArray(order.items)
     ? order.items.map((i: { name: string; qty: number }) => `<li>${i.name} × ${i.qty}</li>`).join('')
     : ''
 
+  // Send email FIRST. Only update DB if email succeeds — otherwise the order is
+  // marked shipped but the customer never knows (and staff can't retry because
+  // the unshipped list no longer shows it).
   const { error: emailError } = await resend.emails.send({
     from: 'FELICITY <orders@felicity.cafe>',
     to: order.customer_email,
@@ -102,7 +94,20 @@ export async function POST(req: Request) {
 
   if (emailError) {
     console.error('Resend error:', emailError)
-    return NextResponse.json({ error: 'Failed to send email' }, { status: 500 })
+    const msg = (emailError as { message?: string })?.message || 'Failed to send email'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
+  // Email sent successfully — now mark the order as shipped.
+  const { error: updateError } = await sb
+    .from('orders')
+    .update({ status: 'shipped', tracking_number: trackingNumber, shipped_at: new Date().toISOString() })
+    .eq('id', orderId)
+
+  if (updateError) {
+    console.error('Supabase update error:', updateError)
+    // Email already sent — surface the error but note it so staff can reconcile manually.
+    return NextResponse.json({ error: 'Email sent but failed to update order status. Please refresh and verify.' }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })
