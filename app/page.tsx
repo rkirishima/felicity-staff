@@ -567,6 +567,11 @@ export default function HomePage() {
             🔐 PIN変更
           </button>
         </div>
+
+        <button onClick={() => router.push('/admin/shipping')}
+          className="w-full py-3 bg-white rounded-2xl shadow-sm text-sm text-stone-600 font-medium">
+          📦 発注・発送管理
+        </button>
       </main>
     )
   }
