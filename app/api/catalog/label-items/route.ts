@@ -11,7 +11,7 @@ const PRINT_LABEL_ATTR_ID = 'X3QZMB3JYOIRV65E4ASKJQJF'
 const HARDCODED_DRIP_PACKS: LabelItem[] = [
   {
     itemId: 'QDQAUC3UUIT7RQXJQ6YFFLUD',
-    name: 'コーヒードリップパック エチオピア',
+    name: 'エチオピア',
     rawName: 'コーヒードリップパック　Ｅｔｈｉｏｐｉａ',
     category: 'drip',
     variations: [{
@@ -25,7 +25,7 @@ const HARDCODED_DRIP_PACKS: LabelItem[] = [
   },
   {
     itemId: 'HM54ODEK23LASACBWONYFMLK',
-    name: 'コーヒードリップパック グアテマラ',
+    name: 'グアテマラ',
     rawName: 'コーヒードリップパック　Ｇｕａｔｅｍａｌａ',
     category: 'drip',
     variations: [{
@@ -39,7 +39,7 @@ const HARDCODED_DRIP_PACKS: LabelItem[] = [
   },
   {
     itemId: '4DCQ4BZAARJEGAYFFWEAGYS3',
-    name: 'コーヒードリップパック パプアニューギニア',
+    name: 'パプアニューギニア',
     rawName: 'コーヒードリップパック　Ｐａｐｕａ　Ｎｅｗ　Ｇｕｉｎｅａ',
     category: 'drip',
     variations: [{
