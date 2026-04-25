@@ -6,7 +6,24 @@ import { NextResponse } from 'next/server'
 
 const PRINT_LABEL_ATTR_ID = 'X3QZMB3JYOIRV65E4ASKJQJF'
 
-// Hardcoded drip pack 10g items — Square print_label属性に依存しない。
+type Variation = {
+  variationId: string
+  sku: string
+  upc: string
+  size: string         // "10g" | "100g" | "200g" | "500g" | "1kg" etc.
+  price: number        // JPY
+  type: 'bean' | 'ground'
+}
+
+type LabelItem = {
+  itemId: string
+  name: string         // normalized display name (half-width)
+  rawName: string      // Square's full-width name as stored
+  category: 'drip' | 'retail' | 'wholesale'
+  variations: Variation[]
+}
+
+// Hardcoded items — Square print_label属性に依存しない。
 // POSもGTINも登録済みなので、これらは固定で常時表示する。
 const HARDCODED_DRIP_PACKS: LabelItem[] = [
   {
@@ -51,25 +68,21 @@ const HARDCODED_DRIP_PACKS: LabelItem[] = [
       type: 'ground',
     }],
   },
+  {
+    itemId: 'NWFAJZ5UZVPTDYSSICP6GVTP',
+    name: 'Brazil Santa Alina',
+    rawName: 'ＢＲＡＺＩＬ　ＳＡＮＴＡ　ＡＬＩＮＡ',
+    category: 'retail',
+    variations: [{
+      variationId: 'IDNLFK4UBJRRFVOP2YVLDFL7',
+      sku: 'BRS-200',
+      upc: '4595433537262',
+      size: '200g',
+      price: 1600,
+      type: 'bean',
+    }],
+  },
 ]
-
-
-type Variation = {
-  variationId: string
-  sku: string
-  upc: string
-  size: string         // "10g" | "100g" | "200g" | "500g" | "1kg" etc.
-  price: number        // JPY
-  type: 'bean' | 'ground'
-}
-
-type LabelItem = {
-  itemId: string
-  name: string         // normalized display name (half-width)
-  rawName: string      // Square's full-width name as stored
-  category: 'drip' | 'retail' | 'wholesale'
-  variations: Variation[]
-}
 
 // Square uses full-width characters. Normalize to ASCII for display/matching.
 function normalizeName(s: string): string {
@@ -95,14 +108,6 @@ function sizeToGrams(size: string): number {
   if (!m) return 0
   const n = parseFloat(m[1])
   return m[2].toLowerCase() === 'kg' ? n * 1000 : n
-}
-
-function classifyCategory(grams: number, itemName: string): LabelItem['category'] {
-  // Drip pack if 10g and name includes "drip" indicator (actually drips are
-  // usually separate items — but to be safe, treat <=10g as drip)
-  if (grams <= 10) return 'drip'
-  if (grams >= 1000) return 'wholesale'
-  return 'retail'
 }
 
 // Ground vs bean is encoded in Square either via SKU suffix or modifier.
@@ -196,7 +201,7 @@ export async function GET(request: Request) {
       const largestGrams = sizeToGrams(variations[variations.length - 1].size)
       const category: LabelItem['category'] =
         smallestGrams <= 10 ? 'drip' :
-        largestGrams >= 1000 ? 'retail' :  // 1kg is also in "retail" here — we split by variation below
+        largestGrams >= 1000 ? 'retail' :
         'retail'
 
       items.push({
@@ -208,10 +213,10 @@ export async function GET(request: Request) {
       })
     }
 
-    // Inject hardcoded drip pack items if not already present (Square print_label属性の有無に関わらず)
-    for (const drip of HARDCODED_DRIP_PACKS) {
-      if (!items.some(i => i.itemId === drip.itemId)) {
-        items.push(drip)
+    // Inject hardcoded items (drip packs + Brazil) — independent of Square print_label attr
+    for (const hc of HARDCODED_DRIP_PACKS) {
+      if (!items.some(i => i.itemId === hc.itemId)) {
+        items.push(hc)
       }
     }
 
