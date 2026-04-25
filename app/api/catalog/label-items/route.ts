@@ -31,6 +31,17 @@ function normalizeName(s: string): string {
     .trim()
 }
 
+// Generate a deterministic 12-digit pseudo-UPC from any string (for items
+// without a real GTIN in Square). The printer's EAN-13 generator adds the
+// check digit. Not POS-scannable — only for visual label barcodes.
+function pseudoUpc(seed: string): string {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = ((h << 5) - h + seed.charCodeAt(i)) | 0
+  // Felicity prefix "200" (in-store use, EAN GS1 reserved range) + 9-digit hash
+  const tail = Math.abs(h).toString().padStart(9, '0').slice(0, 9)
+  return '200' + tail
+}
+
 function sizeToGrams(size: string): number {
   const m = size.match(/(\d+(?:\.\d+)?)\s*(kg|g)/i)
   if (!m) return 0
@@ -106,11 +117,12 @@ export async function GET(request: Request) {
           continue
         }
         const size = vd.name ?? ''
-        const upc = vd.upc ?? ''
+        const realUpc = vd.upc ?? ''
         const sku = vd.sku ?? ''
-        if (!upc) {
-          skipped.push({ item: name, variation: size || v.id, reason: 'no UPC/GTIN — Squareで商品にバーコードを追加してください' })
-          continue
+        // Fall back to a deterministic pseudo-UPC (non-POS) for items without a real GTIN
+        const upc = realUpc || pseudoUpc(v.id)
+        if (!realUpc) {
+          skipped.push({ item: name, variation: size || v.id, reason: `UPC未設定 → 擬似バーコード ${upc} を自動使用（ラベル印刷OK）` })
         }
 
         variations.push({

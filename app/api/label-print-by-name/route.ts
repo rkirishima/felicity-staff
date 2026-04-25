@@ -134,7 +134,6 @@ export async function POST(request: Request) {
         if (v.is_deleted) continue
         const vSize = v.item_variation_data?.name ?? ''
         if (!sizesMatch(vSize, size)) continue
-        if (!v.item_variation_data?.upc) continue
         matchedItem = sq
         matchedVariation = v
         break
@@ -143,11 +142,19 @@ export async function POST(request: Request) {
     }
 
     if (!matchedItem || !matchedVariation) {
-      skipped.push({ name: item.name, reason: 'no Square catalog match with GTIN' })
+      skipped.push({ name: item.name, reason: 'no Square catalog match' })
       continue
     }
 
-    const gtin = matchedVariation.item_variation_data!.upc!
+    // Use real UPC if present, else synthesize a deterministic pseudo-UPC from
+    // the variation ID (non-POS — label-use only, matches catalog/label-items).
+    function pseudoUpc(seed: string): string {
+      let h = 0
+      for (let i = 0; i < seed.length; i++) h = ((h << 5) - h + seed.charCodeAt(i)) | 0
+      return '200' + Math.abs(h).toString().padStart(9, '0').slice(0, 9)
+    }
+    const realUpc = matchedVariation.item_variation_data?.upc ?? ''
+    const gtin = realUpc || pseudoUpc(matchedVariation.id!)
     const grams = parseFloat(size) * (/kg/i.test(size) ? 1000 : 1)
     const category: 'drip' | 'retail' | 'wholesale' =
       grams <= 10 ? 'drip' : grams >= 1000 ? 'wholesale' : 'retail'
