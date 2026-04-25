@@ -6,6 +6,54 @@ import { NextResponse } from 'next/server'
 
 const PRINT_LABEL_ATTR_ID = 'X3QZMB3JYOIRV65E4ASKJQJF'
 
+// Hardcoded drip pack 10g items — Square print_label属性に依存しない。
+// POSもGTINも登録済みなので、これらは固定で常時表示する。
+const HARDCODED_DRIP_PACKS: LabelItem[] = [
+  {
+    itemId: 'QDQAUC3UUIT7RQXJQ6YFFLUD',
+    name: 'コーヒードリップパック エチオピア',
+    rawName: 'コーヒードリップパック　Ｅｔｈｉｏｐｉａ',
+    category: 'drip',
+    variations: [{
+      variationId: 'YYMP3FC6UWIKQWPJYOSQNF45',
+      sku: 'DPE-10',
+      upc: '4595433537514',
+      size: '10g',
+      price: 220,
+      type: 'ground',
+    }],
+  },
+  {
+    itemId: 'HM54ODEK23LASACBWONYFMLK',
+    name: 'コーヒードリップパック グアテマラ',
+    rawName: 'コーヒードリップパック　Ｇｕａｔｅｍａｌａ',
+    category: 'drip',
+    variations: [{
+      variationId: 'D4QWGU44SVGW4KDMOUDEROHW',
+      sku: 'GDP-10',
+      upc: '4595433537521',
+      size: '10g',
+      price: 230,
+      type: 'ground',
+    }],
+  },
+  {
+    itemId: '4DCQ4BZAARJEGAYFFWEAGYS3',
+    name: 'コーヒードリップパック パプアニューギニア',
+    rawName: 'コーヒードリップパック　Ｐａｐｕａ　Ｎｅｗ　Ｇｕｉｎｅａ',
+    category: 'drip',
+    variations: [{
+      variationId: 'L4S4V7E22ODQGZQX2RTPK6A6',
+      sku: 'PNG-DP-10',
+      upc: '4595433537507',
+      size: '10g',
+      price: 250,
+      type: 'ground',
+    }],
+  },
+]
+
+
 type Variation = {
   variationId: string
   sku: string
@@ -158,6 +206,13 @@ export async function GET(request: Request) {
         category,
         variations,
       })
+    }
+
+    // Inject hardcoded drip pack items if not already present (Square print_label属性の有無に関わらず)
+    for (const drip of HARDCODED_DRIP_PACKS) {
+      if (!items.some(i => i.itemId === drip.itemId)) {
+        items.push(drip)
+      }
     }
 
     // Sort items alphabetically by display name
