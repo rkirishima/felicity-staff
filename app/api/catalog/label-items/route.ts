@@ -55,11 +55,13 @@ function inferType(sku: string, size: string): 'bean' | 'ground' {
   return 'bean'
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const token = process.env.SQUARE_ACCESS_TOKEN
   if (!token) {
     return NextResponse.json({ error: 'SQUARE_ACCESS_TOKEN not configured' }, { status: 503 })
   }
+
+  const debug = new URL(request.url).searchParams.get('debug') === '1'
 
   try {
     const res = await fetch('https://connect.squareup.com/v2/catalog/search-catalog-items', {
@@ -86,20 +88,30 @@ export async function GET() {
 
     const data = await res.json()
     const items: LabelItem[] = []
+    const skipped: Array<{ item: string; variation: string; reason: string }> = []
 
     for (const item of (data.items ?? [])) {
-      if (item.is_deleted || item.is_archived) continue
+      if (item.is_deleted || item.is_archived) {
+        skipped.push({ item: item.item_data?.name ?? item.id, variation: '-', reason: 'item deleted/archived' })
+        continue
+      }
       const rawName = item.item_data?.name ?? ''
       const name = normalizeName(rawName)
 
       const variations: Variation[] = []
       for (const v of (item.item_data?.variations ?? [])) {
         const vd = v.item_variation_data
-        if (!vd || v.is_deleted) continue
+        if (!vd || v.is_deleted) {
+          skipped.push({ item: name, variation: vd?.name ?? v.id, reason: 'variation deleted' })
+          continue
+        }
         const size = vd.name ?? ''
         const upc = vd.upc ?? ''
         const sku = vd.sku ?? ''
-        if (!upc) continue  // skip variations without GTIN — can't print label
+        if (!upc) {
+          skipped.push({ item: name, variation: size || v.id, reason: 'no UPC/GTIN — Squareで商品にバーコードを追加してください' })
+          continue
+        }
 
         variations.push({
           variationId: v.id,
@@ -111,7 +123,10 @@ export async function GET() {
         })
       }
 
-      if (variations.length === 0) continue
+      if (variations.length === 0) {
+        skipped.push({ item: name, variation: '-', reason: 'all variations missing UPC' })
+        continue
+      }
 
       // Sort variations by gram weight ascending (100g, 200g, 500g, 1kg)
       variations.sort((a, b) => sizeToGrams(a.size) - sizeToGrams(b.size))
@@ -136,6 +151,14 @@ export async function GET() {
     // Sort items alphabetically by display name
     items.sort((a, b) => a.name.localeCompare(b.name))
 
+    if (debug) {
+      return NextResponse.json({
+        items,
+        skipped,
+        totalSquareItems: (data.items ?? []).length,
+        tip: 'Squareで「print_label=yes」属性とUPC/GTINの両方を設定してください',
+      })
+    }
     return NextResponse.json({ items })
   } catch (err) {
     console.error('Catalog fetch error:', err)

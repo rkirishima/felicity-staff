@@ -47,7 +47,16 @@ export default function LabelPrintPage() {
   const [quantity, setQuantity] = useState(1)
   const [printing, setPrinting] = useState(false)
   const [message, setMessage] = useState('')
+  const [skipped, setSkipped] = useState<Array<{ item: string; variation: string; reason: string }> | null>(null)
   const router = useRouter()
+
+  const loadDiagnostics = async () => {
+    try {
+      const r = await fetch('/api/catalog/label-items?debug=1')
+      const d = await r.json()
+      setSkipped(d.skipped ?? [])
+    } catch { setSkipped([]) }
+  }
 
   useEffect(() => {
     if (!getSession() && !getAdminSession()) router.replace('/')
@@ -150,10 +159,43 @@ export default function LabelPrintPage() {
   return (
     <div className="min-h-screen bg-stone-900 pb-40">
       {/* Header */}
-      <div className="bg-stone-950 border-b border-stone-800 p-4">
-        <h1 className="text-xl font-semibold text-white">ラベル印刷</h1>
-        <p className="text-xs text-stone-500 mt-0.5">Square catalogから自動同期</p>
+      <div className="bg-stone-950 border-b border-stone-800 p-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-white">ラベル印刷</h1>
+          <p className="text-xs text-stone-500 mt-0.5">Square catalogから自動同期</p>
+        </div>
+        <button
+          onClick={loadDiagnostics}
+          className="text-xs text-stone-400 bg-stone-800 px-3 py-1.5 rounded-lg active:bg-stone-700"
+        >
+          🔍 表示されない商品
+        </button>
       </div>
+
+      {/* Diagnostics Panel */}
+      {skipped !== null && (
+        <div className="bg-amber-900/20 border-b border-amber-800/30 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-amber-300">
+              表示されていない商品 ({skipped.length}件)
+            </p>
+            <button onClick={() => setSkipped(null)} className="text-xs text-stone-400">閉じる</button>
+          </div>
+          {skipped.length === 0 ? (
+            <p className="text-xs text-stone-400">すべての商品が正しく読み込まれています</p>
+          ) : (
+            <ul className="space-y-1.5 max-h-60 overflow-y-auto">
+              {skipped.map((s, i) => (
+                <li key={i} className="text-xs text-stone-300">
+                  <span className="font-semibold">{s.item}</span>
+                  {s.variation !== '-' && <span className="text-stone-500"> / {s.variation}</span>}
+                  <span className="block text-amber-400/70 text-[11px]">→ {s.reason}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Quantity Selector */}
       <div className="bg-stone-800 border-b border-stone-700 p-4 flex items-center justify-between">
