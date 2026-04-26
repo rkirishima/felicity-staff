@@ -53,7 +53,7 @@ export default function AdminEventsPage() {
 
   const [form, setForm] = useState({
     title: '', title_en: '', description: '', description_en: '',
-    min_votes: 3, event_type: 'one_off', time_relation: 'during',
+    min_votes: 3, max_attendees: 6, event_type: 'one_off', time_relation: 'during',
     floor_block: '', seats_blocked: 0,
     recurrence_rule: '',
     prep_tasks: [] as { task: string; task_en?: string }[],
@@ -94,7 +94,7 @@ export default function AdminEventsPage() {
     const { data: event, error } = await supabase.from('events').insert({
       title: form.title, title_en: form.title_en,
       description: form.description || null, description_en: form.description_en || null,
-      min_votes: form.min_votes, event_type: form.event_type,
+      min_votes: form.min_votes, max_attendees: form.max_attendees, event_type: form.event_type,
       time_relation: form.time_relation,
       floor_block: form.floor_block || null,
       seats_blocked: form.seats_blocked,
@@ -118,7 +118,7 @@ export default function AdminEventsPage() {
 
     toast.success('イベントを作成しました')
     setShowForm(false)
-    setForm({ title: '', title_en: '', description: '', description_en: '', min_votes: 3, event_type: 'one_off', time_relation: 'during', floor_block: '', seats_blocked: 0, recurrence_rule: '', prep_tasks: [] })
+    setForm({ title: '', title_en: '', description: '', description_en: '', min_votes: 3, max_attendees: 6, event_type: 'one_off', time_relation: 'during', floor_block: '', seats_blocked: 0, recurrence_rule: '', prep_tasks: [] })
     setNewDates([{ date: '', start_time: '', end_time: '' }])
     loadEvents()
   }
@@ -305,13 +305,23 @@ export default function AdminEventsPage() {
                 </div>
               )}
 
-              {/* Min votes */}
-              <div className="flex items-center gap-2">
-                <label className="text-xs" style={{ color: '#78716c' }}>最低投票数:</label>
-                <input type="number" value={form.min_votes}
-                  onChange={e => setForm({...form, min_votes: parseInt(e.target.value) || 3})}
-                  min={1} className="w-14 px-2 py-1.5 rounded-lg text-sm text-center border"
-                  style={{ backgroundColor: '#F5F0E8', borderColor: '#E8E0D4' }} />
+              {/* Min votes + Max attendees */}
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs" style={{ color: '#78716c' }}>最低人数（開催決定）:</label>
+                  <input type="number" value={form.min_votes}
+                    onChange={e => setForm({...form, min_votes: parseInt(e.target.value) || 3})}
+                    min={1} className="w-14 px-2 py-1.5 rounded-lg text-sm text-center border"
+                    style={{ backgroundColor: '#F5F0E8', borderColor: '#E8E0D4' }} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs" style={{ color: '#78716c' }}>定員（満員）:</label>
+                  <input type="number" value={form.max_attendees}
+                    onChange={e => setForm({...form, max_attendees: parseInt(e.target.value) || 0})}
+                    min={0} className="w-14 px-2 py-1.5 rounded-lg text-sm text-center border"
+                    style={{ backgroundColor: '#F5F0E8', borderColor: '#E8E0D4' }} />
+                  <span className="text-xs" style={{ color: '#A8A29E' }}>0=無制限</span>
+                </div>
               </div>
 
               {/* Candidate dates */}
