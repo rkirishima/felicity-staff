@@ -14,7 +14,7 @@ type Order = {
   shipping_address: string
   items: { name: string; qty: number }[]
   amount: number
-  status: 'pending_transfer' | 'paid' | 'shipped'
+  status: 'pending_bank_transfer' | 'paid' | 'shipped'
   payment_method?: string | null
   tracking_number: string | null
   shipped_at: string | null
@@ -111,7 +111,7 @@ export default function ShippingPage() {
     )
   }
 
-  const pending = orders.filter(o => o.status === 'pending_transfer')
+  const pending = orders.filter(o => o.status === 'pending_bank_transfer')
   const unshipped = orders.filter(o => o.status === 'paid')
   const shipped = orders.filter(o => o.status === 'shipped')
   const shown = tab === 'pending' ? pending : tab === 'unshipped' ? unshipped : shipped
@@ -236,7 +236,7 @@ export default function ShippingPage() {
                     発送済み
                   </span>
                 </div>
-              ) : order.status === 'pending_transfer' ? (
+              ) : order.status === 'pending_bank_transfer' ? (
                 /* 入金待ち — 入金確認 button */
                 <div className="flex items-center justify-between gap-2 pt-1 border-t" style={{ borderColor: '#44403c' }}>
                   <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#78350f', color: '#fbbf24' }}>
