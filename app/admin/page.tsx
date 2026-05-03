@@ -98,6 +98,7 @@ export default function AdminPage() {
     { label: '📦 発送管理', sub: '追跡番号・発送通知', path: '/admin/shipping', color: 'bg-white' },
     { label: '⏱ タイムカード', sub: '打刻修正・記録', path: '/admin/timeclock', color: 'bg-white' },
     { label: '💴 給与管理', sub: '月次・時給設定', path: '/admin/payroll', color: 'bg-white' },
+    { label: '📊 経理', sub: 'レシートOCR・請求書・月次', path: '/admin/keiri', color: 'bg-rose-50 border border-rose-200' },
     { label: '📋 シフト申請', sub: '承認・却下', path: '/admin/shifts', color: 'bg-white' },
     { label: '📅 シフト管理', sub: 'カレンダー', path: '/schedule', color: 'bg-white' },
     { label: '🏷 ラベル印刷', sub: 'ドリップ・業販ラベル', path: '/label', color: 'bg-white' },

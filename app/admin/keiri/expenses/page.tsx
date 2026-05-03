@@ -1,0 +1,131 @@
+'use client'
+export const dynamic = 'force-dynamic'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
+import { getAdminSession } from '@/lib/session'
+
+type Row = {
+  id: string
+  date: string
+  amount: number
+  vendor: string | null
+  payment_method: string | null
+  memo: string | null
+  source: string | null
+  category: { name: string } | null
+}
+
+function thisMonthJST() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
+}
+
+export default function ExpensesPage() {
+  const router = useRouter()
+  const supabase = createClient()
+  const [month, setMonth] = useState(thisMonthJST())
+  const [rows, setRows] = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (!getAdminSession()) {
+      router.replace('/admin')
+      return
+    }
+    const start = `${month}-01`
+    const [y, m] = month.split('-').map(s => parseInt(s, 10))
+    const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+    ;(async () => {
+      setLoading(true)
+      const { data } = await supabase
+        .from('keiri_transactions')
+        .select('id, date, amount, vendor, payment_method, memo, source, category:keiri_categories(name)')
+        .eq('type', 'expense')
+        .gte('date', start)
+        .lt('date', next)
+        .order('date', { ascending: false })
+      setRows((data ?? []) as unknown as Row[])
+      setLoading(false)
+    })()
+  }, [month, router, supabase])
+
+  async function remove(id: string) {
+    if (!confirm('この経費を削除しますか?')) return
+    setDeleting(s => ({ ...s, [id]: true }))
+    try {
+      const { error } = await supabase.from('keiri_transactions').delete().eq('id', id)
+      if (error) throw error
+      setRows(prev => prev.filter(r => r.id !== id))
+      toast.success('削除しました')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      toast.error(`削除失敗: ${msg}`)
+    } finally {
+      setDeleting(s => ({ ...s, [id]: false }))
+    }
+  }
+
+  const total = rows.reduce((s, r) => s + (r.amount || 0), 0)
+
+  return (
+    <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
+      <div className="max-w-lg mx-auto space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => router.push('/admin/keiri')} className="text-stone-500 text-sm">← 戻る</button>
+          <h1 className="text-lg font-semibold tracking-wider text-stone-800">経費明細</h1>
+          <Link href="/admin/keiri/expenses/new" className="text-sm text-stone-700">+ 追加</Link>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <input
+            type="month"
+            value={month}
+            onChange={e => setMonth(e.target.value)}
+            className="bg-white rounded-xl px-3 py-1.5 text-sm border border-stone-200"
+          />
+        </div>
+
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl shadow-sm p-5">
+          <p className="text-xs text-rose-700 tracking-wider">月合計</p>
+          <p className="text-2xl font-light text-rose-900 mt-1">¥{total.toLocaleString()}</p>
+        </div>
+
+        {loading ? (
+          <p className="text-center text-stone-400 text-sm py-12">読み込み中...</p>
+        ) : rows.length === 0 ? (
+          <p className="text-center text-stone-400 text-sm py-12">経費はありません</p>
+        ) : (
+          <ul className="space-y-2">
+            {rows.map(r => (
+              <li key={r.id} className="bg-white rounded-2xl shadow-sm p-4 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-stone-800">¥{r.amount.toLocaleString()}</p>
+                    <span className="text-[10px] text-stone-400 tracking-wider">{r.date}</span>
+                    {r.source === 'receipt' && <span className="text-[10px] text-stone-400">📷</span>}
+                  </div>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    {r.category?.name ?? '未分類'}
+                    {r.vendor ? ` ・ ${r.vendor}` : ''}
+                  </p>
+                  {r.memo && <p className="text-xs text-stone-400 mt-1">{r.memo}</p>}
+                </div>
+                <button
+                  onClick={() => remove(r.id)}
+                  disabled={deleting[r.id]}
+                  className="text-xs text-stone-400 hover:text-red-500 disabled:opacity-40 px-2 py-1"
+                >
+                  削除
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </main>
+  )
+}
