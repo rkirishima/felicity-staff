@@ -10,7 +10,7 @@ import { issueInvoice, type InvoiceLineInput } from '@/app/admin/keiri/invoices/
 import { createClientRecord } from '../../clients/actions'
 import { groupByTaxRate, type TaxRate } from '@/lib/keiri/tax'
 
-type ClientRow = { id: string; name: string }
+type ClientRow = { id: string; name: string; email: string | null }
 type ItemRow = { id: string; name: string; description: string | null; unit_price: number; tax_rate: number; unit: string | null }
 
 type LineDraft = {
@@ -62,6 +62,7 @@ export default function NewInvoicePage() {
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()])
   const [saving, setSaving] = useState<'draft' | 'publish' | null>(null)
+  const [autoSend, setAutoSend] = useState(true)
 
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [newClientName, setNewClientName] = useState('')
@@ -76,7 +77,7 @@ export default function NewInvoicePage() {
     }
     ;(async () => {
       const [cRes, iRes] = await Promise.all([
-        supabase.from('keiri_clients').select('id, name').eq('active', true).order('name'),
+        supabase.from('keiri_clients').select('id, name, email').eq('active', true).order('name'),
         supabase
           .from('keiri_items')
           .select('id, name, description, unit_price, tax_rate, unit')
@@ -121,6 +122,8 @@ export default function NewInvoicePage() {
   function removeLine(idx: number) {
     setLines(prev => (prev.length === 1 ? prev : prev.filter((_, i) => i !== idx)))
   }
+
+  const selectedClient = clients.find(c => c.id === clientId)
 
   const taxLines = lines.map(l => ({
     quantity: parseInt(l.quantity || '0', 10) || 0,
@@ -172,7 +175,7 @@ export default function NewInvoicePage() {
         payment_terms: null,
         notes: null,
       })
-      setClients(prev => [{ id: out.id, name }, ...prev])
+      setClients(prev => [{ id: out.id, name, email: newClientEmail.trim() || null }, ...prev])
       setClientId(out.id)
       setShowNewClientModal(false)
       resetNewClient()
@@ -188,7 +191,22 @@ export default function NewInvoicePage() {
     setSaving(publish ? 'publish' : 'draft')
     try {
       const out = await issueInvoice(buildInput(), { publish })
-      toast.success(publish ? `発行しました ${out.invoice_number ?? ''}` : '下書き保存しました')
+      const email = selectedClient?.email
+      if (publish && autoSend && email) {
+        try {
+          const res = await fetch(`/api/keiri/invoices/${out.id}/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          })
+          if (!res.ok) throw new Error(`status ${res.status}`)
+          toast.success('メール送信しました')
+        } catch {
+          toast.error('メール送信失敗')
+        }
+      } else {
+        toast.success(publish ? `発行しました ${out.invoice_number ?? ''}` : '下書き保存しました')
+      }
       router.push(`/admin/keiri/invoices/${out.id}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -327,6 +345,13 @@ export default function NewInvoicePage() {
             <textarea value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} rows={3} />
           </Field>
         </div>
+
+        {selectedClient?.email && (
+          <label className="flex items-center gap-2 text-sm text-stone-600 px-2">
+            <input type="checkbox" checked={autoSend} onChange={e => setAutoSend(e.target.checked)} />
+            発行と同時に取引先 ({selectedClient.email}) へメール送信
+          </label>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <button
