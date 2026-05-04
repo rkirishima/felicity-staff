@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { issueInvoice, type InvoiceLineInput } from '@/app/admin/keiri/invoices/actions'
+import { createClientRecord } from '../../clients/actions'
 import { groupByTaxRate, type TaxRate } from '@/lib/keiri/tax'
 
 type ClientRow = { id: string; name: string }
@@ -61,6 +62,12 @@ export default function NewInvoicePage() {
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()])
   const [saving, setSaving] = useState<'draft' | 'publish' | null>(null)
+
+  const [showNewClientModal, setShowNewClientModal] = useState(false)
+  const [newClientName, setNewClientName] = useState('')
+  const [newClientEmail, setNewClientEmail] = useState('')
+  const [newClientRegNum, setNewClientRegNum] = useState('')
+  const [savingClient, setSavingClient] = useState(false)
 
   useEffect(() => {
     if (!getAdminSession()) {
@@ -139,6 +146,44 @@ export default function NewInvoicePage() {
     }
   }
 
+  function resetNewClient() {
+    setNewClientName('')
+    setNewClientEmail('')
+    setNewClientRegNum('')
+  }
+
+  async function saveNewClient() {
+    const name = newClientName.trim()
+    if (!name) {
+      toast.error('取引先名は必須です')
+      return
+    }
+    setSavingClient(true)
+    try {
+      const out = await createClientRecord({
+        name,
+        name_kana: null,
+        registration_number: newClientRegNum.trim() || null,
+        postal_code: null,
+        address: null,
+        contact_person: null,
+        email: newClientEmail.trim() || null,
+        phone: null,
+        payment_terms: null,
+        notes: null,
+      })
+      setClients(prev => [{ id: out.id, name }, ...prev])
+      setClientId(out.id)
+      setShowNewClientModal(false)
+      resetNewClient()
+      toast.success('取引先を追加しました')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSavingClient(false)
+    }
+  }
+
   async function save(publish: boolean) {
     setSaving(publish ? 'publish' : 'draft')
     try {
@@ -163,12 +208,21 @@ export default function NewInvoicePage() {
 
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
           <Field label="取引先 *">
-            <select value={clientId} onChange={e => setClientId(e.target.value)} className={inputCls}>
-              <option value="">選択してください</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select value={clientId} onChange={e => setClientId(e.target.value)} className={inputCls}>
+                <option value="">選択してください</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowNewClientModal(true)}
+                className="shrink-0 text-xs text-emerald-700 px-2 py-2.5 whitespace-nowrap"
+              >
+                + 新規
+              </button>
+            </div>
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="発行日">
@@ -291,6 +345,59 @@ export default function NewInvoicePage() {
           </button>
         </div>
       </div>
+
+      {showNewClientModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-3">
+            <h2 className="text-base font-semibold text-stone-800 tracking-wider">取引先を追加</h2>
+            <Field label="取引先名 *">
+              <input
+                value={newClientName}
+                onChange={e => setNewClientName(e.target.value)}
+                className={inputCls}
+                autoFocus
+              />
+            </Field>
+            <Field label="メール">
+              <input
+                type="email"
+                value={newClientEmail}
+                onChange={e => setNewClientEmail(e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+            <Field label="登録番号 (T+13桁、任意)">
+              <input
+                value={newClientRegNum}
+                onChange={e => setNewClientRegNum(e.target.value)}
+                placeholder="T1234567890123"
+                className={inputCls}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewClientModal(false)
+                  resetNewClient()
+                }}
+                disabled={savingClient}
+                className="border border-stone-200 text-stone-600 py-2.5 rounded-xl text-sm disabled:opacity-40"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={saveNewClient}
+                disabled={savingClient}
+                className="bg-stone-800 text-white py-2.5 rounded-xl text-sm disabled:opacity-40"
+              >
+                {savingClient ? '保存中...' : '保存して選択'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
