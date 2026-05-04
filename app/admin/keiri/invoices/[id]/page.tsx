@@ -273,6 +273,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </a>
         </div>
 
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-3" style={{ aspectRatio: '210/297' }}>
+          <iframe
+            src={`/api/keiri/invoices/${inv.id}/pdf`}
+            className="w-full h-full"
+            title="invoice PDF"
+          />
+        </div>
+
         {inv.status !== 'cancelled' && inv.status !== 'draft' && inv.status !== 'paid' && (
           <button
             onClick={() => setShowSend(true)}
