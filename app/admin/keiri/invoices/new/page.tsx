@@ -15,7 +15,6 @@ type ItemRow = { id: string; name: string; description: string | null; unit_pric
 
 type LineDraft = {
   item_id: string
-  name: string
   description: string
   quantity: string
   unit_price: string
@@ -23,7 +22,7 @@ type LineDraft = {
 }
 
 function emptyLine(): LineDraft {
-  return { item_id: '', name: '', description: '', quantity: '1', unit_price: '0', tax_rate: 10 }
+  return { item_id: '', description: '', quantity: '1', unit_price: '0', tax_rate: 10 }
 }
 
 function todayJST() {
@@ -106,8 +105,7 @@ export default function NewInvoicePage() {
           ? {
               ...l,
               item_id: item.id,
-              name: item.name,
-              description: item.description ?? '',
+              description: item.description ? `${item.name}\n${item.description}` : item.name,
               unit_price: String(item.unit_price),
               tax_rate: (item.tax_rate === 8 ? 8 : 10) as TaxRate,
             }
@@ -140,8 +138,7 @@ export default function NewInvoicePage() {
       notes: notes.trim() || null,
       lines: lines.map(l => ({
         item_id: l.item_id || null,
-        name: l.name.trim(),
-        description: l.description.trim() || null,
+        description: l.description.trim(),
         quantity: parseInt(l.quantity || '0', 10) || 0,
         unit_price: parseInt(l.unit_price || '0', 10) || 0,
         tax_rate: l.tax_rate,
@@ -275,13 +272,11 @@ export default function NewInvoicePage() {
                   </select>
                 </Field>
                 <Field label="品名 *">
-                  <input value={l.name} onChange={e => updateLine(idx, 'name', e.target.value)} className={inputCls} />
-                </Field>
-                <Field label="説明">
-                  <input
+                  <textarea
                     value={l.description}
                     onChange={e => updateLine(idx, 'description', e.target.value)}
                     className={inputCls}
+                    rows={2}
                   />
                 </Field>
                 <div className="grid grid-cols-3 gap-2">

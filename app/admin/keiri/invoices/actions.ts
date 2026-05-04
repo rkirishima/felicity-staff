@@ -6,8 +6,7 @@ import { groupByTaxRate, type TaxRate } from '@/lib/keiri/tax'
 
 export type InvoiceLineInput = {
   item_id: string | null
-  name: string
-  description: string | null
+  description: string
   quantity: number
   unit_price: number
   tax_rate: TaxRate
@@ -26,7 +25,7 @@ function validate(input: InvoiceInput) {
   if (!input.issue_date) throw new Error('発行日を入力してください')
   if (!input.lines.length) throw new Error('明細を1行以上入力してください')
   for (const l of input.lines) {
-    if (!l.name.trim()) throw new Error('明細の品名は必須です')
+    if (!l.description.trim()) throw new Error('明細の品名は必須です')
     if (!Number.isFinite(l.quantity) || l.quantity <= 0) throw new Error('数量は正の整数です')
     if (!Number.isFinite(l.unit_price) || l.unit_price < 0) throw new Error('単価は0以上の整数です')
     if (l.tax_rate !== 10 && l.tax_rate !== 8) throw new Error('税率は 10 か 8 のみです')
@@ -68,8 +67,7 @@ export async function issueInvoice(
   const lineRows = input.lines.map((l, i) => ({
     invoice_id: inv.id as string,
     item_id: l.item_id,
-    name: l.name.trim(),
-    description: l.description,
+    description: l.description.trim(),
     quantity: Math.trunc(l.quantity),
     unit_price: Math.trunc(l.unit_price),
     tax_rate: l.tax_rate,

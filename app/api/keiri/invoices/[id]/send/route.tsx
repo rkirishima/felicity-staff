@@ -43,14 +43,14 @@ export async function POST(
 
   const { data: lineRows, error: linesErr } = await supabase
     .from('keiri_invoice_lines')
-    .select('name, description, quantity, unit_price, tax_rate, amount, sort_order')
+    .select('description, quantity, unit_price, tax_rate, amount, sort_order')
     .eq('invoice_id', id)
     .order('sort_order')
   if (linesErr) return Response.json({ ok: false, error: linesErr.message }, { status: 500 })
 
   const company = getCompanyInfo()
   const lines: InvoicePDFLine[] = (lineRows ?? []).map(l => ({
-    name: l.name as string,
+    name: l.description as string,
     quantity: l.quantity as number,
     unit_price: l.unit_price as number,
     tax_rate: ((l.tax_rate as number) === 8 ? 8 : 10) as 10 | 8,

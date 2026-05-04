@@ -34,8 +34,7 @@ type Invoice = {
 
 type Line = {
   id: string
-  name: string
-  description: string | null
+  description: string
   quantity: number
   unit_price: number
   tax_rate: number
@@ -80,7 +79,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           .single(),
         supabase
           .from('keiri_invoice_lines')
-          .select('id, name, description, quantity, unit_price, tax_rate, amount, sort_order')
+          .select('id, description, quantity, unit_price, tax_rate, amount, sort_order')
           .eq('invoice_id', id)
           .order('sort_order'),
       ])
@@ -217,8 +216,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             {lines.map(l => (
               <li key={l.id} className="py-2 flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-stone-800">{l.name}</p>
-                  {l.description && <p className="text-xs text-stone-500">{l.description}</p>}
+                  <p className="text-sm text-stone-800 whitespace-pre-wrap">{l.description}</p>
                   <p className="text-[10px] text-stone-400">
                     {l.quantity} × ¥{l.unit_price.toLocaleString()} ({l.tax_rate}%)
                   </p>
