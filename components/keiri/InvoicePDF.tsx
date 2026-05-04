@@ -14,7 +14,7 @@ export type InvoicePDFLine = {
 }
 
 export type InvoicePDFInput = {
-  invoice_number: string
+  invoice_number: string | null
   issue_date: string
   due_date: string | null
   client_name: string
@@ -108,10 +108,10 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
       <Page size="A4" style={styles.page}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.title}>請 求 書</Text>
+            <Text style={styles.title}>{data.invoice_number ? '請 求 書' : '請求書（下書き）'}</Text>
           </View>
           <View style={styles.metaCol}>
-            <Text style={styles.meta}>No. {data.invoice_number}</Text>
+            {data.invoice_number && <Text style={styles.meta}>No. {data.invoice_number}</Text>}
             <Text style={styles.meta}>発行日: {data.issue_date}</Text>
             {data.due_date && <Text style={styles.meta}>支払期限: {data.due_date}</Text>}
           </View>

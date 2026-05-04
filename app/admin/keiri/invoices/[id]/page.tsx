@@ -10,6 +10,7 @@ import {
   cancelInvoice,
   deleteInvoice,
   markInvoicePaid,
+  publishDraftInvoice,
 } from '@/app/admin/keiri/invoices/actions'
 
 type Status = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
@@ -55,6 +56,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [lines, setLines] = useState<Line[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [showSend, setShowSend] = useState(false)
   const [showPay, setShowPay] = useState(false)
   const [paidDate, setPaidDate] = useState(todayJST())
@@ -273,11 +275,57 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-3" style={{ aspectRatio: '210/297' }}>
           <iframe
+            key={inv.invoice_number ?? 'draft'}
             src={`/api/keiri/invoices/${inv.id}/pdf`}
             className="w-full h-full"
             title="invoice PDF"
           />
         </div>
+
+        {inv.status === 'draft' && (
+          <button
+            onClick={async () => {
+              const email = inv.client?.email
+              const msg = email
+                ? `この下書きを発行します。番号が採番され、取引先メール (${email}) に PDF が送信されます。続行しますか？`
+                : 'この下書きを発行します。番号が採番されますが、取引先メールが未設定のためメール送信はスキップされます。続行しますか？'
+              if (!confirm(msg)) return
+              setPublishing(true)
+              try {
+                const res = await publishDraftInvoice(inv.id, { sendEmail: !!email })
+                toast.success(`発行しました (${res.invoice_number})`)
+                if (email) {
+                  const sendRes = await fetch(`/api/keiri/invoices/${inv.id}/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                  })
+                  if (!sendRes.ok) toast.error('メール送信に失敗しました（請求書は発行済み）')
+                }
+                setInv(prev =>
+                  prev
+                    ? {
+                        ...prev,
+                        invoice_number: res.invoice_number,
+                        status: 'sent',
+                        sent_at: new Date().toISOString(),
+                        pdf_path: null,
+                      }
+                    : prev,
+                )
+                router.refresh()
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : '発行失敗')
+              } finally {
+                setPublishing(false)
+              }
+            }}
+            disabled={publishing}
+            className="w-full bg-emerald-600 text-white py-3 rounded-2xl font-medium active:scale-[0.99] transition-transform disabled:opacity-50"
+          >
+            {publishing ? '発行中…' : 'この内容で発行する'}
+          </button>
+        )}
 
         {inv.status !== 'cancelled' && inv.status !== 'draft' && inv.status !== 'paid' && (
           <button

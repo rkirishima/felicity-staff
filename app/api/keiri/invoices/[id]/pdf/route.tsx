@@ -61,7 +61,7 @@ export async function GET(
   const buffer = await renderToBuffer(
     <InvoicePDF
       data={{
-        invoice_number: (inv.invoice_number as string | null) ?? '（下書き）',
+        invoice_number: (inv.invoice_number as string | null) ?? null,
         issue_date: inv.issue_date as string,
         due_date: (inv.due_date as string | null) ?? null,
         client_name: client?.name ?? '',

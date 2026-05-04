@@ -83,6 +83,36 @@ export async function issueInvoice(
   return { id: inv.id as string, invoice_number: (inv.invoice_number as string | null) ?? null }
 }
 
+export async function publishDraftInvoice(
+  id: string,
+  _opts: { sendEmail: boolean },
+): Promise<{ invoice_number: string }> {
+  void _opts
+  const supabase = await createClient()
+
+  const { data: row, error: getErr } = await supabase
+    .from('keiri_invoices')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (getErr) throw new Error(getErr.message)
+  if (row.status !== 'draft') throw new Error('下書きのみ発行できます')
+
+  const invoice_number = await nextInvoiceNumber()
+  const { error: updErr } = await supabase
+    .from('keiri_invoices')
+    .update({
+      invoice_number,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+      pdf_path: null,
+    })
+    .eq('id', id)
+  if (updErr) throw new Error(updErr.message)
+
+  return { invoice_number }
+}
+
 export async function markInvoicePaid(id: string, paid_date: string): Promise<void> {
   const supabase = await createClient()
   const { error } = await supabase
