@@ -31,3 +31,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 1. `npx tsc --noEmit` でエラーゼロ
 2. `npm run lint` で keiri 配下のエラーゼロ
 3. Supabase advisor で security_definer_view 警告が出ていない（ビューは `WITH (security_invoker = true)`）
+
+### Phase 2 追加ルール
+- 採番は server action / API route 内のみ。`lib/keiri/numbering.ts` 経由。client から `next_keiri_number` RPC 直接呼び禁止。
+- PDF 生成は API route handler のみ。client component から `@react-pdf/renderer` を import しない。
+- 会社情報は `lib/keiri/company.ts` の `getCompanyInfo()` 経由。`process.env.COMPANY_*` を component で直接読まない。
+- 適格請求書: 登録番号必須、税率別小計と消費税額を 10% と 8% 別行で表示。
+- 税額計算は税率別小計に `Math.round` を 1 回。各行で切り上げない。
+- 領収書 `amount >= 50000` で印紙貼付欄を PDF に表示。

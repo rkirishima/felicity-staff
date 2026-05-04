@@ -129,6 +129,30 @@ export default function KeiriDashboard() {
               >
                 📒 経費明細
               </Link>
+              <Link
+                href="/admin/keiri/invoices"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm"
+              >
+                📨 請求書
+              </Link>
+              <Link
+                href="/admin/keiri/issued-receipts"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm"
+              >
+                🧾 領収書
+              </Link>
+              <Link
+                href="/admin/keiri/clients"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm"
+              >
+                👥 取引先
+              </Link>
+              <Link
+                href="/admin/keiri/items"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm"
+              >
+                📦 商品マスタ
+              </Link>
             </div>
           </>
         )}
