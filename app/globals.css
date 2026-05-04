@@ -129,3 +129,15 @@
   }
 }
 body { background-color: #F5F0E8; }
+
+/* Force input text color in keiri forms (override body text-white) */
+main input[type="text"],
+main input[type="email"],
+main input[type="number"],
+main input[type="search"],
+main input[type="date"],
+main input[type="month"],
+main textarea,
+main select {
+  color: #44403c !important;
+}
