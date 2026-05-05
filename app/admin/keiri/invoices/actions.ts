@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { nextInvoiceNumber } from '@/lib/keiri/numbering'
 import { groupByTaxRate, type TaxRate } from '@/lib/keiri/tax'
+import { renderAndSendInvoice } from '@/lib/keiri/sendInvoice'
 
 const INVOICE_BUCKET = 'keiri-invoices'
 
@@ -88,9 +89,8 @@ export async function issueInvoice(
 
 export async function publishDraftInvoice(
   id: string,
-  _opts: { sendEmail: boolean },
-): Promise<{ invoice_number: string }> {
-  void _opts
+  opts: { sendEmail: boolean },
+): Promise<{ invoice_number: string; emailSent: boolean; emailError: string | null }> {
   const supabase = await createClient()
 
   const { data: row, error: getErr } = await supabase
@@ -113,7 +113,18 @@ export async function publishDraftInvoice(
     .eq('id', id)
   if (updErr) throw new Error(updErr.message)
 
-  return { invoice_number }
+  let emailSent = false
+  let emailError: string | null = null
+  if (opts.sendEmail) {
+    try {
+      await renderAndSendInvoice(id)
+      emailSent = true
+    } catch (e) {
+      emailError = e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  return { invoice_number, emailSent, emailError }
 }
 
 export async function markInvoicePaid(id: string, paid_date: string): Promise<void> {

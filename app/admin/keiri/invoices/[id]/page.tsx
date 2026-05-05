@@ -299,26 +299,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               setPublishing(true)
               try {
                 const res = await publishDraftInvoice(inv.id, { sendEmail: !!email })
-                toast.success(`発行しました (${res.invoice_number})`)
-                if (email) {
-                  const sendRes = await fetch(`/api/keiri/invoices/${inv.id}/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                  })
-                  if (!sendRes.ok) toast.error('メール送信に失敗しました（請求書は発行済み）')
+                if (res.emailError) {
+                  toast.error(`発行しましたがメール送信に失敗: ${res.emailError}`)
+                } else if (res.emailSent) {
+                  toast.success(`発行＆送信しました (${res.invoice_number})`)
+                } else {
+                  toast.success(`発行しました (${res.invoice_number})`)
                 }
-                setInv(prev =>
-                  prev
-                    ? {
-                        ...prev,
-                        invoice_number: res.invoice_number,
-                        status: 'sent',
-                        sent_at: new Date().toISOString(),
-                        pdf_path: null,
-                      }
-                    : prev,
-                )
                 router.refresh()
               } catch (e) {
                 toast.error(e instanceof Error ? e.message : '発行失敗')
@@ -333,13 +320,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </button>
         )}
 
-        {inv.status !== 'cancelled' && inv.status !== 'draft' && inv.status !== 'paid' && (
+        {inv.status === 'sent' && (inv.sent_at || inv.pdf_path) && (
           <button
             onClick={() => setShowSend(true)}
             disabled={busy}
             className="w-full bg-stone-800 text-white py-4 rounded-2xl font-medium shadow-sm disabled:opacity-40"
           >
-            メールで送信
+            メール再送信
           </button>
         )}
 
@@ -372,7 +359,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         </button>
 
         {showSend && (
-          <Modal title="メール送信" onClose={() => setShowSend(false)}>
+          <Modal title="メール再送信" onClose={() => setShowSend(false)}>
             <div className="space-y-3">
               <FieldM label="宛先">
                 <input value={sendTo} onChange={e => setSendTo(e.target.value)} className={inputClsM} />
