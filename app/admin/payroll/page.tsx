@@ -34,7 +34,7 @@ export default function PayrollPage() {
 
   async function loadStaff() {
     const { data } = await supabase.from('staff')
-      .select('id, name, hourly_rate, employment_type, skill')
+      .select('id, name, hourly_rate, employment_type, skill, salary_start_date, payment_method')
       .eq('active', true).not('role', 'in', '("accountant","admin")').order('name')
     setStaff(data ?? [])
   }
@@ -42,15 +42,23 @@ export default function PayrollPage() {
   async function loadToday() {
     const todayJST = new Date(Date.now() + 9*60*60*1000).toISOString().slice(0,10)
     const { data } = await supabase.from('timeclock')
-      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate)')
+      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate, salary_start_date, payment_method)')
       .gte('clock_in', todayJST + 'T00:00:00+09:00')
       .lte('clock_in', todayJST + 'T23:59:59+09:00')
     setTodayData(data ?? [])
   }
 
+  // 打刻日（JST）が salary_start_date 以降なら正社員期間 → 時給対象外
+  function isSalaryPeriod(clockInIso: string, salaryStart: string | null | undefined): boolean {
+    if (!salaryStart) return false
+    const clockInDateJST = new Date(new Date(clockInIso).getTime() + 9 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10)
+    return clockInDateJST >= salaryStart
+  }
+
   async function loadSummary() {
     const { data: records } = await supabase.from('timeclock')
-      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate)')
+      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate, salary_start_date, payment_method)')
       .gte('clock_in', `${month}-01T00:00:00+09:00`)
       .lt('clock_in', `${nextMonthFirstDay(month)}T00:00:00+09:00`)
     const currentMonth = new Date().toISOString().slice(0, 7)
@@ -59,16 +67,34 @@ export default function PayrollPage() {
     const recMap: Record<string, any[]> = {}
     for (const r of (records ?? [])) {
       const sid = r.staff_id
-      if (!map[sid]) map[sid] = { staffId: sid, name: (r.staff as any)?.name, hourly_rate: (r.staff as any)?.hourly_rate || 1300, hours: 0, days: 0 }
+      const sRow = (r.staff as any) ?? {}
+      if (!map[sid]) map[sid] = {
+        staffId: sid,
+        name: sRow.name,
+        hourly_rate: sRow.hourly_rate || 1300,
+        hours: 0,
+        days: 0,
+        // 期間中に1件でも salary 期間があれば true
+        hasSalaryPeriod: false,
+        // 全件 salary 期間なら「正社員」表示で支払対象外
+        allSalaryPeriod: true,
+        paymentMethod: (sRow.payment_method as 'transfer' | 'cash') ?? 'transfer',
+      }
       if (!recMap[sid]) recMap[sid] = []
+      const salary = isSalaryPeriod(r.clock_in, sRow.salary_start_date ?? null)
+      if (salary) map[sid].hasSalaryPeriod = true
+      else map[sid].allSalaryPeriod = false
+
       const endMs = r.clock_out
         ? new Date(r.clock_out).getTime()
         : (month === currentMonth ? nowMs : null)
       if (endMs) {
         const h = (endMs - new Date(r.clock_in).getTime()) / 3600000
-        map[sid].hours += h
-        if (r.clock_out) map[sid].days += 1
-        recMap[sid].push({ ...r, h })
+        if (!salary) {
+          map[sid].hours += h
+          if (r.clock_out) map[sid].days += 1
+        }
+        recMap[sid].push({ ...r, h, salary })
       }
     }
     setSummary(Object.values(map).sort((a,b) => a.name.localeCompare(b.name, 'ja')))
@@ -83,30 +109,48 @@ export default function PayrollPage() {
   }
 
   async function exportCSV() {
-    const csv = '\uFEFF' + 'スタッフ,出勤日数,労働時間,時給,支払額\n' +
-      summary.map(s => `${s.name},${s.days},${s.hours.toFixed(1)},${s.hourly_rate},${Math.round(s.hours * s.hourly_rate)}`).join('\n')
+    const csv = '\uFEFF' + 'スタッフ,出勤日数,労働時間,時給,支払額,支払方法,区分\n' +
+      summary.map(s => {
+        const kind = s.allSalaryPeriod ? '正社員(月給)' : s.hasSalaryPeriod ? '混在' : '時給'
+        const method = s.paymentMethod === 'cash' ? '現金' : '振込'
+        return `${s.name},${s.days},${s.hours.toFixed(1)},${s.hourly_rate},${Math.round(s.hours * s.hourly_rate)},${method},${kind}`
+      }).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
     a.download = `payroll_${month}.csv`; a.click()
   }
 
-  const total = summary.reduce((sum, s) => sum + Math.round(s.hours * s.hourly_rate), 0)
+  // 振込合計: 現金 と allSalaryPeriod を除外（実際に振込で払う額）
+  const transferTotal = summary
+    .filter(s => s.paymentMethod !== 'cash' && !s.allSalaryPeriod)
+    .reduce((sum, s) => sum + Math.round(s.hours * s.hourly_rate), 0)
+  // 現金合計
+  const cashTotal = summary
+    .filter(s => s.paymentMethod === 'cash')
+    .reduce((sum, s) => sum + Math.round(s.hours * s.hourly_rate), 0)
 
-  // 今日のリアルタイム計算
+  // 今日のリアルタイム計算（正社員期間と現金は別扱い）
   const todayRows = todayData.map(r => {
     const cin = new Date(r.clock_in)
     const cout = r.clock_out ? new Date(r.clock_out) : now
     const h = (cout.getTime() - cin.getTime()) / 3600000
-    const rate = (r.staff as any)?.hourly_rate || 1300
+    const sRow = (r.staff as any) ?? {}
+    const rate = sRow.hourly_rate || 1300
+    const salary = isSalaryPeriod(r.clock_in, sRow.salary_start_date ?? null)
+    const cash = sRow.payment_method === 'cash'
     return {
-      name: (r.staff as any)?.name,
+      name: sRow.name,
       hours: h,
       rate,
       pay: Math.round(h * rate),
       active: !r.clock_out,
+      salary,
+      cash,
     }
   })
-  const todayTotal = todayRows.reduce((s, r) => s + r.pay, 0)
+  const todayTotal = todayRows
+    .filter(r => !r.salary && !r.cash)
+    .reduce((s, r) => s + r.pay, 0)
   const activeCount = todayRows.filter(r => r.active).length
 
   return (
@@ -134,10 +178,12 @@ export default function PayrollPage() {
                   {r.active && <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />}
                   {!r.active && <div className="w-1.5 h-1.5 rounded-full bg-stone-600" />}
                   <span className="text-sm text-stone-300">{r.name}</span>
+                  {r.salary && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-900 text-violet-200">正社員</span>}
+                  {r.cash && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-900 text-amber-200">現金</span>}
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-stone-500">{r.hours.toFixed(1)}h</span>
-                  <span className="text-sm text-stone-300">¥{r.pay.toLocaleString()}</span>
+                  <span className={`text-sm ${r.salary ? 'text-stone-600 line-through' : 'text-stone-300'}`}>¥{r.pay.toLocaleString()}</span>
                 </div>
               </div>
             ))}
@@ -170,8 +216,11 @@ export default function PayrollPage() {
             </button>
           </div>
           <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 mb-4 text-center">
-            <p className="text-xs text-teal-600 mb-1">{month} 支払総額</p>
-            <p className="text-3xl font-medium text-teal-700">¥{total.toLocaleString()}</p>
+            <p className="text-xs text-teal-600 mb-1">{month} 振込支払額</p>
+            <p className="text-3xl font-medium text-teal-700">¥{transferTotal.toLocaleString()}</p>
+            {cashTotal > 0 && (
+              <p className="text-xs text-amber-600 mt-2">＋ 現金 ¥{cashTotal.toLocaleString()}</p>
+            )}
           </div>
           <div className="space-y-2">
             {summary.length === 0 ? (
@@ -181,16 +230,22 @@ export default function PayrollPage() {
               const recs = (staffRecords[s.staffId] ?? []).slice().sort((a: any, b: any) =>
                 new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime()
               )
+              const pay = Math.round(s.hours * s.hourly_rate)
               return (
                 <div key={s.name} className="bg-white rounded-2xl shadow-sm overflow-hidden">
                   <button onClick={() => setExpandedStaff(isOpen ? null : s.staffId)}
                     className="w-full px-4 py-3 flex justify-between items-center text-left">
                     <div>
-                      <p className="font-medium text-stone-800">{s.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-stone-800">{s.name}</p>
+                        {s.allSalaryPeriod && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">正社員</span>}
+                        {s.hasSalaryPeriod && !s.allSalaryPeriod && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">混在</span>}
+                        {s.paymentMethod === 'cash' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">現金</span>}
+                      </div>
                       <p className="text-xs text-stone-400 mt-0.5">{s.days}日 / {s.hours.toFixed(1)}h / ¥{s.hourly_rate.toLocaleString()}/h</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <p className="text-lg font-medium text-stone-800">¥{Math.round(s.hours * s.hourly_rate).toLocaleString()}</p>
+                      <p className={`text-lg font-medium ${s.allSalaryPeriod ? 'text-stone-300 line-through' : s.paymentMethod === 'cash' ? 'text-amber-700' : 'text-stone-800'}`}>¥{pay.toLocaleString()}</p>
                       <span className="text-stone-300 text-sm">{isOpen ? '▲' : '▼'}</span>
                     </div>
                   </button>
