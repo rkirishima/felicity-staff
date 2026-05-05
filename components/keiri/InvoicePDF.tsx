@@ -273,21 +273,16 @@ const styles = StyleSheet.create({
 
   // brand footer
   brandBlock: {
-    marginTop: 40,
+    marginTop: 80,
     alignItems: 'center',
     borderTopWidth: 1,
     borderColor: COLOR.ink,
-    paddingTop: 20,
+    paddingTop: 24,
   },
   brandLogo: {
-    width: 160,
-    height: 60,
+    width: 320,
+    height: 120,
     objectFit: 'contain',
-  },
-  brandLegal: {
-    fontSize: 7,
-    color: '#bbb',
-    marginTop: 12,
   },
 })
 
@@ -450,12 +445,6 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
         <View style={styles.brandBlock}>
           {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image */}
           <Image src={logoPath} style={styles.brandLogo} />
-          {(c.name || c.registrationNumber) && (
-            <Text style={styles.brandLegal}>
-              {c.name}
-              {c.registrationNumber ? ` ／ 登録番号: ${c.registrationNumber}` : ''}
-            </Text>
-          )}
         </View>
       </Page>
     </Document>
