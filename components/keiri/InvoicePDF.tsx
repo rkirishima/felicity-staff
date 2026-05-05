@@ -56,7 +56,7 @@ const COLOR = {
 const styles = StyleSheet.create({
   page: {
     paddingTop: 48,
-    paddingBottom: 64,
+    paddingBottom: 180,
     paddingLeft: 56,
     paddingRight: 56,
     fontSize: 9.5,
@@ -271,13 +271,16 @@ const styles = StyleSheet.create({
   },
   notesText: { fontSize: 9.5, color: COLOR.body, lineHeight: 1.7, marginTop: 8 },
 
-  // brand footer
+  // brand footer (anchored to page bottom)
   brandBlock: {
-    marginTop: 80,
+    position: 'absolute',
+    bottom: 24,
+    left: 56,
+    right: 56,
     alignItems: 'center',
     borderTopWidth: 1,
     borderColor: COLOR.ink,
-    paddingTop: 24,
+    paddingTop: 16,
   },
   brandLogo: {
     width: 320,
@@ -441,8 +444,8 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
           </View>
         )}
 
-        {/* BRAND FOOTER */}
-        <View style={styles.brandBlock}>
+        {/* BRAND FOOTER (anchored bottom) */}
+        <View style={styles.brandBlock} fixed>
           {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image */}
           <Image src={logoPath} style={styles.brandLogo} />
         </View>
