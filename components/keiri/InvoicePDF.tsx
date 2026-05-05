@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { ensureFontsRegistered, FONT_FAMILY } from './_pdfFonts'
 import type { CompanyInfo } from '@/lib/keiri/company'
 import type { TaxSummary } from '@/lib/keiri/tax'
@@ -24,77 +24,210 @@ export type InvoicePDFInput = {
   lines: InvoicePDFLine[]
   summary: TaxSummary
   company: CompanyInfo
+  stamp_url?: string | null
+}
+
+const COLOR = {
+  text: '#1c1917',
+  muted: '#78716c',
+  borderStrong: '#1c1917',
+  borderWeak: '#e7e5e4',
+  accentBg: '#fafaf9',
+  headerBg: '#f5f0e8',
+  draftBg: '#fef2f2',
+  draftText: '#b91c1c',
+  watermark: '#fde2e2',
 }
 
 const styles = StyleSheet.create({
   page: {
-    padding: 56.7,
+    paddingTop: 40,
+    paddingBottom: 60,
+    paddingLeft: 50,
+    paddingRight: 50,
     fontSize: 10,
     fontFamily: FONT_FAMILY,
-    color: '#1f2937',
+    color: COLOR.text,
   },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  title: { fontSize: 22, letterSpacing: 6, marginBottom: 16 },
-  metaCol: { textAlign: 'right' },
-  meta: { fontSize: 10, marginBottom: 2 },
-  block: { marginTop: 14 },
-  clientName: { fontSize: 14 },
-  table: { marginTop: 18, borderTopWidth: 1, borderColor: '#9ca3af' },
-  tr: {
+
+  // header
+  headerRow: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderColor: '#e5e7eb',
-    paddingVertical: 6,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
+  title: { fontSize: 32, letterSpacing: 12, fontWeight: 700 },
+  metaCol: { alignItems: 'flex-end' },
+  meta: { fontSize: 9, color: COLOR.muted, marginBottom: 2 },
+  draftBadge: {
+    backgroundColor: COLOR.draftBg,
+    color: COLOR.draftText,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    fontSize: 10,
+    letterSpacing: 2,
+    marginBottom: 6,
+    borderRadius: 2,
+  },
+  stamp: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 64,
+    height: 64,
+    opacity: 0.7,
+  },
+  watermark: {
+    position: 'absolute',
+    top: 320,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 110,
+    color: COLOR.watermark,
+    letterSpacing: 18,
+    opacity: 0.55,
+  },
+
+  divider: {
+    borderBottomWidth: 0.75,
+    borderColor: COLOR.borderStrong,
+    marginTop: 14,
+  },
+  weakDivider: {
+    borderBottomWidth: 0.25,
+    borderColor: COLOR.borderWeak,
+  },
+
+  // parties
+  parties: { flexDirection: 'row', marginTop: 20 },
+  partyLeft: { width: '55%', paddingRight: 16 },
+  partyRight: { width: '45%' },
+  partyLabel: {
+    fontSize: 9,
+    color: COLOR.muted,
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+  clientName: { fontSize: 16, fontWeight: 700, marginBottom: 6 },
+  companyName: { fontSize: 12, fontWeight: 700, marginBottom: 4 },
+  addrLine: { fontSize: 9, lineHeight: 1.6 },
+
+  // total banner
+  banner: { marginTop: 26 },
+  bannerLabel: {
+    fontSize: 9,
+    color: COLOR.muted,
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+  bannerAmount: { fontSize: 28, fontWeight: 700, letterSpacing: 1 },
+  bannerRule: {
+    borderBottomWidth: 0.25,
+    borderColor: COLOR.borderWeak,
+    marginTop: 10,
+  },
+  bannerNote: { fontSize: 9, color: COLOR.muted, marginTop: 8 },
+
+  // table
+  table: { marginTop: 22 },
   th: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderColor: '#9ca3af',
-    paddingVertical: 6,
-    backgroundColor: '#f5f0e8',
+    backgroundColor: COLOR.headerBg,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderTopWidth: 0.75,
+    borderBottomWidth: 0.75,
+    borderColor: COLOR.borderStrong,
   },
-  cellName: { flex: 4, paddingHorizontal: 4 },
+  thCell: { fontSize: 9 },
+  tr: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.25,
+    borderColor: COLOR.borderWeak,
+  },
+  trAlt: { backgroundColor: COLOR.accentBg },
+  cellName: { flex: 3, paddingHorizontal: 4 },
   cellQty: { flex: 1, paddingHorizontal: 4, textAlign: 'right' },
   cellUnit: { flex: 1.5, paddingHorizontal: 4, textAlign: 'right' },
-  cellRate: { flex: 1, paddingHorizontal: 4, textAlign: 'right' },
-  cellAmt: { flex: 2, paddingHorizontal: 4, textAlign: 'right' },
-  summary: { marginTop: 14, alignSelf: 'flex-end', width: 240 },
-  sumRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
-  sumLabel: { color: '#374151' },
-  sumValue: { color: '#111827' },
+  cellRate: { flex: 0.7, paddingHorizontal: 4, textAlign: 'center' },
+  cellAmt: { flex: 1.5, paddingHorizontal: 4, textAlign: 'right' },
+
+  // sums
+  sumWrap: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14 },
+  sumBox: { width: 260 },
+  sumRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+    fontSize: 10,
+  },
+  sumRowSub: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 1,
+    fontSize: 9,
+    color: COLOR.muted,
+  },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderColor: '#9ca3af',
-    paddingTop: 6,
+    marginTop: 8,
+    borderTopWidth: 0.75,
+    borderColor: COLOR.borderStrong,
+    paddingTop: 8,
   },
   totalLabel: { fontSize: 12 },
-  totalValue: { fontSize: 16 },
-  notesBox: {
+  totalValue: { fontSize: 14, fontWeight: 700 },
+
+  // bank card
+  bankCard: {
     marginTop: 18,
-    padding: 8,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 4,
-    minHeight: 50,
+    borderColor: COLOR.borderStrong,
+    backgroundColor: COLOR.accentBg,
+    padding: 12,
   },
-  sectionLabel: { fontSize: 9, color: '#6b7280', marginBottom: 4 },
-  bankBox: { marginTop: 14, padding: 8, backgroundColor: '#f9fafb', borderRadius: 4 },
+  bankHeader: {
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+  bankDivider: {
+    borderBottomWidth: 0.25,
+    borderColor: COLOR.borderWeak,
+    marginBottom: 8,
+  },
+  bankBody: { fontSize: 11, lineHeight: 1.6 },
+  bankNote: { fontSize: 8, color: COLOR.muted, marginTop: 10 },
+
+  // notes
+  notesWrap: { marginTop: 10 },
+  notesLabel: {
+    fontSize: 9,
+    color: COLOR.muted,
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  notesText: { fontSize: 10, lineHeight: 1.6 },
+
+  // footer
   footer: {
     position: 'absolute',
-    bottom: 30,
-    left: 56.7,
-    right: 56.7,
-    fontSize: 9,
-    color: '#4b5563',
-    borderTopWidth: 1,
-    borderColor: '#e5e7eb',
-    paddingTop: 8,
-    textAlign: 'right',
+    bottom: 28,
+    left: 50,
+    right: 50,
+    fontSize: 8,
+    color: COLOR.muted,
+    borderTopWidth: 0.25,
+    borderColor: COLOR.borderWeak,
+    paddingTop: 6,
+    textAlign: 'center',
   },
-  yen: {},
 })
 
 function fmt(n: number): string {
@@ -103,38 +236,86 @@ function fmt(n: number): string {
 
 export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
   const c = data.company
+  const isDraft = !data.invoice_number
+  const subtotal = data.summary.subtotal_10 + data.summary.subtotal_8
+  const taxTotal = data.summary.tax_10 + data.summary.tax_8
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {isDraft && (
+          <Text style={styles.watermark} fixed>
+            DRAFT
+          </Text>
+        )}
+
+        {/* HEADER */}
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>{data.invoice_number ? '請 求 書' : '請求書（下書き）'}</Text>
-          </View>
+          <Text style={styles.title}>請求書</Text>
           <View style={styles.metaCol}>
-            {data.invoice_number && <Text style={styles.meta}>No. {data.invoice_number}</Text>}
+            {isDraft ? (
+              <Text style={styles.draftBadge}>下書き</Text>
+            ) : (
+              <Text style={styles.meta}>No. {data.invoice_number}</Text>
+            )}
             <Text style={styles.meta}>発行日: {data.issue_date}</Text>
             {data.due_date && <Text style={styles.meta}>支払期限: {data.due_date}</Text>}
           </View>
+          {data.stamp_url && (
+            // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image, not HTML img
+            <Image src={data.stamp_url} style={styles.stamp} />
+          )}
+        </View>
+        <View style={styles.divider} />
+
+        {/* PARTIES */}
+        <View style={styles.parties}>
+          <View style={styles.partyLeft}>
+            <Text style={styles.partyLabel}>請 求 先</Text>
+            <Text style={styles.clientName}>{data.client_name} 御中</Text>
+            {data.client_postal && <Text style={styles.addrLine}>〒{data.client_postal}</Text>}
+            {data.client_address && <Text style={styles.addrLine}>{data.client_address}</Text>}
+          </View>
+          <View style={styles.partyRight}>
+            <Text style={styles.partyLabel}>請 求 元</Text>
+            <Text style={styles.companyName}>{c.name}</Text>
+            {(c.postal || c.address) && (
+              <Text style={styles.addrLine}>
+                {c.postal ? `〒${c.postal} ` : ''}
+                {c.address}
+              </Text>
+            )}
+            {c.phone && <Text style={styles.addrLine}>TEL: {c.phone}</Text>}
+            {c.email && <Text style={styles.addrLine}>Email: {c.email}</Text>}
+            {c.registrationNumber && (
+              <Text style={styles.addrLine}>登録番号: {c.registrationNumber}</Text>
+            )}
+          </View>
         </View>
 
-        <View style={styles.block}>
-          {data.client_postal && <Text>〒{data.client_postal}</Text>}
-          {data.client_address && <Text>{data.client_address}</Text>}
-          <Text style={styles.clientName}>{data.client_name} 御中</Text>
+        {/* TOTAL BANNER */}
+        <View style={styles.banner}>
+          <Text style={styles.bannerLabel}>ご 請 求 金 額（税込）</Text>
+          <Text style={styles.bannerAmount}>
+            ¥ {data.summary.total.toLocaleString('ja-JP')} -
+          </Text>
+          <View style={styles.bannerRule} />
+          <Text style={styles.bannerNote}>下記の通りご請求申し上げます。</Text>
         </View>
 
+        {/* TABLE */}
         <View style={styles.table}>
           <View style={styles.th}>
-            <Text style={styles.cellName}>品名</Text>
-            <Text style={styles.cellQty}>数量</Text>
-            <Text style={styles.cellUnit}>単価(税抜)</Text>
-            <Text style={styles.cellRate}>税率</Text>
-            <Text style={styles.cellAmt}>金額</Text>
+            <Text style={[styles.cellName, styles.thCell]}>品名</Text>
+            <Text style={[styles.cellQty, styles.thCell]}>数量</Text>
+            <Text style={[styles.cellUnit, styles.thCell]}>単価(税抜)</Text>
+            <Text style={[styles.cellRate, styles.thCell]}>税</Text>
+            <Text style={[styles.cellAmt, styles.thCell]}>金額</Text>
           </View>
           {data.lines.map((l, i) => (
-            <View key={i} style={styles.tr}>
+            <View key={i} style={i % 2 === 1 ? [styles.tr, styles.trAlt] : styles.tr}>
               <Text style={styles.cellName}>{l.name}</Text>
-              <Text style={styles.cellQty}>{l.quantity.toLocaleString()}</Text>
+              <Text style={styles.cellQty}>{l.quantity.toLocaleString('ja-JP')}</Text>
               <Text style={styles.cellUnit}>{fmt(l.unit_price)}</Text>
               <Text style={styles.cellRate}>{l.tax_rate}%</Text>
               <Text style={styles.cellAmt}>{fmt(l.amount)}</Text>
@@ -142,57 +323,62 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
           ))}
         </View>
 
-        <View style={styles.summary}>
-          {data.summary.subtotal_10 > 0 && (
-            <>
-              <View style={styles.sumRow}>
-                <Text style={styles.sumLabel}>10% 対象 税抜小計</Text>
-                <Text style={styles.sumValue}>{fmt(data.summary.subtotal_10)}</Text>
+        {/* SUMS */}
+        <View style={styles.sumWrap}>
+          <View style={styles.sumBox}>
+            <View style={styles.sumRow}>
+              <Text>税抜小計</Text>
+              <Text>{fmt(subtotal)}</Text>
+            </View>
+            <View style={styles.sumRow}>
+              <Text>消費税合計</Text>
+              <Text>{fmt(taxTotal)}</Text>
+            </View>
+            {data.summary.subtotal_10 > 0 && (
+              <View style={styles.sumRowSub}>
+                <Text>　内 10% 対象（税抜 {fmt(data.summary.subtotal_10)}）</Text>
+                <Text>{fmt(data.summary.tax_10)}</Text>
               </View>
-              <View style={styles.sumRow}>
-                <Text style={styles.sumLabel}>10% 消費税</Text>
-                <Text style={styles.sumValue}>{fmt(data.summary.tax_10)}</Text>
+            )}
+            {data.summary.subtotal_8 > 0 && (
+              <View style={styles.sumRowSub}>
+                <Text>　内 8% 対象（税抜 {fmt(data.summary.subtotal_8)}）</Text>
+                <Text>{fmt(data.summary.tax_8)}</Text>
               </View>
-            </>
-          )}
-          {data.summary.subtotal_8 > 0 && (
-            <>
-              <View style={styles.sumRow}>
-                <Text style={styles.sumLabel}>8% 対象 税抜小計</Text>
-                <Text style={styles.sumValue}>{fmt(data.summary.subtotal_8)}</Text>
-              </View>
-              <View style={styles.sumRow}>
-                <Text style={styles.sumLabel}>8% 消費税</Text>
-                <Text style={styles.sumValue}>{fmt(data.summary.tax_8)}</Text>
-              </View>
-            </>
-          )}
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>合計（税込）</Text>
-            <Text style={styles.totalValue}>{fmt(data.summary.total)}</Text>
+            )}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>合計（税込）</Text>
+              <Text style={styles.totalValue}>{fmt(data.summary.total)}</Text>
+            </View>
           </View>
         </View>
 
-        {data.notes && (
-          <View style={styles.notesBox}>
-            <Text style={styles.sectionLabel}>備考</Text>
-            <Text>{data.notes}</Text>
-          </View>
-        )}
-
+        {/* BANK CARD */}
         {c.bank && (
-          <View style={styles.bankBox}>
-            <Text style={styles.sectionLabel}>お振込先</Text>
-            <Text>{c.bank}</Text>
+          <View style={styles.bankCard}>
+            <Text style={styles.bankHeader}>お 振 込 先</Text>
+            <View style={styles.bankDivider} />
+            <Text style={styles.bankBody}>{c.bank}</Text>
+            <Text style={styles.bankNote}>
+              ※振込手数料は貴社にてご負担くださいますようお願い申し上げます
+            </Text>
           </View>
         )}
 
+        {/* NOTES */}
+        {data.notes && (
+          <View style={styles.notesWrap}>
+            <Text style={styles.notesLabel}>備 考</Text>
+            <Text style={styles.notesText}>{data.notes}</Text>
+          </View>
+        )}
+
+        {/* FOOTER */}
         <View style={styles.footer} fixed>
-          <Text>{c.name}</Text>
-          {c.postal && <Text>〒{c.postal} {c.address}</Text>}
-          {c.phone && <Text>TEL: {c.phone}</Text>}
-          {c.email && <Text>{c.email}</Text>}
-          {c.registrationNumber && <Text>登録番号: {c.registrationNumber}</Text>}
+          <Text>
+            {c.name}
+            {c.registrationNumber ? `　／　登録番号: ${c.registrationNumber}` : ''}
+          </Text>
         </View>
       </Page>
     </Document>
