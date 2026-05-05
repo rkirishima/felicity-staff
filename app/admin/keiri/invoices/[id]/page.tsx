@@ -166,7 +166,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   }
 
   async function remove() {
-    if (!confirm('下書きを削除しますか?')) return
+    const isDraft = inv?.status === 'draft'
+    const msg = isDraft
+      ? '下書きを削除しますか？'
+      : `この請求書 (${inv?.invoice_number ?? ''}) を完全に削除します。\n` +
+        'PDF と明細も削除されます。連番は再利用されません。\n' +
+        '本当に削除しますか？'
+    if (!confirm(msg)) return
     setBusy(true)
     try {
       await deleteInvoice(id)
@@ -357,15 +363,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </button>
         )}
 
-        {inv.status === 'draft' && (
-          <button
-            onClick={remove}
-            disabled={busy}
-            className="w-full bg-white border border-red-300 text-red-600 py-3 rounded-2xl text-sm shadow-sm disabled:opacity-40"
-          >
-            下書きを削除
-          </button>
-        )}
+        <button
+          onClick={remove}
+          disabled={busy}
+          className="w-full bg-white border border-red-300 text-red-600 py-3 rounded-2xl text-sm shadow-sm disabled:opacity-40"
+        >
+          {inv.status === 'draft' ? '下書きを削除' : 'この請求書を完全に削除'}
+        </button>
 
         {showSend && (
           <Modal title="メール送信" onClose={() => setShowSend(false)}>

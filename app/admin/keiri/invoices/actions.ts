@@ -1,8 +1,11 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { nextInvoiceNumber } from '@/lib/keiri/numbering'
 import { groupByTaxRate, type TaxRate } from '@/lib/keiri/tax'
+
+const INVOICE_BUCKET = 'keiri-invoices'
 
 export type InvoiceLineInput = {
   item_id: string | null
@@ -132,11 +135,16 @@ export async function deleteInvoice(id: string): Promise<void> {
   const supabase = await createClient()
   const { data: row, error: getErr } = await supabase
     .from('keiri_invoices')
-    .select('status')
+    .select('pdf_path')
     .eq('id', id)
     .single()
   if (getErr) throw new Error(getErr.message)
-  if (row.status !== 'draft') throw new Error('下書きのみ削除できます')
+
+  if (row.pdf_path) {
+    const service = createServiceClient()
+    const { error: storageErr } = await service.storage.from(INVOICE_BUCKET).remove([row.pdf_path as string])
+    if (storageErr) throw new Error(`PDF削除失敗: ${storageErr.message}`)
+  }
 
   const { error: linesErr } = await supabase.from('keiri_invoice_lines').delete().eq('invoice_id', id)
   if (linesErr) throw new Error(linesErr.message)
