@@ -33,10 +33,13 @@ const COLOR = {
   borderStrong: '#1c1917',
   borderWeak: '#e7e5e4',
   accentBg: '#fafaf9',
-  headerBg: '#f5f0e8',
+  beige: '#f5f0e8',
+  thBg: '#44403c',
+  thText: '#ffffff',
   draftBg: '#fef2f2',
   draftText: '#b91c1c',
   watermark: '#fde2e2',
+  barBg: '#e7e5e4',
 }
 
 const styles = StyleSheet.create({
@@ -51,13 +54,20 @@ const styles = StyleSheet.create({
   },
 
   // header
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  titleWrap: { position: 'relative', marginBottom: 8 },
+  title: {
+    fontSize: 28,
+    letterSpacing: 14,
+    textAlign: 'center',
+    fontWeight: 700,
+    paddingTop: 4,
   },
-  title: { fontSize: 32, letterSpacing: 12, fontWeight: 700 },
-  metaCol: { alignItems: 'flex-end' },
+  metaAbs: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    alignItems: 'flex-end',
+  },
   meta: { fontSize: 9, color: COLOR.muted, marginBottom: 2 },
   draftBadge: {
     backgroundColor: COLOR.draftBg,
@@ -68,14 +78,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 6,
     borderRadius: 2,
-  },
-  stamp: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 64,
-    height: 64,
-    opacity: 0.7,
   },
   watermark: {
     position: 'absolute',
@@ -92,15 +94,11 @@ const styles = StyleSheet.create({
   divider: {
     borderBottomWidth: 0.75,
     borderColor: COLOR.borderStrong,
-    marginTop: 14,
-  },
-  weakDivider: {
-    borderBottomWidth: 0.25,
-    borderColor: COLOR.borderWeak,
+    marginTop: 12,
   },
 
-  // parties
-  parties: { flexDirection: 'row', marginTop: 20 },
+  // parties (relative so stamp can absolute-position inside)
+  parties: { flexDirection: 'row', marginTop: 20, position: 'relative' },
   partyLeft: { width: '55%', paddingRight: 16 },
   partyRight: { width: '45%' },
   partyLabel: {
@@ -112,6 +110,14 @@ const styles = StyleSheet.create({
   clientName: { fontSize: 16, fontWeight: 700, marginBottom: 6 },
   companyName: { fontSize: 12, fontWeight: 700, marginBottom: 4 },
   addrLine: { fontSize: 9, lineHeight: 1.6 },
+  stamp: {
+    position: 'absolute',
+    top: 18,
+    right: -4,
+    width: 80,
+    height: 80,
+    opacity: 0.85,
+  },
 
   // total banner
   banner: { marginTop: 26 },
@@ -133,14 +139,11 @@ const styles = StyleSheet.create({
   table: { marginTop: 22 },
   th: {
     flexDirection: 'row',
-    backgroundColor: COLOR.headerBg,
+    backgroundColor: COLOR.thBg,
     paddingVertical: 7,
     paddingHorizontal: 4,
-    borderTopWidth: 0.75,
-    borderBottomWidth: 0.75,
-    borderColor: COLOR.borderStrong,
   },
-  thCell: { fontSize: 9 },
+  thCell: { fontSize: 9, color: COLOR.thText },
   tr: {
     flexDirection: 'row',
     paddingVertical: 6,
@@ -205,15 +208,20 @@ const styles = StyleSheet.create({
   bankBody: { fontSize: 11, lineHeight: 1.6 },
   bankNote: { fontSize: 8, color: COLOR.muted, marginTop: 10 },
 
-  // notes
-  notesWrap: { marginTop: 10 },
-  notesLabel: {
-    fontSize: 9,
-    color: COLOR.muted,
-    letterSpacing: 2,
-    marginBottom: 4,
+  // notes (full-width bar header)
+  notesBar: {
+    marginTop: 12,
+    backgroundColor: COLOR.barBg,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
   },
-  notesText: { fontSize: 10, lineHeight: 1.6 },
+  notesBarLabel: {
+    fontSize: 9,
+    color: COLOR.text,
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  notesText: { fontSize: 10, lineHeight: 1.6, marginTop: 6 },
 
   // footer
   footer: {
@@ -249,10 +257,10 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
           </Text>
         )}
 
-        {/* HEADER */}
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>請求書</Text>
-          <View style={styles.metaCol}>
+        {/* HEADER — centered title + meta absolutely positioned top-right */}
+        <View style={styles.titleWrap}>
+          <Text style={styles.title}>請 求 書</Text>
+          <View style={styles.metaAbs}>
             {isDraft ? (
               <Text style={styles.draftBadge}>下書き</Text>
             ) : (
@@ -261,10 +269,6 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
             <Text style={styles.meta}>発行日: {data.issue_date}</Text>
             {data.due_date && <Text style={styles.meta}>支払期限: {data.due_date}</Text>}
           </View>
-          {data.stamp_url && (
-            // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image, not HTML img
-            <Image src={data.stamp_url} style={styles.stamp} />
-          )}
         </View>
         <View style={styles.divider} />
 
@@ -291,6 +295,10 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
               <Text style={styles.addrLine}>登録番号: {c.registrationNumber}</Text>
             )}
           </View>
+          {data.stamp_url && (
+            // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image, not HTML img
+            <Image src={data.stamp_url} style={styles.stamp} />
+          )}
         </View>
 
         {/* TOTAL BANNER */}
@@ -365,10 +373,12 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
           </View>
         )}
 
-        {/* NOTES */}
+        {/* NOTES (full-width bar header) */}
         {data.notes && (
-          <View style={styles.notesWrap}>
-            <Text style={styles.notesLabel}>備 考</Text>
+          <View>
+            <View style={styles.notesBar}>
+              <Text style={styles.notesBarLabel}>備　考</Text>
+            </View>
             <Text style={styles.notesText}>{data.notes}</Text>
           </View>
         )}

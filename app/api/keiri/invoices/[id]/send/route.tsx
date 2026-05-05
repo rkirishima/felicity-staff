@@ -1,6 +1,7 @@
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { getCompanyInfo } from '@/lib/keiri/company'
+import { getCompanySealDataUri } from '@/lib/keiri/stamps'
 import { sendInvoiceEmail } from '@/lib/keiri/email'
 import { InvoicePDF, type InvoicePDFLine } from '@/components/keiri/InvoicePDF'
 
@@ -49,6 +50,7 @@ export async function POST(
   if (linesErr) return Response.json({ ok: false, error: linesErr.message }, { status: 500 })
 
   const company = getCompanyInfo()
+  const stamp_url = await getCompanySealDataUri()
   const lines: InvoicePDFLine[] = (lineRows ?? []).map(l => ({
     name: l.description as string,
     quantity: l.quantity as number,
@@ -84,6 +86,7 @@ export async function POST(
             total: inv.total as number,
           },
           company,
+          stamp_url,
         }}
       />,
     )
