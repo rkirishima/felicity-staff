@@ -56,7 +56,7 @@ const COLOR = {
 const styles = StyleSheet.create({
   page: {
     paddingTop: 48,
-    paddingBottom: 150,
+    paddingBottom: 110,
     paddingLeft: 56,
     paddingRight: 56,
     fontSize: 9.5,
@@ -274,17 +274,17 @@ const styles = StyleSheet.create({
   // brand footer (anchored to page bottom)
   brandBlock: {
     position: 'absolute',
-    bottom: 28,
+    bottom: 18,
     left: 56,
     right: 56,
     alignItems: 'center',
-    borderTopWidth: 0.75,
+    borderTopWidth: 0.5,
     borderColor: COLOR.ink,
-    paddingTop: 10,
+    paddingTop: 6,
   },
   brandLogo: {
-    width: 224,
-    height: 84,
+    width: 160,
+    height: 60,
     objectFit: 'contain',
   },
 })
