@@ -52,9 +52,9 @@ ${company.email}
 `
 
   const resend = new Resend(apiKey)
-  const from = company.email
-    ? `${company.name} <${company.email}>`
-    : 'onboarding@resend.dev'
+  const fromAddress = company.email || 'info@felicity.cafe'
+  const fromName = company.name || 'FELICITY'
+  const from = `${fromName} <${fromAddress}>`
 
   const result = await resend.emails.send({
     from,
