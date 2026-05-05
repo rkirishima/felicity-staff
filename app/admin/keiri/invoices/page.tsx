@@ -4,8 +4,10 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
+import { deleteInvoice } from '@/app/admin/keiri/invoices/actions'
 
 type Status = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 type Tab = 'all' | Status
@@ -66,6 +68,22 @@ export default function InvoicesListPage() {
     })()
   }, [router, supabase, month])
 
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function handleDeleteDraft(id: string) {
+    if (!confirm('この下書きを削除しますか？')) return
+    setDeletingId(id)
+    try {
+      await deleteInvoice(id)
+      setRows(prev => prev.filter(r => r.id !== id))
+      toast.success('削除しました')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '削除失敗')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const today = todayJST()
   const decorated = rows.map(r => {
     const isOverdue = r.status === 'sent' && r.due_date && r.due_date < today
@@ -117,7 +135,7 @@ export default function InvoicesListPage() {
         ) : (
           <ul className="space-y-2">
             {filtered.map(r => (
-              <li key={r.id}>
+              <li key={r.id} className="relative">
                 <Link href={`/admin/keiri/invoices/${r.id}`} className="block bg-white rounded-2xl shadow-sm p-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-stone-800">
@@ -135,6 +153,21 @@ export default function InvoicesListPage() {
                     <StatusBadge status={r.displayStatus} />
                   </div>
                 </Link>
+                {r.status === 'draft' && (
+                  <button
+                    type="button"
+                    onClick={e => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleDeleteDraft(r.id)
+                    }}
+                    disabled={deletingId === r.id}
+                    aria-label="下書きを削除"
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full text-stone-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center text-sm disabled:opacity-40"
+                  >
+                    {deletingId === r.id ? '…' : '×'}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
