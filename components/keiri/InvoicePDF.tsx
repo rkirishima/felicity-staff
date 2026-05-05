@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   ruleStrong: {
     borderBottomWidth: 0.75,
     borderColor: COLOR.ink,
-    marginTop: 14,
+    marginTop: 48,
     marginBottom: 22,
   },
   ruleHair: { borderBottomWidth: 0.25, borderColor: COLOR.hairline },
@@ -105,17 +105,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   clientName: {
-    fontSize: 14,
+    fontSize: 10.5,
     color: COLOR.ink,
-    lineHeight: 1.3,
+    marginBottom: 6,
     letterSpacing: 0.5,
-  },
-  clientHonorific: {
-    fontSize: 11,
-    color: COLOR.ink,
-    marginTop: 2,
-    marginBottom: 8,
-    letterSpacing: 1,
+    lineHeight: 1.4,
   },
   companyName: {
     fontSize: 10.5,
@@ -302,8 +296,7 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
         <View style={styles.parties}>
           <View style={styles.partyLeft}>
             <Text style={styles.partyLabel}>請　求　先</Text>
-            <Text style={styles.clientName}>{data.client_name}</Text>
-            <Text style={styles.clientHonorific}>御中</Text>
+            <Text style={styles.clientName}>{data.client_name}　御中</Text>
             {data.client_postal && <Text style={styles.addrLine}>〒{data.client_postal}</Text>}
             {data.client_address && <Text style={styles.addrLine}>{data.client_address}</Text>}
           </View>
