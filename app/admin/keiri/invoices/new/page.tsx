@@ -65,6 +65,7 @@ export default function NewInvoicePage() {
 
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [newClientName, setNewClientName] = useState('')
+  const [newClientContact, setNewClientContact] = useState('')
   const [newClientEmail, setNewClientEmail] = useState('')
   const [newClientRegNum, setNewClientRegNum] = useState('')
   const [savingClient, setSavingClient] = useState(false)
@@ -148,6 +149,7 @@ export default function NewInvoicePage() {
 
   function resetNewClient() {
     setNewClientName('')
+    setNewClientContact('')
     setNewClientEmail('')
     setNewClientRegNum('')
   }
@@ -166,7 +168,7 @@ export default function NewInvoicePage() {
         registration_number: newClientRegNum.trim() || null,
         postal_code: null,
         address: null,
-        contact_person: null,
+        contact_person: newClientContact.trim() || null,
         email: newClientEmail.trim() || null,
         phone: null,
         payment_terms: null,
@@ -376,6 +378,14 @@ export default function NewInvoicePage() {
                 onChange={e => setNewClientName(e.target.value)}
                 className={inputCls}
                 autoFocus
+              />
+            </Field>
+            <Field label="担当者">
+              <input
+                value={newClientContact}
+                onChange={e => setNewClientContact(e.target.value)}
+                placeholder="例: 山田 太郎"
+                className={inputCls}
               />
             </Field>
             <Field label="メール">
