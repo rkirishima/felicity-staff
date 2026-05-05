@@ -10,7 +10,7 @@ export type CompanyInfo = {
 
 const DEFAULTS = {
   name: '株式会社FELICITY',
-  postal: '',
+  postal: '240-0115',
   address: '神奈川県三浦郡葉山町上山口2432-3',
   phone: '080-8758-4368',
   email: '',
