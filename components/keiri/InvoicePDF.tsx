@@ -55,8 +55,8 @@ const styles = StyleSheet.create({
   // header
   titleWrap: { position: 'relative', marginBottom: 6 },
   title: {
-    fontSize: 22,
-    letterSpacing: 18,
+    fontSize: 18,
+    letterSpacing: 12,
     textAlign: 'center',
     color: COLOR.ink,
     paddingTop: 2,
@@ -106,13 +106,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   clientName: {
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: 700,
     color: COLOR.ink,
     letterSpacing: 0.5,
     lineHeight: 1.3,
   },
   clientContact: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#333',
     marginTop: 2,
     letterSpacing: 0.5,
@@ -129,7 +130,8 @@ const styles = StyleSheet.create({
     lineHeight: 1.5,
   },
   companyName: {
-    fontSize: 10.5,
+    fontSize: 12,
+    fontWeight: 700,
     color: COLOR.ink,
     marginBottom: 4,
     letterSpacing: 0.5,
@@ -219,24 +221,24 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 11, color: COLOR.ink, letterSpacing: 2 },
   totalValue: { fontSize: 13, color: COLOR.ink },
 
-  // bank
+  // bank (compact)
   bankCard: {
     marginTop: 22,
     marginBottom: 14,
+    width: 280,
     borderWidth: 0.5,
     borderColor: COLOR.ink,
     backgroundColor: COLOR.paperWarm,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    padding: 6,
   },
   bankHeader: {
-    fontSize: 8,
-    color: COLOR.muted,
-    letterSpacing: 4,
-    marginBottom: 8,
+    fontSize: 9,
+    fontWeight: 700,
+    color: COLOR.ink,
+    marginBottom: 4,
   },
-  bankBody: { fontSize: 10.5, color: COLOR.ink, lineHeight: 1.7 },
-  bankNote: { fontSize: 7.5, color: COLOR.muted, marginTop: 10 },
+  bankBody: { fontSize: 9, color: COLOR.ink, lineHeight: 1.6 },
+  bankNote: { fontSize: 7, color: '#666', marginTop: 4 },
 
   // notes
   notesWrap: { marginTop: 14 },
@@ -256,19 +258,30 @@ const styles = StyleSheet.create({
   },
   notesText: { fontSize: 9.5, color: COLOR.body, lineHeight: 1.7, marginTop: 8 },
 
-  // footer
-  footer: {
-    position: 'absolute',
-    bottom: 32,
-    left: 56,
-    right: 56,
-    fontSize: 7.5,
-    color: COLOR.muted,
-    borderTopWidth: 0.25,
-    borderColor: COLOR.hairline,
-    paddingTop: 8,
-    textAlign: 'center',
-    letterSpacing: 1,
+  // brand footer
+  brandBlock: {
+    marginTop: 40,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderColor: COLOR.ink,
+    paddingTop: 16,
+  },
+  brandTitle: {
+    fontSize: 22,
+    fontWeight: 700,
+    letterSpacing: 12,
+    color: COLOR.ink,
+  },
+  brandSubtitle: {
+    fontSize: 8,
+    color: '#999',
+    letterSpacing: 4,
+    marginTop: 4,
+  },
+  brandLegal: {
+    fontSize: 7,
+    color: '#bbb',
+    marginTop: 8,
   },
 })
 
@@ -290,6 +303,7 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
   const isDraft = !data.invoice_number
   const subtotal = data.summary.subtotal_10 + data.summary.subtotal_8
   const taxTotal = data.summary.tax_10 + data.summary.tax_8
+  const fullCompanyAddress = c.postal ? `〒${c.postal}  ${c.address}` : c.address
 
   return (
     <Document>
@@ -328,10 +342,7 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
             <Text style={styles.partyLabel}>請　求　元</Text>
             <Text style={styles.companyName}>{c.name}</Text>
             {(c.postal || c.address) && (
-              <Text style={styles.addrLine}>
-                {c.postal ? `〒${c.postal}　` : ''}
-                {c.address}
-              </Text>
+              <Text style={styles.addrLine}>{fullCompanyAddress}</Text>
             )}
             {c.phone && <Text style={styles.addrLine}>TEL  {c.phone}</Text>}
             {c.email && <Text style={styles.addrLine}>{c.email}</Text>}
@@ -411,10 +422,10 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
         {/* BANK */}
         {c.bank && (
           <View style={styles.bankCard}>
-            <Text style={styles.bankHeader}>お　振　込　先</Text>
+            <Text style={styles.bankHeader}>お振込先</Text>
             <Text style={styles.bankBody}>{c.bank}</Text>
             <Text style={styles.bankNote}>
-              ※ 振込手数料は貴社にてご負担くださいますようお願い申し上げます
+              ※振込手数料は貴社にてご負担くださいますようお願い申し上げます
             </Text>
           </View>
         )}
@@ -429,12 +440,16 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
           </View>
         )}
 
-        {/* FOOTER */}
-        <View style={styles.footer} fixed>
-          <Text>
-            {c.name}
-            {c.registrationNumber ? `　／　登録番号 ${c.registrationNumber}` : ''}
-          </Text>
+        {/* BRAND FOOTER */}
+        <View style={styles.brandBlock}>
+          <Text style={styles.brandTitle}>FELICITY</Text>
+          <Text style={styles.brandSubtitle}>COFFEE  ROASTERS</Text>
+          {(c.name || c.registrationNumber) && (
+            <Text style={styles.brandLegal}>
+              {c.name}
+              {c.registrationNumber ? ` ／ 登録番号: ${c.registrationNumber}` : ''}
+            </Text>
+          )}
         </View>
       </Page>
     </Document>
