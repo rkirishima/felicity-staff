@@ -33,12 +33,19 @@ export default function AdminShiftsPage() {
   const [addEnd, setAddEnd] = useState('')
   const [addLocation, setAddLocation] = useState<ShiftLocation>('cafe')
   const [loading, setLoading] = useState(false)
-  // キッチンカー一括生成
-  const [bulkStaff, setBulkStaff] = useState('')
-  const [bulkStart, setBulkStart] = useState(KITCHEN_CAR_DEFAULT_START)
-  const [bulkEnd, setBulkEnd] = useState(KITCHEN_CAR_DEFAULT_END)
+  // キッチンカー一括登録（日ごとに担当・時間を変えられる）
+  type BulkRow = {
+    id: string
+    date: string
+    staffId: string
+    startTime: string
+    endTime: string
+    include: boolean
+  }
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([])
   const [bulkLoading, setBulkLoading] = useState(false)
   const [showBulk, setShowBulk] = useState(false)
+  const [extraDate, setExtraDate] = useState('')
   const supabase = createClient()
   const router = useRouter()
 
@@ -99,47 +106,110 @@ export default function AdminShiftsPage() {
     loadShifts()
   }
 
-  // 表示中の月の水・木を全部 'kitchen_car' で一括追加
-  async function bulkKitchenCar() {
-    if (!bulkStaff || !bulkStart || !bulkEnd) {
-      toast.error('スタッフ・時間を選んでください'); return
-    }
-    setBulkLoading(true)
+  // 曜日ごとのデフォルト担当（前回登録した担当を覚えておく）
+  function getDowDefault(dow: number): string {
+    if (typeof window === 'undefined') return ''
+    return localStorage.getItem(`felicity_kitchencar_dow_${dow}`) ?? ''
+  }
+  function saveDowDefault(dow: number, staffId: string) {
+    if (typeof window === 'undefined' || !staffId) return
+    localStorage.setItem(`felicity_kitchencar_dow_${dow}`, staffId)
+  }
+
+  // 表示月の水・木を初期行として生成
+  function generateBulkRows(): BulkRow[] {
     const yy = viewMonth.getFullYear()
     const mm = viewMonth.getMonth()
     const last = new Date(yy, mm + 1, 0).getDate()
-    // 既に同日同スタッフのキッチンカーシフトがあればスキップ
-    const existingDates = new Set(
-      shifts
-        .filter(s => s.staff_id === bulkStaff && locationOf(s) === 'kitchen_car')
-        .map(s => s.date)
-    )
-    const rows: any[] = []
+    const rows: BulkRow[] = []
     for (let day = 1; day <= last; day++) {
       const d = new Date(yy, mm, day)
       const dow = d.getDay()
       if (dow !== 3 && dow !== 4) continue // 水=3, 木=4
       const dateStr = `${yy}-${String(mm + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
-      if (existingDates.has(dateStr)) continue
       rows.push({
-        staff_id: bulkStaff,
+        id: dateStr,
         date: dateStr,
-        start_time: bulkStart,
-        end_time: bulkEnd,
-        status: 'approved',
-        location: 'kitchen_car',
+        staffId: getDowDefault(dow),
+        startTime: KITCHEN_CAR_DEFAULT_START,
+        endTime: KITCHEN_CAR_DEFAULT_END,
+        include: true,
       })
     }
-    if (rows.length === 0) {
-      toast.info('追加対象の水木はありません（既に登録済み）')
+    return rows
+  }
+
+  // パネルを開いた時 or 月を切り替えた時に行を再生成
+  useEffect(() => {
+    if (!showBulk) return
+    setBulkRows(generateBulkRows())
+  }, [showBulk, viewMonth])
+
+  function updateBulkRow(id: string, patch: Partial<BulkRow>) {
+    setBulkRows(rows => rows.map(r => r.id === id ? { ...r, ...patch } : r))
+  }
+  function removeBulkRow(id: string) {
+    setBulkRows(rows => rows.filter(r => r.id !== id))
+  }
+  function addExtraBulkRow() {
+    if (!extraDate) return
+    if (bulkRows.some(r => r.date === extraDate)) {
+      toast.error('その日付は既にリストにあります')
+      return
+    }
+    const dow = new Date(extraDate + 'T12:00:00').getDay()
+    const newRow: BulkRow = {
+      id: `${extraDate}-${Date.now()}`,
+      date: extraDate,
+      staffId: getDowDefault(dow),
+      startTime: KITCHEN_CAR_DEFAULT_START,
+      endTime: KITCHEN_CAR_DEFAULT_END,
+      include: true,
+    }
+    setBulkRows(rows => [...rows, newRow].sort((a, b) => a.date.localeCompare(b.date)))
+    setExtraDate('')
+  }
+
+  async function submitBulkRows() {
+    const checked = bulkRows.filter(r => r.include && r.staffId)
+    if (checked.length === 0) {
+      toast.error('チェック中で担当者が選ばれている行がありません')
+      return
+    }
+    setBulkLoading(true)
+    // 同日・同スタッフのキッチンカーシフトが既にあればスキップ
+    const existing = new Set(
+      shifts
+        .filter(s => locationOf(s) === 'kitchen_car')
+        .map(s => `${s.date}|${s.staff_id}`)
+    )
+    const toInsert = checked
+      .filter(r => !existing.has(`${r.date}|${r.staffId}`))
+      .map(r => ({
+        staff_id: r.staffId,
+        date: r.date,
+        start_time: r.startTime,
+        end_time: r.endTime,
+        status: 'approved',
+        location: 'kitchen_car',
+      }))
+    if (toInsert.length === 0) {
+      toast.info('全行が既に登録済みでした')
       setBulkLoading(false); return
     }
-    const { error } = await supabase.from('shifts').insert(rows)
+    const { error } = await supabase.from('shifts').insert(toInsert)
     if (error) { toast.error('一括追加失敗: ' + error.message); setBulkLoading(false); return }
-    toast.success(`${rows.length}件のキッチンカーシフトを追加しました`)
+    // 曜日ごとのデフォルト担当を更新（最後にそのdowで使った人）
+    for (const r of checked) {
+      const dow = new Date(r.date + 'T12:00:00').getDay()
+      saveDowDefault(dow, r.staffId)
+    }
+    const skipped = checked.length - toInsert.length
+    toast.success(skipped > 0
+      ? `${toInsert.length}件追加（${skipped}件は既存のためスキップ）`
+      : `${toInsert.length}件のキッチンカーシフトを追加しました`)
     setBulkLoading(false)
     setShowBulk(false)
-    setBulkStaff('')
     loadShifts()
   }
 
@@ -325,40 +395,78 @@ export default function AdminShiftsPage() {
             </div>
           )}
 
-          {/* キッチンカー一括生成（その月の水・木に適用） */}
+          {/* キッチンカー一括登録（日ごとに担当・時間を変えられる） */}
           <div className="mt-4 bg-white rounded-2xl shadow-sm p-4">
             <button onClick={() => setShowBulk(v => !v)}
               className="w-full text-left flex items-center justify-between">
-              <span className="text-sm font-medium text-stone-700">🚐 今月の水・木にキッチンカーを一括追加</span>
+              <span className="text-sm font-medium text-stone-700">🚐 {y}年{m+1}月のキッチンカー一括登録</span>
               <span className="text-stone-400">{showBulk ? '−' : '＋'}</span>
             </button>
             {showBulk && (
               <div className="space-y-3 mt-3 border-t border-stone-100 pt-3">
-                <div className="grid grid-cols-3 gap-1.5">
-                  {staffList.filter(s => s.role !== 'accountant').map(s => (
-                    <button key={s.id} onClick={() => setBulkStaff(s.id)}
-                      className={`py-2 rounded-xl text-xs font-medium transition-all ${
-                        bulkStaff === s.id ? 'bg-amber-500 text-white' : 'bg-stone-100 text-stone-700'
-                      }`}>
-                      {s.name.split(' ')[0] || s.name}
-                    </button>
-                  ))}
+                <p className="text-xs text-stone-400">
+                  水・木をデフォルトで一覧に出してます。各日で担当・時間を変えたり、チェックを外して除外したり、＋で他の日（イベント等）を足したりできます。
+                </p>
+
+                {bulkRows.length === 0 ? (
+                  <p className="text-xs text-stone-400 text-center py-4">この月には水・木がありません。下の「日を追加」で他の日を足せます。</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {bulkRows.map(r => {
+                      const d = new Date(r.date + 'T12:00:00')
+                      const dowLabel = DAYS[d.getDay()]
+                      return (
+                        <div key={r.id} className={'rounded-xl p-2 transition-all ' + (r.include ? 'bg-amber-50 border border-amber-200' : 'bg-stone-100 opacity-50')}>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <input type="checkbox" checked={r.include}
+                              onChange={e => updateBulkRow(r.id, { include: e.target.checked })}
+                              className="w-4 h-4 accent-amber-500" />
+                            <span className="text-xs font-medium text-stone-700 flex-1">
+                              {d.getMonth()+1}/{d.getDate()}({dowLabel})
+                            </span>
+                            <button onClick={() => removeBulkRow(r.id)}
+                              className="text-xs text-stone-400 hover:text-red-500 px-1">×</button>
+                          </div>
+                          <div className="flex gap-1 ml-6">
+                            <select value={r.staffId} onChange={e => updateBulkRow(r.id, { staffId: e.target.value })}
+                              className="flex-1 border border-stone-200 rounded-lg px-2 py-1 text-xs bg-white text-stone-800">
+                              <option value="">担当未定</option>
+                              {staffList.filter(s => s.role !== 'accountant').map(s => (
+                                <option key={s.id} value={s.id}>{s.name.split(' ')[0]}</option>
+                              ))}
+                            </select>
+                            <select value={r.startTime} onChange={e => updateBulkRow(r.id, { startTime: e.target.value })}
+                              className="border border-stone-200 rounded-lg px-1 py-1 text-xs bg-white text-stone-800">
+                              {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                            <span className="text-stone-400 self-center text-xs">〜</span>
+                            <select value={r.endTime} onChange={e => updateBulkRow(r.id, { endTime: e.target.value })}
+                              className="border border-stone-200 rounded-lg px-1 py-1 text-xs bg-white text-stone-800">
+                              {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* 水・木以外の日を追加（イベント等） */}
+                <div className="flex gap-2 items-center pt-2 border-t border-stone-100">
+                  <input type="date" value={extraDate}
+                    onChange={e => setExtraDate(e.target.value)}
+                    className="flex-1 border border-stone-200 rounded-lg px-2 py-1.5 text-xs bg-white text-stone-700" />
+                  <button onClick={addExtraBulkRow} disabled={!extraDate}
+                    className="px-3 py-1.5 bg-stone-200 text-stone-700 rounded-lg text-xs font-medium disabled:opacity-50">
+                    ＋ 日を追加
+                  </button>
                 </div>
-                <div className="flex gap-2">
-                  <select value={bulkStart} onChange={e => setBulkStart(e.target.value)}
-                    className="flex-1 border border-stone-200 rounded-xl px-2 py-2 text-sm bg-white text-stone-800">
-                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <span className="text-stone-400 self-center">〜</span>
-                  <select value={bulkEnd} onChange={e => setBulkEnd(e.target.value)}
-                    className="flex-1 border border-stone-200 rounded-xl px-2 py-2 text-sm bg-white text-stone-800">
-                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <p className="text-xs text-stone-400">既に同日同スタッフのキッチンカーシフトがある日はスキップします。</p>
-                <button onClick={bulkKitchenCar} disabled={bulkLoading}
+
+                <button onClick={submitBulkRows} disabled={bulkLoading}
                   className="w-full py-3 bg-amber-500 text-white rounded-xl text-sm font-medium disabled:opacity-50">
-                  {bulkLoading ? '追加中...' : `${y}年${m+1}月の水・木に一括追加`}
+                  {bulkLoading
+                    ? '追加中...'
+                    : `チェック中の${bulkRows.filter(r => r.include && r.staffId).length}件を登録`}
                 </button>
               </div>
             )}
