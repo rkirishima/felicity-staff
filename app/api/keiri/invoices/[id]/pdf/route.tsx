@@ -22,7 +22,7 @@ export async function GET(
   const { data: inv, error } = await supabase
     .from('keiri_invoices')
     .select(
-      'id, invoice_number, status, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, pdf_path, client:keiri_clients(name, postal_code, address)',
+      'id, invoice_number, status, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, pdf_path, client:keiri_clients(name, contact_person, postal_code, address)',
     )
     .eq('id', id)
     .single()
@@ -59,7 +59,7 @@ export async function GET(
     amount: l.amount as number,
   }))
 
-  const client = (inv.client as unknown as { name: string; postal_code: string | null; address: string | null } | null) ?? null
+  const client = (inv.client as unknown as { name: string; contact_person: string | null; postal_code: string | null; address: string | null } | null) ?? null
   const buffer = await renderToBuffer(
     <InvoicePDF
       data={{
@@ -67,6 +67,7 @@ export async function GET(
         issue_date: inv.issue_date as string,
         due_date: (inv.due_date as string | null) ?? null,
         client_name: client?.name ?? '',
+        client_contact: client?.contact_person ?? null,
         client_postal: client?.postal_code ?? null,
         client_address: client?.address ?? null,
         notes: (inv.notes as string | null) ?? null,

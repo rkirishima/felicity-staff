@@ -18,6 +18,7 @@ export type InvoicePDFInput = {
   issue_date: string
   due_date: string | null
   client_name: string
+  client_contact: string | null
   client_postal: string | null
   client_address: string | null
   notes: string | null
@@ -105,11 +106,27 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   clientName: {
-    fontSize: 10.5,
+    fontSize: 14,
     color: COLOR.ink,
-    marginBottom: 6,
     letterSpacing: 0.5,
-    lineHeight: 1.4,
+    lineHeight: 1.3,
+  },
+  clientContact: {
+    fontSize: 11,
+    color: '#333',
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  clientAddrLine: {
+    fontSize: 9,
+    color: '#666',
+    lineHeight: 1.5,
+  },
+  clientPostal: {
+    fontSize: 9,
+    color: '#666',
+    marginTop: 6,
+    lineHeight: 1.5,
   },
   companyName: {
     fontSize: 10.5,
@@ -297,8 +314,15 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
           <View style={styles.partyLeft}>
             <Text style={styles.partyLabel}>請　求　先</Text>
             <Text style={styles.clientName}>{data.client_name}　御中</Text>
-            {data.client_postal && <Text style={styles.addrLine}>〒{data.client_postal}</Text>}
-            {data.client_address && <Text style={styles.addrLine}>{data.client_address}</Text>}
+            {data.client_contact && (
+              <Text style={styles.clientContact}>{data.client_contact}　様</Text>
+            )}
+            {data.client_postal && (
+              <Text style={styles.clientPostal}>〒{data.client_postal}</Text>
+            )}
+            {data.client_address && (
+              <Text style={styles.clientAddrLine}>{data.client_address}</Text>
+            )}
           </View>
           <View style={styles.partyRight}>
             <Text style={styles.partyLabel}>請　求　元</Text>
