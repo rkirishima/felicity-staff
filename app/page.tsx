@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { getSession, saveSession } from '@/lib/session'
 import Image from 'next/image'
 import { verifyStaffPin, reportAbsence } from '@/app/admin/actions'
+import { LOCATION_META, locationOf } from '@/lib/shift-locations'
 
 type Staff = { id: string; name: string; role: string; hourly_rate?: number }
 type ClockStatus = 'not_clocked' | 'clocked_in' | 'clocked_out'
@@ -169,7 +170,7 @@ export default function HomePage() {
     const today = todayJST()
     const in7days = new Date(Date.now() + 9*60*60*1000 + 7*24*60*60*1000).toISOString().slice(0,10)
     const { data } = await getSb().from('shifts')
-      .select('id, date, start_time, end_time, status')
+      .select('id, date, start_time, end_time, status, location')
       .eq('staff_id', staffId)
       .eq('status', 'approved')
       .gte('date', today)
@@ -213,7 +214,7 @@ export default function HomePage() {
         clock_in,
         clock_out,
         shift_id,
-        shifts(id, start_time, end_time, date)
+        shifts(id, start_time, end_time, date, location)
       `)
       .eq('staff_id', staff.id)
       .order('clock_in', { ascending: false })
@@ -225,44 +226,43 @@ export default function HomePage() {
     if (!selected || clockingRef.current) return
     clockingRef.current = true
     setLoading(true)
-    // GPS確認
-    const nearby = await checkLocation()
-    if (!nearby) {
-      toast.error('店舗の近くにいる時のみ出勤できます📍')
-      setLoading(false)
-      return
-    }
-    // 二重出勤防止
-    const today = todayJST()
-    const { data: existing } = await getSb().from('timeclock')
-      .select('id')
-      .eq('staff_id', selected.id)
-      .gte('clock_in', today + 'T00:00:00+09:00')
-      .lte('clock_in', today + 'T23:59:59+09:00')
-      .is('clock_out', null)
-      .maybeSingle()
-    if (existing) {
+    try {
+      // 二重出勤防止（連打吸収）— 今日の未退勤レコードがあればそれを採用
+      const today = todayJST()
+      const { data: existing } = await getSb().from('timeclock')
+        .select('id, clock_in')
+        .eq('staff_id', selected.id)
+        .gte('clock_in', today + 'T00:00:00+09:00')
+        .lte('clock_in', today + 'T23:59:59+09:00')
+        .is('clock_out', null)
+        .order('clock_in', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (existing) {
+        setClockInTime(new Date(existing.clock_in))
+        setClockStatus('clocked_in')
+        return
+      }
+
+      const now = new Date()
+      const { error } = await getSb().from('timeclock').insert({
+        staff_id: selected.id,
+        clock_in: now.toISOString()
+      })
+      if (error) { toast.error('エラーが発生しました'); return }
+      setClockInTime(now)
       setClockStatus('clocked_in')
+      toast.success(selected.name.split(' ')[0] + 'さん、おはようございます！')
+
+      // 最初の出勤者ならオープンチェックへ
+      const { data: todayAll } = await getSb().from('timeclock')
+        .select('id').gte('clock_in', today + 'T00:00:00+09:00').lte('clock_in', today + 'T23:59:59+09:00')
+      if (todayAll && todayAll.length <= 1) {
+        setTimeout(() => setShowCheckPrompt('opening'), 1500)
+      }
+    } finally {
       setLoading(false)
-      return
-    }
-    
-    const now = new Date()
-    const { error } = await getSb().from('timeclock').insert({
-      staff_id: selected.id,
-      clock_in: now.toISOString()
-    })
-    if (error) { toast.error('エラーが発生しました'); setLoading(false); clockingRef.current = false; return }
-    setClockInTime(now)
-    setClockStatus('clocked_in')
-    toast.success(selected.name.split(' ')[0] + 'さん、おはようございます！')
-    setLoading(false)
-    clockingRef.current = false
-    // 最初の出勤者ならオープンチェックへ
-    const { data: todayAll } = await getSb().from('timeclock')
-      .select('id').gte('clock_in', today + 'T00:00:00+09:00').lte('clock_in', today + 'T23:59:59+09:00')
-    if (todayAll && todayAll.length <= 1) {
-      setTimeout(() => setShowCheckPrompt('opening'), 1500)
+      clockingRef.current = false
     }
   }
 
@@ -270,53 +270,56 @@ export default function HomePage() {
     if (!selected || clockingRef.current) return
     clockingRef.current = true
     setLoading(true)
-    // GPS確認
-    const nearby = await checkLocation()
-    if (!nearby) {
-      toast.error('店舗の近くにいる時のみ退勤できます📍')
+    try {
+      // 退勤対象は「最新の未退勤レコード」1件のみ（昨日以前の取り残しを巻き込まない）
+      const today = todayJST()
+      let { data: open } = await getSb().from('timeclock')
+        .select('id, clock_in')
+        .eq('staff_id', selected.id)
+        .gte('clock_in', today + 'T00:00:00+09:00')
+        .lte('clock_in', today + 'T23:59:59+09:00')
+        .is('clock_out', null)
+        .order('clock_in', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      // 今日の未退勤がない場合は、深夜跨ぎ等の救済として直近24時間以内の未退勤を退勤対象にする
+      if (!open) {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const { data: recent } = await getSb().from('timeclock')
+          .select('id, clock_in')
+          .eq('staff_id', selected.id)
+          .gte('clock_in', cutoff)
+          .is('clock_out', null)
+          .order('clock_in', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        open = recent
+      }
+
+      if (!open) {
+        toast.error('出勤記録が見つかりません')
+        return
+      }
+
+      const outTime = new Date()
+      const { error } = await getSb().from('timeclock')
+        .update({ clock_out: outTime.toISOString() })
+        .eq('id', open.id)
+      if (error) { toast.error('エラーが発生しました'); return }
+      setClockInTime(new Date(open.clock_in))
+      setClockOutTime(outTime)
+      setClockStatus('clocked_out')
+      toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした！')
+      await loadStats(selected, statsPeriod)
+      // クローズチェックへ誘導
+      setTimeout(() => setShowCheckPrompt('closing'), 1500)
+      // 10秒後に自動でホームに戻る
+      autoResetRef.current = setTimeout(() => reset(), 10000)
+    } finally {
       setLoading(false)
-      return
+      clockingRef.current = false
     }
-    const outTime = new Date()
-    const { error } = await getSb().from('timeclock')
-      .update({ clock_out: outTime.toISOString() })
-      .eq('staff_id', selected.id)
-      .is('clock_out', null)
-    if (error) { toast.error('エラーが発生しました'); setLoading(false); clockingRef.current = false; return }
-    setClockOutTime(outTime)
-    setClockStatus('clocked_out')
-    toast.success(selected.name.split(' ')[0] + 'さん、お疲れ様でした！')
-    await loadStats(selected, statsPeriod)
-    setLoading(false)
-    clockingRef.current = false
-    // クローズチェックへ誘導
-    setTimeout(() => setShowCheckPrompt('closing'), 1500)
-    // 10秒後に自動でホームに戻る
-    autoResetRef.current = setTimeout(() => reset(), 10000)
-  }
-
-  // GPS
-  const CAFE_LAT = 35.267359
-  const CAFE_LNG = 139.610321
-  const CAFE_RADIUS = 500
-
-  function calcDist(lat1: number, lng1: number, lat2: number, lng2: number) {
-    const R = 6371000
-    const dLat = (lat2 - lat1) * Math.PI / 180
-    const dLng = (lng2 - lng1) * Math.PI / 180
-    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-  }
-
-  async function checkLocation(): Promise<boolean> {
-    return new Promise(resolve => {
-      if (!navigator.geolocation) { resolve(false); return }
-      navigator.geolocation.getCurrentPosition(
-        pos => resolve(calcDist(pos.coords.latitude, pos.coords.longitude, CAFE_LAT, CAFE_LNG) <= CAFE_RADIUS),
-        () => resolve(false),
-        { timeout: 8000, maximumAge: 60000 }
-      )
-    })
   }
 
   const H = String(now.getHours()).padStart(2,'0')
@@ -504,10 +507,18 @@ export default function HomePage() {
                 const shiftStart = r.shifts?.start_time ? new Date('2000-01-01T' + r.shifts.start_time).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : null
                 const shiftEnd = r.shifts?.end_time ? new Date('2000-01-01T' + r.shifts.end_time).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : null
                 const shiftDate = r.shifts?.date ? new Date(r.shifts.date).toLocaleDateString('ja-JP', { month:'numeric', day:'numeric' }) : null
+                const loc = locationOf(r.shifts)
+                const meta = LOCATION_META[loc]
                 return (
                   <div key={i} className="flex justify-between items-center text-sm">
                     <div className="flex-1">
-                      <p className="text-stone-600">{cin.toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', weekday:'short' })}</p>
+                      <div className="flex items-center gap-1.5">
+                        <div className={`w-2 h-2 rounded-full ${meta.dot}`} />
+                        <p className="text-stone-600">{cin.toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', weekday:'short' })}</p>
+                        {loc !== 'cafe' && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${meta.badge}`}>{meta.emoji}</span>
+                        )}
+                      </div>
                       <p className="text-xs text-stone-400">
                         🕐 {cin.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })}〜{cout ? cout.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' }) : '退勤未記録'}
                       </p>
@@ -534,9 +545,17 @@ export default function HomePage() {
                 const d = new Date(s.date + 'T12:00:00')
                 const weekday = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
                 const label = `${d.getMonth()+1}/${d.getDate()}(${weekday}) ${s.start_time.slice(0,5)}〜${s.end_time.slice(0,5)}`
+                const loc = locationOf(s)
+                const meta = LOCATION_META[loc]
                 return (
                   <div key={s.id} className="flex items-center justify-between">
-                    <span className="text-sm text-stone-700">{label}</span>
+                    <span className="flex items-center gap-2 text-sm text-stone-700">
+                      <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+                      {label}
+                      {loc !== 'cafe' && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${meta.badge}`}>{meta.emoji} {meta.label}</span>
+                      )}
+                    </span>
                     {absenceConfirm === s.id ? (
                       <div className="flex gap-2">
                         <button onClick={() => handleAbsence(s)}

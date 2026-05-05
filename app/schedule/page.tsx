@@ -6,9 +6,10 @@ import { toast } from 'sonner'
 import { getHolidaysOf } from 'japanese-holidays'
 import { getSession, saveSession, getAdminSession } from '@/lib/session'
 import { verifyStaffPin } from '@/app/admin/actions'
+import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
-type Shift = { id: string; staff_id: string; date: string; start_time: string; end_time: string; status: string; staff: { name: string } }
+type Shift = { id: string; staff_id: string; date: string; start_time: string; end_time: string; status: string; location: string | null; staff: { name: string } }
 type Staff = { id: string; name: string; role: string }
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
@@ -33,6 +34,7 @@ export default function SchedulePage() {
   const [selectedStaff, setSelectedStaff] = useState<string>('')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
+  const [shiftLocation, setShiftLocation] = useState<ShiftLocation>('cafe')
   const [loading, setLoading] = useState(false)
   const [viewMonth, setViewMonth] = useState(new Date())
   const [holidays, setHolidays] = useState<Record<string, string>>({})
@@ -85,7 +87,7 @@ export default function SchedulePage() {
     const y = viewMonth.getFullYear()
     const m = String(viewMonth.getMonth() + 1).padStart(2, '0')
     const lastDay = new Date(y, viewMonth.getMonth() + 1, 0).getDate()
-    supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status, staff!shifts_staff_id_fkey(name)')
+    supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status, location, staff!shifts_staff_id_fkey(name)')
       .gte('date', y + '-' + m + '-01')
       .lte('date', y + '-' + m + '-' + lastDay)
       .in('status', ['approved', 'pending'])
@@ -143,6 +145,7 @@ export default function SchedulePage() {
       start_time: startTime,
       end_time: endTime,
       status,
+      location: shiftLocation,
     })
     if (error) { toast.error('エラー: ' + error.message); setLoading(false); return }
     if (isAdmin) {
@@ -151,7 +154,7 @@ export default function SchedulePage() {
       toast.success('申請しました！桐島に確認してもらいます 📩')
     }
     setSelectedDate(null); setSelectedTemplate(''); setSelectedStaff(isAdmin ? '' : authStaff?.id || '')
-    setCustomStart(''); setCustomEnd('')
+    setCustomStart(''); setCustomEnd(''); setShiftLocation('cafe')
     setLoading(false); loadShifts()
   }
 
@@ -273,9 +276,9 @@ export default function SchedulePage() {
               <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                 {approvedShifts.slice(0,3).map((s, j) => {
                   const n = (s.staff as any)?.name ?? ''
-                  const isKitchen = ['荒波','竹内','荒井'].some(k => n.includes(k))
+                  const meta = LOCATION_META[locationOf(s)]
                   return (
-                    <div key={j} className={'w-4 h-4 rounded-full flex items-center justify-center ' + (isKitchen?'bg-amber-400':'bg-teal-500')}
+                    <div key={j} className={'w-4 h-4 rounded-full flex items-center justify-center ' + meta.dot}
                       style={{ fontSize:'7px', color:'white', fontWeight:'bold' }}>
                       {n.slice(-1)}
                     </div>
@@ -312,11 +315,18 @@ export default function SchedulePage() {
           {shifts.filter(s => s.date === selectedDate).length > 0 && (
             <div className="space-y-1">
               <p className="text-xs text-stone-400">スタッフ</p>
-              {shifts.filter(s => s.date === selectedDate).map(s => (
-                <div key={s.id} className={'flex justify-between items-center rounded-xl px-3 py-2 text-sm ' + (s.status === 'pending' ? 'bg-yellow-50 border border-yellow-200' : 'bg-stone-50')}>
-                  <div>
+              {shifts.filter(s => s.date === selectedDate).map(s => {
+                const loc = locationOf(s)
+                const meta = LOCATION_META[loc]
+                return (
+                <div key={s.id} className={'flex justify-between items-center rounded-xl px-3 py-2 text-sm ' + (s.status === 'pending' ? 'bg-yellow-50 border border-yellow-200' : loc === 'cafe' ? 'bg-stone-50' : meta.cell)}>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${meta.dot}`} />
                     <span className="text-stone-700">{(s.staff as any)?.name}</span>
-                    {s.status === 'pending' && <span className="ml-2 text-xs text-yellow-600">申請中</span>}
+                    {loc !== 'cafe' && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${meta.badge}`}>{meta.emoji} {meta.label}</span>
+                    )}
+                    {s.status === 'pending' && <span className="ml-1 text-xs text-yellow-600">申請中</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-stone-400">{s.start_time.slice(0,5)}〜{s.end_time.slice(0,5)}</span>
@@ -326,7 +336,8 @@ export default function SchedulePage() {
                     )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -350,6 +361,23 @@ export default function SchedulePage() {
             )}
 
             <div>
+              <p className="text-xs text-stone-400 mb-2">勤務場所</p>
+              <div className="grid grid-cols-3 gap-1.5 mb-3">
+                {SHIFT_LOCATION_OPTIONS.map(loc => {
+                  const meta = LOCATION_META[loc]
+                  const active = shiftLocation === loc
+                  return (
+                    <button key={loc} onClick={() => setShiftLocation(loc)}
+                      className={'py-2 rounded-xl text-xs font-medium transition-all border-2 ' + (
+                        active
+                          ? `${meta.cell} ${meta.border} text-stone-800`
+                          : 'bg-white border-transparent text-stone-500'
+                      )}>
+                      {meta.emoji} {meta.label}
+                    </button>
+                  )
+                })}
+              </div>
               <p className="text-xs text-stone-400 mb-2">
                 {isAdmin ? 'シフト' : '希望シフト'}
               </p>

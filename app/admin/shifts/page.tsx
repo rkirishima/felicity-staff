@@ -5,9 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { getAdminSession } from '@/lib/session'
+import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 const DAYS = ['日','月','火','水','木','金','土']
+// 既定のキッチンカー営業時間（一括生成のデフォルト）
+const KITCHEN_CAR_DEFAULT_START = '10:00'
+const KITCHEN_CAR_DEFAULT_END = '15:00'
 
 const TIME_OPTIONS: string[] = []
 for (let i = 0; i <= 28; i++) {
@@ -27,7 +31,14 @@ export default function AdminShiftsPage() {
   const [addStaff, setAddStaff] = useState('')
   const [addStart, setAddStart] = useState('')
   const [addEnd, setAddEnd] = useState('')
+  const [addLocation, setAddLocation] = useState<ShiftLocation>('cafe')
   const [loading, setLoading] = useState(false)
+  // キッチンカー一括生成
+  const [bulkStaff, setBulkStaff] = useState('')
+  const [bulkStart, setBulkStart] = useState(KITCHEN_CAR_DEFAULT_START)
+  const [bulkEnd, setBulkEnd] = useState(KITCHEN_CAR_DEFAULT_END)
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [showBulk, setShowBulk] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
@@ -45,7 +56,7 @@ export default function AdminShiftsPage() {
     const m = String(viewMonth.getMonth() + 1).padStart(2,'0')
     const last = new Date(y, viewMonth.getMonth() + 1, 0).getDate()
     const { data, error } = await supabase.from('shifts')
-      .select('id, staff_id, date, start_time, end_time, status')
+      .select('id, staff_id, date, start_time, end_time, status, location')
       .gte('date', `${y}-${m}-01`)
       .lte('date', `${y}-${m}-${last}`)
       .order('date')
@@ -59,7 +70,7 @@ export default function AdminShiftsPage() {
 
   async function loadPending() {
     const { data, error } = await supabase.from('shifts')
-      .select('id, staff_id, date, start_time, end_time, status')
+      .select('id, staff_id, date, start_time, end_time, status, location')
       .eq('status', 'pending').order('date')
     if (error) { console.error(error); return }
     const { data: staffData } = await supabase.from('staff').select('id, name')
@@ -79,11 +90,56 @@ export default function AdminShiftsPage() {
       start_time: addStart,
       end_time: addEnd,
       status: 'approved',
+      location: addLocation,
     })
     if (error) { toast.error('追加失敗: ' + error.message); setLoading(false); return }
     toast.success('シフトを追加しました')
-    setAddStaff(''); setAddStart(''); setAddEnd('')
+    setAddStaff(''); setAddStart(''); setAddEnd(''); setAddLocation('cafe')
     setLoading(false)
+    loadShifts()
+  }
+
+  // 表示中の月の水・木を全部 'kitchen_car' で一括追加
+  async function bulkKitchenCar() {
+    if (!bulkStaff || !bulkStart || !bulkEnd) {
+      toast.error('スタッフ・時間を選んでください'); return
+    }
+    setBulkLoading(true)
+    const yy = viewMonth.getFullYear()
+    const mm = viewMonth.getMonth()
+    const last = new Date(yy, mm + 1, 0).getDate()
+    // 既に同日同スタッフのキッチンカーシフトがあればスキップ
+    const existingDates = new Set(
+      shifts
+        .filter(s => s.staff_id === bulkStaff && locationOf(s) === 'kitchen_car')
+        .map(s => s.date)
+    )
+    const rows: any[] = []
+    for (let day = 1; day <= last; day++) {
+      const d = new Date(yy, mm, day)
+      const dow = d.getDay()
+      if (dow !== 3 && dow !== 4) continue // 水=3, 木=4
+      const dateStr = `${yy}-${String(mm + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+      if (existingDates.has(dateStr)) continue
+      rows.push({
+        staff_id: bulkStaff,
+        date: dateStr,
+        start_time: bulkStart,
+        end_time: bulkEnd,
+        status: 'approved',
+        location: 'kitchen_car',
+      })
+    }
+    if (rows.length === 0) {
+      toast.info('追加対象の水木はありません（既に登録済み）')
+      setBulkLoading(false); return
+    }
+    const { error } = await supabase.from('shifts').insert(rows)
+    if (error) { toast.error('一括追加失敗: ' + error.message); setBulkLoading(false); return }
+    toast.success(`${rows.length}件のキッチンカーシフトを追加しました`)
+    setBulkLoading(false)
+    setShowBulk(false)
+    setBulkStaff('')
     loadShifts()
   }
 
@@ -112,8 +168,6 @@ export default function AdminShiftsPage() {
   const firstDay = new Date(y, m, 1).getDay()
   const daysInMonth = new Date(y, m + 1, 0).getDate()
   const cells = [...Array(firstDay).fill(null), ...Array.from({length: daysInMonth}, (_,i) => i+1)]
-
-  const KITCHEN = ['荒波','竹内']
 
   return (
     <main className="min-h-screen p-4 max-w-lg mx-auto pb-24" style={{ backgroundColor: '#F5F0E8' }}>
@@ -168,10 +222,10 @@ export default function AdminShiftsPage() {
                   <div className={`text-xs font-medium ${isWeekend?'text-teal-600':'text-stone-600'}`}>{day}</div>
                   <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                     {dayShifts.slice(0,4).map((s,j) => {
-                      const isKit = KITCHEN.some(k => s.staffName.includes(k))
+                      const meta = LOCATION_META[locationOf(s)]
                       const isAbsent = s.status === 'absent'
                       return (
-                        <div key={j} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${isAbsent?'bg-red-400':isKit?'bg-orange-400':'bg-teal-500'}`}
+                        <div key={j} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${isAbsent?'bg-red-400':meta.dot}`}
                           style={{fontSize:'6px', color:'white', fontWeight:'bold'}}>
                           {s.staffName.slice(-1)}
                         </div>
@@ -195,13 +249,17 @@ export default function AdminShiftsPage() {
               {shifts.filter(s => s.date === selectedDate && (s.status === 'approved' || s.status === 'absent')).length > 0 && (
                 <div className="space-y-1.5">
                   {shifts.filter(s => s.date === selectedDate && (s.status === 'approved' || s.status === 'absent')).map(s => {
-                    const isKit = KITCHEN.some(k => s.staffName.includes(k))
+                    const loc = locationOf(s)
+                    const meta = LOCATION_META[loc]
                     const isAbsent = s.status === 'absent'
                     return (
-                      <div key={s.id} className={`flex items-center justify-between rounded-xl px-3 py-2 ${isAbsent?'bg-red-50':'bg-stone-50'}`}>
+                      <div key={s.id} className={`flex items-center justify-between rounded-xl px-3 py-2 ${isAbsent?'bg-red-50':loc==='cafe'?'bg-stone-50':meta.cell}`}>
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${isAbsent?'bg-red-400':isKit?'bg-orange-400':'bg-teal-500'}`} />
+                          <div className={`w-2 h-2 rounded-full ${isAbsent?'bg-red-400':meta.dot}`} />
                           <span className={`text-sm ${isAbsent?'text-red-500 line-through':'text-stone-700'}`}>{s.staffName}</span>
+                          {loc !== 'cafe' && !isAbsent && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${meta.badge}`}>{meta.emoji} {meta.label}</span>
+                          )}
                           {isAbsent && <span className="text-xs text-red-400">欠勤</span>}
                         </div>
                         <div className="flex items-center gap-2">
@@ -230,6 +288,22 @@ export default function AdminShiftsPage() {
                     </button>
                   ))}
                 </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {SHIFT_LOCATION_OPTIONS.map(loc => {
+                    const meta = LOCATION_META[loc]
+                    const active = addLocation === loc
+                    return (
+                      <button key={loc} onClick={() => setAddLocation(loc)}
+                        className={`py-2 rounded-xl text-xs font-medium transition-all border-2 ${
+                          active
+                            ? `${meta.cell} ${meta.border} text-stone-800`
+                            : 'bg-white border-transparent text-stone-500'
+                        }`}>
+                        {meta.emoji} {meta.label}
+                      </button>
+                    )
+                  })}
+                </div>
                 <div className="flex gap-2">
                   <select value={addStart} onChange={e => setAddStart(e.target.value)}
                     className="flex-1 border border-stone-200 rounded-xl px-2 py-2 text-sm bg-white text-stone-800">
@@ -250,6 +324,45 @@ export default function AdminShiftsPage() {
               </div>
             </div>
           )}
+
+          {/* キッチンカー一括生成（その月の水・木に適用） */}
+          <div className="mt-4 bg-white rounded-2xl shadow-sm p-4">
+            <button onClick={() => setShowBulk(v => !v)}
+              className="w-full text-left flex items-center justify-between">
+              <span className="text-sm font-medium text-stone-700">🚐 今月の水・木にキッチンカーを一括追加</span>
+              <span className="text-stone-400">{showBulk ? '−' : '＋'}</span>
+            </button>
+            {showBulk && (
+              <div className="space-y-3 mt-3 border-t border-stone-100 pt-3">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {staffList.filter(s => s.role !== 'accountant').map(s => (
+                    <button key={s.id} onClick={() => setBulkStaff(s.id)}
+                      className={`py-2 rounded-xl text-xs font-medium transition-all ${
+                        bulkStaff === s.id ? 'bg-amber-500 text-white' : 'bg-stone-100 text-stone-700'
+                      }`}>
+                      {s.name.split(' ')[0] || s.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <select value={bulkStart} onChange={e => setBulkStart(e.target.value)}
+                    className="flex-1 border border-stone-200 rounded-xl px-2 py-2 text-sm bg-white text-stone-800">
+                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <span className="text-stone-400 self-center">〜</span>
+                  <select value={bulkEnd} onChange={e => setBulkEnd(e.target.value)}
+                    className="flex-1 border border-stone-200 rounded-xl px-2 py-2 text-sm bg-white text-stone-800">
+                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <p className="text-xs text-stone-400">既に同日同スタッフのキッチンカーシフトがある日はスキップします。</p>
+                <button onClick={bulkKitchenCar} disabled={bulkLoading}
+                  className="w-full py-3 bg-amber-500 text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                  {bulkLoading ? '追加中...' : `${y}年${m+1}月の水・木に一括追加`}
+                </button>
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -261,9 +374,17 @@ export default function AdminShiftsPage() {
               <p className="text-2xl mb-2">📋</p>
               <p className="text-sm">承認待ちの申請はありません</p>
             </div>
-          ) : pending.map(s => (
+          ) : pending.map(s => {
+            const loc = locationOf(s)
+            const meta = LOCATION_META[loc]
+            return (
             <div key={s.id} className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="font-medium text-stone-800">{s.staffName}</p>
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-stone-800">{s.staffName}</p>
+                {loc !== 'cafe' && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${meta.badge}`}>{meta.emoji} {meta.label}</span>
+                )}
+              </div>
               <p className="text-sm text-stone-500 mt-0.5">
                 {new Date(s.date+'T12:00:00').toLocaleDateString('ja-JP',{month:'long',day:'numeric',weekday:'short'})}
                 　{s.start_time?.slice(0,5)}〜{s.end_time?.slice(0,5)}
@@ -275,7 +396,8 @@ export default function AdminShiftsPage() {
                   className="flex-1 py-2.5 bg-red-50 text-red-500 rounded-xl text-sm font-medium">✕ 却下</button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </main>
