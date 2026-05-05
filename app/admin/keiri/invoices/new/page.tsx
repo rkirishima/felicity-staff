@@ -22,7 +22,7 @@ type LineDraft = {
 }
 
 function emptyLine(): LineDraft {
-  return { item_id: '', description: '', quantity: '1', unit_price: '0', tax_rate: 10 }
+  return { item_id: '', description: '', quantity: '', unit_price: '', tax_rate: 10 }
 }
 
 function todayJST() {
@@ -284,17 +284,23 @@ export default function NewInvoicePage() {
                 <div className="grid grid-cols-3 gap-2">
                   <Field label="数量">
                     <input
+                      type="text"
                       inputMode="numeric"
+                      pattern="[0-9]*"
                       value={l.quantity}
                       onChange={e => updateLine(idx, 'quantity', e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="1"
                       className={inputCls}
                     />
                   </Field>
                   <Field label="単価(税抜)">
                     <input
+                      type="text"
                       inputMode="numeric"
+                      pattern="[0-9]*"
                       value={l.unit_price}
                       onChange={e => updateLine(idx, 'unit_price', e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="0"
                       className={inputCls}
                     />
                   </Field>
