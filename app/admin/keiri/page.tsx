@@ -44,7 +44,9 @@ export default function KeiriDashboard() {
   const [square, setSquare] = useState<SquareSales | null>(null)
   const [squareLoading, setSquareLoading] = useState(false)
   const [squareError, setSquareError] = useState<string | null>(null)
+  const [resyncing, setResyncing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [reload, setReload] = useState(0)
 
   const isCurrentMonth = month === thisMonthJST()
 
@@ -91,7 +93,25 @@ export default function KeiriDashboard() {
     return () => {
       cancelled = true
     }
-  }, [month, router, supabase])
+  }, [month, router, supabase, reload])
+
+  async function resyncSquare() {
+    setResyncing(true)
+    try {
+      const res = await fetch(`/api/keiri/square-sync-history?from=${month}&to=${month}`)
+      const data = await res.json()
+      if (!res.ok) {
+        alert(`再同期失敗: ${data.error ?? 'unknown'}`)
+      } else {
+        alert(`再同期完了: ${data.completed ?? 0}件 / ${data.monthsSynced ?? 0}ヶ月`)
+        setReload(n => n + 1)
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '再同期失敗')
+    } finally {
+      setResyncing(false)
+    }
+  }
 
   // Square API only for current month (real-time refresh).
   useEffect(() => {
@@ -221,9 +241,18 @@ export default function KeiriDashboard() {
               <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-5">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-blue-700 tracking-wider">🟦 Square (店舗)</p>
-                  {isCurrentMonth && squareLoading && (
-                    <span className="text-xs text-blue-500">更新中…</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isCurrentMonth && squareLoading && (
+                      <span className="text-xs text-blue-500">更新中…</span>
+                    )}
+                    <button
+                      onClick={resyncSquare}
+                      disabled={resyncing}
+                      className="text-xs text-blue-700 underline disabled:opacity-50"
+                    >
+                      {resyncing ? '再同期中...' : '🔄 再同期'}
+                    </button>
+                  </div>
                 </div>
                 {isCurrentMonth && squareError && squareDisplayed === 0 ? (
                   <p className="text-sm text-rose-600 mt-1">{squareError}</p>

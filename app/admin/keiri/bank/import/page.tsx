@@ -25,7 +25,13 @@ export default function BankImportPage() {
       const fd = new FormData()
       fd.append('file', file)
       const res = await importBankCsv(fd)
-      toast.success(`${res.count}件 取り込みました`)
+      if (res.skipped > 0 && res.inserted === 0) {
+        toast.success(`全${res.total}件すべて取込済み（重複スキップ）`)
+      } else if (res.skipped > 0) {
+        toast.success(`${res.inserted}件取込／${res.skipped}件は重複スキップ`)
+      } else {
+        toast.success(`${res.inserted}件 取り込みました`)
+      }
       router.push('/admin/keiri/bank')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '取込失敗')
@@ -90,6 +96,11 @@ export default function BankImportPage() {
           <p>・カラム: 取引日 / 摘要 / 入金 / 出金 / 残高（順不同 OK）</p>
           <p>・エンコーディング: Shift-JIS / UTF-8 自動判定</p>
           <p>・日付形式: YYYY/MM/DD or YYYY-MM-DD</p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-800 space-y-1">
+          <p className="font-medium">💡 重複スキップ</p>
+          <p>同じ取引（取引日・摘要・入出金額・残高がすべて一致）はスキップされます。何月分のCSVでも、いつ取り込んでも、同じ行は二重計上されません。</p>
         </div>
       </div>
     </main>

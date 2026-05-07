@@ -123,7 +123,11 @@ function parseBankCsv(text: string): ParsedRow[] {
   return out
 }
 
-export async function importBankCsv(formData: FormData): Promise<{ count: number }> {
+function fingerprint(r: { date: string; description: string; debit: number; credit: number; balance: number | null }): string {
+  return `${r.date}|${r.description}|${r.debit}|${r.credit}|${r.balance ?? ''}`
+}
+
+export async function importBankCsv(formData: FormData): Promise<{ inserted: number; skipped: number; total: number }> {
   const file = formData.get('file') as File | null
   if (!file) throw new Error('ファイルがありません')
 
@@ -135,20 +139,55 @@ export async function importBankCsv(formData: FormData): Promise<{ count: number
   if (rows.length === 0) throw new Error('取り込めるデータがありません')
 
   const sb = await createClient()
-  const { error } = await sb.from('keiri_bank_transactions').insert(
-    rows.map(r => ({
-      date: r.date,
-      description: r.description,
-      debit: r.debit,
-      credit: r.credit,
-      balance: r.balance,
-      source_file: file.name,
-    })),
-  )
-  if (error) throw new Error(error.message)
+
+  const dates = rows.map(r => r.date).sort()
+  const minDate = dates[0]
+  const maxDate = dates[dates.length - 1]
+
+  const { data: existing, error: selErr } = await sb
+    .from('keiri_bank_transactions')
+    .select('date, description, debit, credit, balance')
+    .gte('date', minDate)
+    .lte('date', maxDate)
+  if (selErr) throw new Error(selErr.message)
+
+  const existingFp = new Set((existing ?? []).map(r => fingerprint({
+    date: r.date as string,
+    description: (r.description as string) ?? '',
+    debit: (r.debit as number) ?? 0,
+    credit: (r.credit as number) ?? 0,
+    balance: r.balance as number | null,
+  })))
+
+  const fresh: typeof rows = []
+  const seenInBatch = new Set<string>()
+  let skipped = 0
+  for (const r of rows) {
+    const fp = fingerprint(r)
+    if (existingFp.has(fp) || seenInBatch.has(fp)) {
+      skipped++
+      continue
+    }
+    seenInBatch.add(fp)
+    fresh.push(r)
+  }
+
+  if (fresh.length > 0) {
+    const { error } = await sb.from('keiri_bank_transactions').insert(
+      fresh.map(r => ({
+        date: r.date,
+        description: r.description,
+        debit: r.debit,
+        credit: r.credit,
+        balance: r.balance,
+        source_file: file.name,
+      })),
+    )
+    if (error) throw new Error(error.message)
+  }
 
   revalidatePath('/admin/keiri/bank')
-  return { count: rows.length }
+  return { inserted: fresh.length, skipped, total: rows.length }
 }
 
 export async function deleteBankTransaction(id: string): Promise<void> {

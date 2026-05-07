@@ -23,7 +23,14 @@ export async function GET(req: Request): Promise<Response> {
     .toISOString()
     .slice(0, 7)
   const fromYearMonth = url.searchParams.get('from') ?? defaultFrom
+  const toYearMonth = url.searchParams.get('to')
   const beginTime = new Date(fromYearMonth + '-01T00:00:00+09:00').toISOString()
+  let endTime: string | null = null
+  if (toYearMonth) {
+    const [ty, tm] = toYearMonth.split('-').map(s => parseInt(s, 10))
+    const next = tm === 12 ? `${ty + 1}-01-01T00:00:00+09:00` : `${ty}-${String(tm + 1).padStart(2, '0')}-01T00:00:00+09:00`
+    endTime = new Date(next).toISOString()
+  }
 
   const allPayments: SquarePayment[] = []
   let cursor: string | undefined
@@ -33,6 +40,7 @@ export async function GET(req: Request): Promise<Response> {
     do {
       const u = new URL('https://connect.squareup.com/v2/payments')
       u.searchParams.set('begin_time', beginTime)
+      if (endTime) u.searchParams.set('end_time', endTime)
       u.searchParams.set('limit', '100')
       u.searchParams.set('sort_order', 'ASC')
       if (cursor) u.searchParams.set('cursor', cursor)
