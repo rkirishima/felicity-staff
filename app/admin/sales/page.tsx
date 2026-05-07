@@ -67,6 +67,8 @@ export default function SalesPage() {
     monthlyData.push({ month: key, count: mo.length, total: mo.reduce((s, o) => s + o.amount, 0) })
   }
   const maxMonthTotal = Math.max(...monthlyData.map(m => m.total), 1)
+  const monthsWithSales = monthlyData.filter(m => m.total > 0).length
+  const showChart = monthsWithSales >= 3
 
   const statusLabel: Record<string, { text: string; bg: string; fg: string }> = {
     paid: { text: '入金済', bg: '#14532d', fg: '#86efac' },
@@ -107,30 +109,53 @@ export default function SalesPage() {
               </div>
             </div>
 
-            {/* Monthly Bar Chart */}
-            <div className="rounded-2xl p-4" style={{ backgroundColor: '#292524' }}>
+            {/* Monthly summary — chart if ≥3 months, table fallback otherwise */}
+            <div className="rounded-2xl p-4 tabular-nums" style={{ backgroundColor: '#292524' }}>
               <p className="text-xs text-stone-500 tracking-wider mb-3">月別推移</p>
-              <div className="flex items-end gap-2 h-24">
-                {monthlyData.map(m => {
-                  const pct = maxMonthTotal > 0 ? (m.total / maxMonthTotal) * 100 : 0
-                  return (
-                    <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
-                      <div className="w-full rounded-t-md transition-all" style={{
-                        height: `${Math.max(pct, 2)}%`,
-                        backgroundColor: m.month === monthStr ? '#5eead4' : '#44403c',
-                      }} />
-                      <p className="text-[10px] text-stone-500">{m.month.slice(5)}月</p>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="flex justify-between mt-2">
-                {monthlyData.map(m => (
-                  <p key={m.month} className="flex-1 text-center text-[10px] text-stone-600">
-                    {m.total > 0 ? `¥${(m.total / 1000).toFixed(0)}k` : '-'}
-                  </p>
-                ))}
-              </div>
+              {showChart ? (
+                <>
+                  <div className="flex items-end gap-2 h-24">
+                    {monthlyData.map(m => {
+                      const pct = maxMonthTotal > 0 ? (m.total / maxMonthTotal) * 100 : 0
+                      return (
+                        <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
+                          <div
+                            className="w-full rounded-t-md transition-all"
+                            style={{
+                              height: `${Math.max(pct, 2)}%`,
+                              backgroundColor: m.month === monthStr ? '#5eead4' : '#44403c',
+                            }}
+                          />
+                          <p className="text-[10px] text-stone-500">{m.month.slice(5)}月</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex justify-between mt-2 gap-1">
+                    {monthlyData.map(m => (
+                      <p key={m.month} className="flex-1 text-center text-[10px] text-stone-600">
+                        {m.total > 0 ? `¥${m.total.toLocaleString('ja-JP')}` : '-'}
+                      </p>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <ul className="divide-y divide-stone-700/50">
+                  {monthlyData.map(m => (
+                    <li key={m.month} className="flex items-center justify-between py-2">
+                      <span className="text-xs text-stone-400">{m.month.slice(0, 4)}年{m.month.slice(5)}月</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-stone-500">{m.count}件</span>
+                        <span
+                          className={`text-sm ${m.month === monthStr ? 'text-teal-300' : 'text-stone-300'}`}
+                        >
+                          {m.total > 0 ? `¥${m.total.toLocaleString('ja-JP')}` : '—'}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Order List */}

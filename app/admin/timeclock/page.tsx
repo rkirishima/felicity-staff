@@ -326,29 +326,29 @@ export default function AdminTimeclockPage() {
                           className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">保存</button>
                         <button onClick={() => setEditId(null)}
                           className="flex-1 py-2 bg-stone-100 text-stone-600 rounded-xl text-sm">キャンセル</button>
+                        <button onClick={() => deleteRecord(r.id)}
+                          className="px-3 py-2 bg-red-50 text-red-500 rounded-xl text-sm font-medium">削除</button>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-stone-700">{(r.staff as any)?.name}</p>
-                        <p className="text-xs text-stone-400 mt-0.5">
+                        <p className="text-xs text-stone-400 mt-0.5 tabular-nums">
                           {cin.toLocaleDateString('ja-JP', { month:'numeric', day:'numeric', weekday:'short', timeZone:'Asia/Tokyo' })}{'　'}
                           {cin.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Tokyo' })}
                           〜{cout ? cout.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Tokyo' }) : '未退勤'}
-                          {hours && <span className="ml-2 text-teal-600 font-medium">{hours}h</span>}
+                          {hours !== null && parseFloat(hours) > 0 ? (
+                            <span className="ml-2 text-teal-600 font-medium">{hours}h</span>
+                          ) : (
+                            <span className="ml-2 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">⚠ 未退勤</span>
+                          )}
                         </p>
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => startEdit(r)}
-                          className="text-xs text-stone-500 px-2 py-1 bg-stone-100 rounded-lg hover:bg-stone-200">
-                          編集
-                        </button>
-                        <button onClick={() => deleteRecord(r.id)}
-                          className="text-xs text-red-500 px-2 py-1 bg-red-50 rounded-lg hover:bg-red-100">
-                          削除
-                        </button>
-                      </div>
+                      <button onClick={() => startEdit(r)}
+                        className="text-xs text-stone-500 px-3 py-1.5 bg-stone-100 rounded-lg hover:bg-stone-200">
+                        編集
+                      </button>
                     </div>
                   )}
                 </div>
