@@ -71,7 +71,7 @@ export default function HomePage() {
 
   useEffect(() => {
     getSb().from('staff').select('id, name, role')
-      .eq('active', true).not('role', 'eq', 'accountant').order('name')
+      .eq('active', true).order('name')
       .then(({ data }) => setStaffList((data ?? []) as Staff[]))
   }, [])
 
@@ -99,7 +99,7 @@ export default function HomePage() {
 
   function handleSelect(s: Staff) {
     cancelAutoReset()
-    if (s.role === 'admin') { router.push('/admin'); return }
+    if (s.role === 'admin' || s.role === 'accountant') { router.push('/admin'); return }
     setSelected(s)
     setPin('')
     setPinError(false)
@@ -649,7 +649,9 @@ export default function HomePage() {
           {staffList.map(s => (
             <button key={s.id} onClick={() => handleSelect(s)}
               className={'py-3 px-2 rounded-2xl text-sm font-medium transition-all shadow-sm ' + (
-                s.role === 'admin' ? 'bg-white border-2 border-teal-300 text-teal-700' : 'bg-white text-stone-700 hover:shadow-md'
+                s.role === 'admin' ? 'bg-white border-2 border-teal-300 text-teal-700' :
+                s.role === 'accountant' ? 'bg-white border-2 border-amber-300 text-amber-700' :
+                'bg-white text-stone-700 hover:shadow-md'
               )}>
               <div className="text-xs font-normal text-stone-400">{s.name.split(' ')[0]}</div>
               <div>{s.name.split(' ')[1] || ''}</div>
