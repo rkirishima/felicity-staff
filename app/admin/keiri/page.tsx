@@ -310,6 +310,12 @@ export default function KeiriDashboard() {
               >
                 📦 商品マスタ
               </Link>
+              <Link
+                href="/admin/keiri/bank"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
+              >
+                🏦 銀行（CSV取込・入出金）
+              </Link>
             </div>
           </>
         )}
