@@ -182,16 +182,22 @@ export default function KeiriDashboard() {
   const pendingTotal = pendingBankTotal + pendingInvoiceTotal
   const pendingCount = pendingBank.length + pendingInvoices.length
 
+  // 売上合計 は Square + Stripe + 手動 + 入金確認済み請求書 のみ。
+  // 銀行入金 (CSV) は Square / Stripe の週次振込が遅延して着金しているケースが大半なので
+  // 売上として加算すると二重計上になる。現金フロー情報として別カードで表示するに留める。
   const totalConfirmed =
-    stripeTotal + manualIncomeTotal + invoiceIncomeTotal + bankCsvTotal + squareDisplayed
+    stripeTotal + manualIncomeTotal + invoiceIncomeTotal + squareDisplayed
   const totalExpense = expenses.reduce((s, r) => s + (r.amount || 0), 0)
   const profit = totalConfirmed - totalExpense
 
-  const incomeByTax = income.reduce<Record<string, number>>((acc, r) => {
-    const key = r.tax_category ?? '未分類'
-    acc[key] = (acc[key] || 0) + (r.amount || 0)
-    return acc
-  }, {})
+  // 税区分別も bank_csv は除外（売上ではなく着金フロー扱いのため）
+  const incomeByTax = income
+    .filter(r => r.source !== 'bank_csv')
+    .reduce<Record<string, number>>((acc, r) => {
+      const key = r.tax_category ?? '未分類'
+      acc[key] = (acc[key] || 0) + (r.amount || 0)
+      return acc
+    }, {})
 
   return (
     <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
@@ -299,16 +305,16 @@ export default function KeiriDashboard() {
               </div>
             )}
 
-            {/* 銀行入金（CSV） */}
+            {/* 銀行入金（CSV）— 現金フロー（売上には含めない） */}
             {bankCsvTotal > 0 && (
               <div className="bg-teal-50 border border-teal-200 rounded-2xl shadow-sm p-5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-teal-700 tracking-wider">🏦 銀行入金（CSV取込）</p>
+                  <p className="text-xs text-teal-700 tracking-wider">🏦 銀行入金（参考・現金フロー）</p>
                   <Link href="/admin/keiri/bank" className="text-xs text-teal-600">→ 一覧</Link>
                 </div>
                 <p className="text-3xl font-light text-teal-900 mt-1">¥{bankCsvTotal.toLocaleString()}</p>
                 <p className="text-[10px] text-teal-600 mt-1">
-                  ※ Stripe/Square 入金やマッチ済み請求書と二重計上の可能性あり
+                  ※ Square / Stripe の週次振込が含まれるため <strong>売上合計には加算していません</strong>
                 </p>
               </div>
             )}
