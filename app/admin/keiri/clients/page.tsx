@@ -14,6 +14,11 @@ type Row = {
   email: string | null
   phone: string | null
   active: boolean
+  pendingAmount: number
+}
+
+function normalizeName(n: string | null | undefined): string {
+  return (n ?? '').replace(/\s+/g, ' ').trim()
 }
 
 export default function ClientsListPage() {
@@ -36,8 +41,28 @@ export default function ClientsListPage() {
         .select('id, name, name_kana, email, phone, active')
         .order('name')
       if (!showAll) qb = qb.eq('active', true)
-      const { data } = await qb
-      setRows((data ?? []) as Row[])
+      const [clientsRes, pendingRes] = await Promise.all([
+        qb,
+        supabase
+          .from('keiri_invoices')
+          .select('client_id, total, paid_amount')
+          .eq('status', 'sent'),
+      ])
+      const pendingByClient = new Map<string, number>()
+      for (const inv of (pendingRes.data ?? []) as { client_id: string | null; total: number | null; paid_amount: number | null }[]) {
+        if (!inv.client_id) continue
+        const remaining = (inv.total ?? 0) - (inv.paid_amount ?? 0)
+        if (remaining <= 0) continue
+        pendingByClient.set(inv.client_id, (pendingByClient.get(inv.client_id) ?? 0) + remaining)
+      }
+      const clients = (clientsRes.data ?? []) as Omit<Row, 'pendingAmount'>[]
+      setRows(
+        clients.map(c => ({
+          ...c,
+          name: normalizeName(c.name),
+          pendingAmount: pendingByClient.get(c.id) ?? 0,
+        })),
+      )
       setLoading(false)
     })()
   }, [router, supabase, showAll])
@@ -51,7 +76,7 @@ export default function ClientsListPage() {
   return (
     <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="max-w-lg mx-auto space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between h-12">
           <button onClick={() => router.push('/admin/keiri')} className="text-stone-500 text-sm">← 戻る</button>
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">取引先</h1>
           <Link href="/admin/keiri/clients/new" className="text-sm text-stone-700">+ 追加</Link>
@@ -76,25 +101,33 @@ export default function ClientsListPage() {
           <p className="text-center text-stone-400 text-sm py-12">取引先がありません</p>
         ) : (
           <ul className="space-y-2">
-            {filtered.map(r => (
-              <li key={r.id}>
-                <Link
-                  href={`/admin/keiri/clients/${r.id}`}
-                  className={`block bg-white rounded-2xl shadow-sm p-4 ${r.active ? '' : 'opacity-60'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-stone-800">{r.name}</p>
-                    {!r.active && <span className="text-[10px] text-stone-400">アーカイブ済</span>}
-                  </div>
-                  {r.name_kana && <p className="text-xs text-stone-500 mt-0.5">{r.name_kana}</p>}
-                  {(r.email || r.phone) && (
-                    <p className="text-xs text-stone-400 mt-1">
-                      {[r.email, r.phone].filter(Boolean).join(' ・ ')}
-                    </p>
-                  )}
-                </Link>
-              </li>
-            ))}
+            {filtered.map(r => {
+              const contactBits = [r.email, r.phone].filter(Boolean) as string[]
+              return (
+                <li key={r.id}>
+                  <Link
+                    href={`/admin/keiri/clients/${r.id}`}
+                    className={`block bg-white rounded-2xl shadow-sm p-4 ${r.active ? '' : 'opacity-60'}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-stone-800">{r.name}</p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {r.pendingAmount > 0 && (
+                          <span className="text-xs text-rose-600 font-medium tabular-nums">
+                            未収 ¥{r.pendingAmount.toLocaleString('ja-JP')}
+                          </span>
+                        )}
+                        {!r.active && <span className="text-[10px] text-stone-400">アーカイブ済</span>}
+                      </div>
+                    </div>
+                    {r.name_kana && <p className="text-xs text-stone-500 mt-0.5">{r.name_kana}</p>}
+                    {contactBits.length > 0 && (
+                      <p className="text-xs text-stone-400 mt-1">{contactBits.join(' ・ ')}</p>
+                    )}
+                  </Link>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>

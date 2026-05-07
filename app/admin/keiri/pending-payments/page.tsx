@@ -40,6 +40,7 @@ export default function PendingPaymentsPage() {
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState<string | null>(null)
+  const [resyncing, setResyncing] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -69,7 +70,7 @@ export default function PendingPaymentsPage() {
   }, [router])
 
   async function confirmInvoice(inv: InvoiceRow) {
-    if (!confirm(`${inv.invoice_number ?? '請求書'} (¥${inv.total.toLocaleString()}) を入金済みにします。よろしいですか？`)) return
+    if (!confirm(`${inv.invoice_number ?? '請求書'} (¥${inv.total.toLocaleString('ja-JP')}) を入金済みにします。よろしいですか？`)) return
     setWorking(inv.id)
     try {
       await markInvoicePaid(inv.id, todayJST())
@@ -82,8 +83,26 @@ export default function PendingPaymentsPage() {
     }
   }
 
+  async function squareResync() {
+    const month = todayJST().slice(0, 7)
+    setResyncing(true)
+    try {
+      const res = await fetch(`/api/keiri/square-sync-history?from=${month}&to=${month}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `status ${res.status}`)
+      }
+      toast.success('Square を再同期しました')
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Square再同期失敗')
+    } finally {
+      setResyncing(false)
+    }
+  }
+
   async function confirmOrder(order: OrderRow) {
-    if (!confirm(`注文 ${order.customer_name ?? ''} (¥${order.amount.toLocaleString()}) を入金済みにします。よろしいですか？`)) return
+    if (!confirm(`注文 ${order.customer_name ?? ''} (¥${order.amount.toLocaleString('ja-JP')}) を入金済みにします。よろしいですか？`)) return
     setWorking(order.id)
     try {
       await markOrderPaid(order.id)
@@ -105,19 +124,25 @@ export default function PendingPaymentsPage() {
   return (
     <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="max-w-lg mx-auto space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between h-12">
           <button onClick={() => router.push('/admin/keiri')} className="text-stone-500 text-sm">
             ← 戻る
           </button>
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">未収金</h1>
-          <button onClick={load} className="text-xs text-stone-500">更新</button>
+          <button
+            onClick={squareResync}
+            disabled={resyncing}
+            className="text-xs text-stone-600 px-3 py-1.5 bg-white rounded-xl shadow-sm disabled:opacity-50"
+          >
+            {resyncing ? '同期中…' : '🔄 Square再同期'}
+          </button>
         </div>
 
         <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
           <p className="text-xs text-amber-700 tracking-wider">🔶 合計</p>
-          <p className="text-3xl font-light text-amber-900 mt-1">¥{total.toLocaleString()}</p>
+          <p className="text-3xl font-light text-amber-900 mt-1">¥{total.toLocaleString('ja-JP')}</p>
           <p className="text-xs text-amber-600 mt-1">
-            請求書 {invoices.length}件 ¥{totalInvoices.toLocaleString()} / EC 銀行振込 {orders.length}件 ¥{totalOrders.toLocaleString()}
+            請求書 {invoices.length}件 ¥{totalInvoices.toLocaleString('ja-JP')} / EC 銀行振込 {orders.length}件 ¥{totalOrders.toLocaleString('ja-JP')}
           </p>
         </div>
 
@@ -160,7 +185,7 @@ export default function PendingPaymentsPage() {
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-medium text-stone-800 tabular-nums">
-                          ¥{inv.total.toLocaleString()}
+                          ¥{inv.total.toLocaleString('ja-JP')}
                         </p>
                         <button
                           onClick={() => confirmInvoice(inv)}
@@ -204,7 +229,7 @@ export default function PendingPaymentsPage() {
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-medium text-stone-800 tabular-nums">
-                          ¥{order.amount.toLocaleString()}
+                          ¥{order.amount.toLocaleString('ja-JP')}
                         </p>
                         <button
                           onClick={() => confirmOrder(order)}

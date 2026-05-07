@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
+import { MonthSelector } from '@/components/keiri/MonthSelector'
 
 function thisMonthJST() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
@@ -55,11 +56,17 @@ export default function BankPage() {
   const totalCredit = txs.reduce((s, t) => s + (t.credit || 0), 0)
   const totalDebit = txs.reduce((s, t) => s + (t.debit || 0), 0)
   const net = totalCredit - totalDebit
+  const netCardCls =
+    net > 0
+      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+      : net < 0
+        ? 'bg-rose-50 border-rose-200 text-rose-700'
+        : 'bg-stone-50 border-stone-200 text-stone-500'
 
   return (
     <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="max-w-lg mx-auto space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between h-12">
           <button onClick={() => router.push('/admin/keiri')} className="text-stone-500 text-sm">
             ← 戻る
           </button>
@@ -72,32 +79,25 @@ export default function BankPage() {
           </Link>
         </div>
 
-        <input
-          type="month"
-          value={month}
-          onChange={e => setMonth(e.target.value)}
-          className="bg-white rounded-xl px-3 py-2 text-sm border border-stone-200 w-full"
-        />
+        <MonthSelector value={month} onChange={setMonth} />
 
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3">
-            <p className="text-[10px] text-emerald-700">入金</p>
-            <p className="text-sm font-medium text-emerald-900 mt-1">
-              ¥{totalCredit.toLocaleString()}
+            <p className="text-[10px] text-emerald-700 tracking-wider">入金</p>
+            <p className="text-sm font-medium text-emerald-700 mt-1 tabular-nums">
+              ¥{totalCredit.toLocaleString('ja-JP')}
             </p>
           </div>
           <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3">
-            <p className="text-[10px] text-rose-700">出金</p>
-            <p className="text-sm font-medium text-rose-900 mt-1">¥{totalDebit.toLocaleString()}</p>
+            <p className="text-[10px] text-rose-700 tracking-wider">出金</p>
+            <p className="text-sm font-medium text-rose-700 mt-1 tabular-nums">
+              ¥{totalDebit.toLocaleString('ja-JP')}
+            </p>
           </div>
-          <div
-            className={`${net >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'} border rounded-2xl p-3`}
-          >
-            <p className={`text-[10px] ${net >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>差引</p>
-            <p
-              className={`text-sm font-medium ${net >= 0 ? 'text-blue-900' : 'text-amber-900'} mt-1 tabular-nums`}
-            >
-              ¥{net.toLocaleString()}
+          <div className={`border rounded-2xl p-3 ${netCardCls}`}>
+            <p className="text-[10px] tracking-wider opacity-80">差引</p>
+            <p className="text-sm font-medium mt-1 tabular-nums">
+              {net >= 0 ? '' : '−'}¥{Math.abs(net).toLocaleString('ja-JP')}
             </p>
           </div>
         </div>
@@ -105,13 +105,14 @@ export default function BankPage() {
         {loading ? (
           <p className="text-center text-stone-400 text-sm py-12">読み込み中...</p>
         ) : txs.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
-            <p className="text-stone-400 text-sm mb-3">取引が無いか、まだ取込まれていません</p>
+          <div className="flex flex-col items-center gap-4 py-12 text-stone-400">
+            <span className="text-4xl">🏦</span>
+            <p className="text-sm">取引がありません</p>
             <Link
               href="/admin/keiri/bank/import"
-              className="inline-block bg-stone-800 text-white py-2 px-4 rounded-xl text-sm"
+              className="w-full bg-stone-900 text-white rounded-2xl py-4 text-sm font-medium text-center"
             >
-              CSV を取り込む
+              CSVを取り込む
             </Link>
           </div>
         ) : (
@@ -120,23 +121,23 @@ export default function BankPage() {
               <div key={tx.id} className="p-4">
                 <div className="flex justify-between items-start gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-stone-400">{tx.date}</p>
+                    <p className="text-xs text-stone-400 tabular-nums">{tx.date}</p>
                     <p className="text-sm text-stone-700 truncate">{tx.description}</p>
                   </div>
                   <div className="text-right">
                     {tx.credit > 0 && (
                       <p className="text-sm font-medium text-emerald-700 tabular-nums">
-                        +¥{tx.credit.toLocaleString()}
+                        +¥{tx.credit.toLocaleString('ja-JP')}
                       </p>
                     )}
                     {tx.debit > 0 && (
                       <p className="text-sm font-medium text-rose-700 tabular-nums">
-                        −¥{tx.debit.toLocaleString()}
+                        −¥{tx.debit.toLocaleString('ja-JP')}
                       </p>
                     )}
                     {tx.balance !== null && (
                       <p className="text-[10px] text-stone-400 tabular-nums">
-                        残高 ¥{tx.balance.toLocaleString()}
+                        残高 ¥{tx.balance.toLocaleString('ja-JP')}
                       </p>
                     )}
                   </div>
