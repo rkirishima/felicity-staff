@@ -39,7 +39,7 @@ export default function KeiriDashboard() {
       const [incRes, expRes] = await Promise.all([
         supabase
           .from('keiri_income_view')
-          .select('date, amount, tax_rate, tax_category')
+          .select('date, amount, tax_category')
           .gte('date', start)
           .lt('date', nextMonth),
         supabase
