@@ -40,6 +40,7 @@ export default function KeiriDashboard() {
   const [income, setIncome] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [pendingBank, setPendingBank] = useState<PendingRow[]>([])
+  const [pendingInvoices, setPendingInvoices] = useState<{ total: number }[]>([])
   const [square, setSquare] = useState<SquareSales | null>(null)
   const [squareLoading, setSquareLoading] = useState(false)
   const [squareError, setSquareError] = useState<string | null>(null)
@@ -59,7 +60,7 @@ export default function KeiriDashboard() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const [incRes, expRes, pendRes] = await Promise.all([
+      const [incRes, expRes, pendBankRes, pendInvRes] = await Promise.all([
         supabase
           .from('keiri_income_view')
           .select('date, amount, tax_category, source')
@@ -74,14 +75,17 @@ export default function KeiriDashboard() {
         supabase
           .from('orders')
           .select('amount')
-          .eq('status', 'pending_bank_transfer')
-          .gte('created_at', start + 'T00:00:00+09:00')
-          .lt('created_at', nextMonth + 'T00:00:00+09:00'),
+          .eq('status', 'pending_bank_transfer'),
+        supabase
+          .from('keiri_invoices')
+          .select('total')
+          .eq('status', 'sent'),
       ])
       if (cancelled) return
       setIncome((incRes.data ?? []) as IncomeRow[])
       setExpenses((expRes.data ?? []) as ExpenseRow[])
-      setPendingBank((pendRes.data ?? []) as PendingRow[])
+      setPendingBank((pendBankRes.data ?? []) as PendingRow[])
+      setPendingInvoices((pendInvRes.data ?? []) as { total: number }[])
       setLoading(false)
     })()
     return () => {
@@ -90,7 +94,6 @@ export default function KeiriDashboard() {
   }, [month, router, supabase])
 
   // Square API only for current month (real-time refresh).
-  // For past months, we display square from keiri_income_view (monthly_revenue aggregate).
   useEffect(() => {
     if (!isCurrentMonth) {
       setSquare(null)
@@ -135,28 +138,25 @@ export default function KeiriDashboard() {
   const manualIncomeTotal = income
     .filter(r => r.source === 'manual')
     .reduce((s, r) => s + (r.amount || 0), 0)
-  const otherIncomeTotal = income
-    .filter(
-      r =>
-        r.source !== 'stripe' &&
-        r.source !== 'manual' &&
-        r.source !== 'square' &&
-        r.source !== 'freee',
-    )
+  const invoiceIncomeTotal = income
+    .filter(r => r.source === 'invoice')
+    .reduce((s, r) => s + (r.amount || 0), 0)
+  const bankCsvTotal = income
+    .filter(r => r.source === 'bank_csv')
     .reduce((s, r) => s + (r.amount || 0), 0)
 
-  // Square value to display: for current month prefer live API, fallback to view.
-  // For past months use view aggregate (monthly_revenue).
   const squareLiveThisMonth = square?.thisMonth ?? null
-  const squareDisplayed = isCurrentMonth
-    ? squareLiveThisMonth ?? squareFromView
-    : squareFromView
+  const squareDisplayed = isCurrentMonth ? squareLiveThisMonth ?? squareFromView : squareFromView
   const squareToday = isCurrentMonth ? square?.today ?? 0 : 0
   const squareCount = isCurrentMonth ? square?.count ?? null : null
 
   const pendingBankTotal = pendingBank.reduce((s, r) => s + (r.amount || 0), 0)
+  const pendingInvoiceTotal = pendingInvoices.reduce((s, r) => s + (r.total || 0), 0)
+  const pendingTotal = pendingBankTotal + pendingInvoiceTotal
+  const pendingCount = pendingBank.length + pendingInvoices.length
 
-  const totalConfirmed = stripeTotal + manualIncomeTotal + otherIncomeTotal + squareDisplayed
+  const totalConfirmed =
+    stripeTotal + manualIncomeTotal + invoiceIncomeTotal + bankCsvTotal + squareDisplayed
   const totalExpense = expenses.reduce((s, r) => s + (r.amount || 0), 0)
   const profit = totalConfirmed - totalExpense
 
@@ -191,65 +191,95 @@ export default function KeiriDashboard() {
           <p className="text-center text-stone-400 text-sm py-12">読み込み中...</p>
         ) : (
           <>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl shadow-sm p-5">
-              <p className="text-xs text-emerald-700 tracking-wider">💳 Stripe (EC)</p>
-              <p className="text-3xl font-light text-emerald-900 mt-1">¥{stripeTotal.toLocaleString()}</p>
-            </div>
+            {/* 未収金 (常時表示・全期間) */}
+            {pendingTotal > 0 && (
+              <Link
+                href="/admin/keiri/pending-payments"
+                className="block bg-orange-50 border border-orange-200 rounded-2xl shadow-sm p-5 hover:bg-orange-100 transition"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-orange-700 tracking-wider">🔶 未収金</p>
+                  <span className="text-xs text-orange-600">→ 詳細</span>
+                </div>
+                <p className="text-3xl font-light text-orange-900 mt-1">¥{pendingTotal.toLocaleString()}</p>
+                <p className="text-xs text-orange-600 mt-1">
+                  請求書 {pendingInvoices.length}件 ¥{pendingInvoiceTotal.toLocaleString()} ／ EC銀行振込 {pendingBank.length}件 ¥{pendingBankTotal.toLocaleString()}
+                </p>
+              </Link>
+            )}
 
-            {pendingBankTotal > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
-                <p className="text-xs text-amber-700 tracking-wider">🏦 銀行振込（入金待ち）</p>
-                <p className="text-3xl font-light text-amber-900 mt-1">¥{pendingBankTotal.toLocaleString()}</p>
-                <p className="text-xs text-amber-600 mt-1">
-                  {pendingBank.length}件・入金確認後に売上計上
+            {/* Stripe */}
+            {stripeTotal > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl shadow-sm p-5">
+                <p className="text-xs text-emerald-700 tracking-wider">💳 Stripe (EC)</p>
+                <p className="text-3xl font-light text-emerald-900 mt-1">¥{stripeTotal.toLocaleString()}</p>
+              </div>
+            )}
+
+            {/* Square */}
+            {(squareDisplayed > 0 || isCurrentMonth) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-blue-700 tracking-wider">🟦 Square (店舗)</p>
+                  {isCurrentMonth && squareLoading && (
+                    <span className="text-xs text-blue-500">更新中…</span>
+                  )}
+                </div>
+                {isCurrentMonth && squareError && squareDisplayed === 0 ? (
+                  <p className="text-sm text-rose-600 mt-1">{squareError}</p>
+                ) : (
+                  <>
+                    <p className="text-3xl font-light text-blue-900 mt-1">
+                      ¥{squareDisplayed.toLocaleString()}
+                    </p>
+                    {isCurrentMonth ? (
+                      <p className="text-xs text-blue-600 mt-1">
+                        本日 ¥{squareToday.toLocaleString()}
+                        {squareCount !== null ? `・${squareCount}件` : ''}
+                        {squareLiveThisMonth === null && squareFromView > 0 && '（月次集計）'}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-blue-600 mt-1">月次集計（過去月）</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* 請求書入金 */}
+            {invoiceIncomeTotal > 0 && (
+              <div className="bg-purple-50 border border-purple-200 rounded-2xl shadow-sm p-5">
+                <p className="text-xs text-purple-700 tracking-wider">📨 請求書入金</p>
+                <p className="text-3xl font-light text-purple-900 mt-1">¥{invoiceIncomeTotal.toLocaleString()}</p>
+                <p className="text-xs text-purple-600 mt-1">業販請求書（入金確認済）</p>
+              </div>
+            )}
+
+            {/* 銀行入金（CSV） */}
+            {bankCsvTotal > 0 && (
+              <div className="bg-teal-50 border border-teal-200 rounded-2xl shadow-sm p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-teal-700 tracking-wider">🏦 銀行入金（CSV取込）</p>
+                  <Link href="/admin/keiri/bank" className="text-xs text-teal-600">→ 一覧</Link>
+                </div>
+                <p className="text-3xl font-light text-teal-900 mt-1">¥{bankCsvTotal.toLocaleString()}</p>
+                <p className="text-[10px] text-teal-600 mt-1">
+                  ※ Stripe/Square 入金やマッチ済み請求書と二重計上の可能性あり
                 </p>
               </div>
             )}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-blue-700 tracking-wider">🟦 Square (店舗)</p>
-                {isCurrentMonth && squareLoading && (
-                  <span className="text-xs text-blue-500">更新中…</span>
-                )}
-              </div>
-              {isCurrentMonth && squareError && squareDisplayed === 0 ? (
-                <p className="text-sm text-rose-600 mt-1">{squareError}</p>
-              ) : (
-                <>
-                  <p className="text-3xl font-light text-blue-900 mt-1">
-                    ¥{squareDisplayed.toLocaleString()}
-                  </p>
-                  {isCurrentMonth ? (
-                    <p className="text-xs text-blue-600 mt-1">
-                      本日 ¥{squareToday.toLocaleString()}
-                      {squareCount !== null ? `・${squareCount}件` : ''}
-                      {squareLiveThisMonth === null && squareFromView > 0 && '（月次集計）'}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-blue-600 mt-1">月次集計（過去月）</p>
-                  )}
-                </>
-              )}
-            </div>
-
-            {(manualIncomeTotal > 0 || otherIncomeTotal > 0) && (
-              <div className="bg-stone-50 border border-stone-200 rounded-2xl shadow-sm p-4 text-sm space-y-1">
-                {manualIncomeTotal > 0 && (
-                  <div className="flex justify-between text-stone-700">
-                    <span>手動売上</span>
-                    <span className="tabular-nums">¥{manualIncomeTotal.toLocaleString()}</span>
-                  </div>
-                )}
-                {otherIncomeTotal > 0 && (
-                  <div className="flex justify-between text-stone-700">
-                    <span>その他売上</span>
-                    <span className="tabular-nums">¥{otherIncomeTotal.toLocaleString()}</span>
-                  </div>
-                )}
+            {/* 手動売上 */}
+            {manualIncomeTotal > 0 && (
+              <div className="bg-stone-50 border border-stone-200 rounded-2xl shadow-sm p-4 text-sm">
+                <div className="flex justify-between text-stone-700">
+                  <span>手動売上</span>
+                  <span className="tabular-nums">¥{manualIncomeTotal.toLocaleString()}</span>
+                </div>
               </div>
             )}
 
+            {/* 売上合計 / 経費 / 粗利 */}
             <div className="bg-stone-800 rounded-2xl shadow-sm p-5 space-y-2">
               <div className="flex justify-between items-baseline">
                 <span className="text-xs text-stone-400 tracking-wider">📊 売上合計</span>
@@ -271,8 +301,9 @@ export default function KeiriDashboard() {
               </div>
             </div>
 
+            {/* 税区分別売上 */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
-              <p className="text-xs text-stone-500 tracking-wider mb-3">税区分別売上（DB分のみ）</p>
+              <p className="text-xs text-stone-500 tracking-wider mb-3">税区分別売上</p>
               {Object.keys(incomeByTax).length === 0 ? (
                 <p className="text-stone-400 text-sm">なし</p>
               ) : (
@@ -291,7 +322,14 @@ export default function KeiriDashboard() {
               )}
             </div>
 
+            {/* メニュー */}
             <div className="grid grid-cols-2 gap-3 pt-2">
+              <Link
+                href="/admin/keiri/pending-payments"
+                className="bg-orange-600 text-white py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
+              >
+                🔶 未収金（入金確認）
+              </Link>
               <Link
                 href="/admin/keiri/receipts/upload"
                 className="bg-stone-800 text-white py-4 rounded-2xl text-center text-sm font-medium shadow-sm"
