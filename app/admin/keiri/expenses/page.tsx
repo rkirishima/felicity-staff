@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
+import { MonthSelector } from '@/components/keiri/MonthSelector'
 
 type Row = {
   id: string
@@ -72,40 +73,49 @@ export default function ExpensesPage() {
   const total = rows.reduce((s, r) => s + (r.amount || 0), 0)
 
   return (
-    <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
+    <main className="min-h-screen pb-32 px-4 pt-8 relative" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="max-w-lg mx-auto space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between h-12">
           <button onClick={() => router.push('/admin/keiri')} className="text-stone-500 text-sm">← 戻る</button>
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">経費明細</h1>
-          <Link href="/admin/keiri/expenses/new" className="text-sm text-stone-700">+ 追加</Link>
+          <span className="w-10" />
         </div>
 
-        <div className="flex items-center gap-3">
-          <input
-            type="month"
-            value={month}
-            onChange={e => setMonth(e.target.value)}
-            className="bg-white rounded-xl px-3 py-1.5 text-sm border border-stone-200"
-          />
-        </div>
+        <MonthSelector value={month} onChange={setMonth} />
 
         <div className="bg-rose-50 border border-rose-200 rounded-2xl shadow-sm p-5">
           <p className="text-xs text-rose-700 tracking-wider">月合計</p>
-          <p className="text-2xl font-light text-rose-900 mt-1">¥{total.toLocaleString()}</p>
+          <p className="text-2xl font-light text-rose-900 mt-1 tabular-nums">¥{total.toLocaleString('ja-JP')}</p>
         </div>
 
         {loading ? (
           <p className="text-center text-stone-400 text-sm py-12">読み込み中...</p>
         ) : rows.length === 0 ? (
-          <p className="text-center text-stone-400 text-sm py-12">経費はありません</p>
+          <div className="flex flex-col items-center gap-4 py-16 text-stone-400">
+            <span className="text-5xl">🧾</span>
+            <p className="text-sm font-medium text-stone-600">経費がありません</p>
+            <p className="text-xs text-center">レシートを撮影するか<br />CSVから取り込んでください</p>
+            <Link
+              href="/admin/keiri/receipts/upload"
+              className="w-full bg-stone-900 text-white rounded-2xl py-4 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              📷 レシートを撮影
+            </Link>
+            <Link
+              href="/admin/keiri/bank/import"
+              className="w-full border border-stone-200 text-stone-600 rounded-2xl py-4 text-sm text-center"
+            >
+              CSVから取込
+            </Link>
+          </div>
         ) : (
           <ul className="space-y-2">
             {rows.map(r => (
               <li key={r.id} className="bg-white rounded-2xl shadow-sm p-4 flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-stone-800">¥{r.amount.toLocaleString()}</p>
-                    <span className="text-[10px] text-stone-400 tracking-wider">{r.date}</span>
+                    <p className="text-sm font-medium text-stone-800 tabular-nums">¥{r.amount.toLocaleString('ja-JP')}</p>
+                    <span className="text-[10px] text-stone-400 tracking-wider tabular-nums">{r.date}</span>
                     {r.source === 'receipt' && <span className="text-[10px] text-stone-400">📷</span>}
                   </div>
                   <p className="text-xs text-stone-500 mt-0.5">
@@ -126,6 +136,15 @@ export default function ExpensesPage() {
           </ul>
         )}
       </div>
+
+      {/* FAB — 経費を追加 */}
+      <Link
+        href="/admin/keiri/expenses/new"
+        aria-label="経費を追加"
+        className="fixed bottom-24 right-4 z-10 bg-stone-900 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg text-2xl"
+      >
+        +
+      </Link>
     </main>
   )
 }
