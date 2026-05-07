@@ -98,16 +98,16 @@ export default function KeiriDashboard() {
   async function resyncSquare() {
     setResyncing(true)
     try {
-      const res = await fetch(`/api/keiri/square-sync-history?from=${month}&to=${month}`)
+      const res = await fetch(`/api/keiri/square-sync-month?month=${month}`)
       const data = await res.json()
       if (!res.ok) {
-        alert(`再同期失敗: ${data.error ?? 'unknown'}`)
+        alert(`同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
       } else {
-        alert(`再同期完了: ${data.completed ?? 0}件 / ${data.monthsSynced ?? 0}ヶ月`)
+        alert(`同期完了: ${data.completed ?? 0}件 ¥${(data.monthTotal ?? 0).toLocaleString()}`)
         setReload(n => n + 1)
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : '再同期失敗')
+      alert(e instanceof Error ? e.message : '同期失敗')
     } finally {
       setResyncing(false)
     }
@@ -241,7 +241,7 @@ export default function KeiriDashboard() {
               <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-5">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-blue-700 tracking-wider">🟦 Square (店舗)</p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     {isCurrentMonth && squareLoading && (
                       <span className="text-xs text-blue-500">更新中…</span>
                     )}
@@ -250,8 +250,11 @@ export default function KeiriDashboard() {
                       disabled={resyncing}
                       className="text-xs text-blue-700 underline disabled:opacity-50"
                     >
-                      {resyncing ? '再同期中...' : '🔄 再同期'}
+                      {resyncing ? '同期中...' : '🔄 同期'}
                     </button>
+                    <Link href={`/admin/keiri/square?month=${month}`} className="text-xs text-blue-700">
+                      → 明細
+                    </Link>
                   </div>
                 </div>
                 {isCurrentMonth && squareError && squareDisplayed === 0 ? (
@@ -396,10 +399,16 @@ export default function KeiriDashboard() {
                 📦 商品マスタ
               </Link>
               <Link
-                href="/admin/keiri/bank"
-                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
+                href="/admin/keiri/square"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm"
               >
-                🏦 銀行（CSV取込・入出金）
+                🟦 Square 売上
+              </Link>
+              <Link
+                href="/admin/keiri/bank"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm"
+              >
+                🏦 銀行入金
               </Link>
             </div>
           </>
