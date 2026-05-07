@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -14,6 +14,18 @@ function thisMonthJST() {
   return todayJST().slice(0, 7)
 }
 
+function monthOptions(count = 24): { value: string; label: string }[] {
+  const list: { value: string; label: string }[] = []
+  const now = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  for (let i = 0; i < count; i++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
+    const value = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+    const label = `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月`
+    list.push({ value, label })
+  }
+  return list
+}
+
 type IncomeRow = { date: string; amount: number; tax_category: string | null; source: string | null }
 type ExpenseRow = { date: string; amount: number }
 type PendingRow = { amount: number }
@@ -24,6 +36,7 @@ export default function KeiriDashboard() {
   const router = useRouter()
   const supabase = createClient()
   const [month, setMonth] = useState(thisMonthJST())
+  const months = useMemo(() => monthOptions(24), [])
   const [income, setIncome] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [pendingBank, setPendingBank] = useState<PendingRow[]>([])
@@ -161,12 +174,17 @@ export default function KeiriDashboard() {
             ← 戻る
           </button>
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">経理</h1>
-          <input
-            type="month"
+          <select
             value={month}
             onChange={e => setMonth(e.target.value)}
-            className="bg-white rounded-xl px-3 py-1.5 text-sm border border-stone-200"
-          />
+            className="bg-white rounded-xl px-3 py-1.5 text-sm border border-stone-200 cursor-pointer"
+          >
+            {months.map(opt => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {loading ? (
