@@ -95,6 +95,13 @@ export default function KeiriDashboard() {
     }
   }, [month, router, supabase, reload])
 
+  // Refetch on tab focus so stale pages auto-update after a sync from elsewhere.
+  useEffect(() => {
+    const onFocus = () => setReload(n => n + 1)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
   async function resyncSquare() {
     setResyncing(true)
     try {
@@ -228,53 +235,58 @@ export default function KeiriDashboard() {
               </Link>
             )}
 
+            {/* Square — 上に表示（店舗売上が主） */}
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-blue-700 tracking-wider">🟦 Square (店舗)</p>
+                <div className="flex items-center gap-3">
+                  {isCurrentMonth && squareLoading && (
+                    <span className="text-xs text-blue-500">更新中…</span>
+                  )}
+                  <button
+                    onClick={resyncSquare}
+                    disabled={resyncing}
+                    className="text-xs text-blue-700 underline disabled:opacity-50"
+                  >
+                    {resyncing ? '同期中...' : '🔄 同期'}
+                  </button>
+                  <Link href={`/admin/keiri/square?month=${month}`} className="text-xs text-blue-700">
+                    → 明細
+                  </Link>
+                </div>
+              </div>
+              {isCurrentMonth && squareError && squareDisplayed === 0 ? (
+                <p className="text-sm text-rose-600 mt-1">{squareError}</p>
+              ) : squareDisplayed === 0 ? (
+                <>
+                  <p className="text-3xl font-light text-blue-900 mt-1">¥0</p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    {isCurrentMonth ? '本日 ¥0' : '🔄 同期 を押して取込'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-light text-blue-900 mt-1">
+                    ¥{squareDisplayed.toLocaleString()}
+                  </p>
+                  {isCurrentMonth ? (
+                    <p className="text-xs text-blue-600 mt-1">
+                      本日 ¥{squareToday.toLocaleString()}
+                      {squareCount !== null ? `・${squareCount}件` : ''}
+                      {squareLiveThisMonth === null && squareFromView > 0 && '（月次集計）'}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-blue-600 mt-1">月次集計（過去月）</p>
+                  )}
+                </>
+              )}
+            </div>
+
             {/* Stripe */}
             {stripeTotal > 0 && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-2xl shadow-sm p-5">
                 <p className="text-xs text-emerald-700 tracking-wider">💳 Stripe (EC)</p>
                 <p className="text-3xl font-light text-emerald-900 mt-1">¥{stripeTotal.toLocaleString()}</p>
-              </div>
-            )}
-
-            {/* Square */}
-            {(squareDisplayed > 0 || isCurrentMonth) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-5">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-blue-700 tracking-wider">🟦 Square (店舗)</p>
-                  <div className="flex items-center gap-3">
-                    {isCurrentMonth && squareLoading && (
-                      <span className="text-xs text-blue-500">更新中…</span>
-                    )}
-                    <button
-                      onClick={resyncSquare}
-                      disabled={resyncing}
-                      className="text-xs text-blue-700 underline disabled:opacity-50"
-                    >
-                      {resyncing ? '同期中...' : '🔄 同期'}
-                    </button>
-                    <Link href={`/admin/keiri/square?month=${month}`} className="text-xs text-blue-700">
-                      → 明細
-                    </Link>
-                  </div>
-                </div>
-                {isCurrentMonth && squareError && squareDisplayed === 0 ? (
-                  <p className="text-sm text-rose-600 mt-1">{squareError}</p>
-                ) : (
-                  <>
-                    <p className="text-3xl font-light text-blue-900 mt-1">
-                      ¥{squareDisplayed.toLocaleString()}
-                    </p>
-                    {isCurrentMonth ? (
-                      <p className="text-xs text-blue-600 mt-1">
-                        本日 ¥{squareToday.toLocaleString()}
-                        {squareCount !== null ? `・${squareCount}件` : ''}
-                        {squareLiveThisMonth === null && squareFromView > 0 && '（月次集計）'}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-blue-600 mt-1">月次集計（過去月）</p>
-                    )}
-                  </>
-                )}
               </div>
             )}
 
