@@ -14,8 +14,11 @@ function thisMonthJST() {
   return todayJST().slice(0, 7)
 }
 
-type IncomeRow = { date: string; amount: number; tax_rate: number | null; tax_category: string | null }
+type IncomeRow = { date: string; amount: number; tax_category: string | null; source: string | null }
 type ExpenseRow = { date: string; amount: number }
+type PendingRow = { amount: number }
+
+type SquareSales = { today: number; thisMonth: number; count: number; asOf: string }
 
 export default function KeiriDashboard() {
   const router = useRouter()
@@ -23,6 +26,10 @@ export default function KeiriDashboard() {
   const [month, setMonth] = useState(thisMonthJST())
   const [income, setIncome] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
+  const [pendingBank, setPendingBank] = useState<PendingRow[]>([])
+  const [square, setSquare] = useState<SquareSales | null>(null)
+  const [squareLoading, setSquareLoading] = useState(false)
+  const [squareError, setSquareError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -34,12 +41,13 @@ export default function KeiriDashboard() {
     const [y, m] = month.split('-').map(s => parseInt(s, 10))
     const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
 
+    let cancelled = false
     ;(async () => {
       setLoading(true)
-      const [incRes, expRes] = await Promise.all([
+      const [incRes, expRes, pendRes] = await Promise.all([
         supabase
           .from('keiri_income_view')
-          .select('date, amount, tax_category')
+          .select('date, amount, tax_category, source')
           .gte('date', start)
           .lt('date', nextMonth),
         supabase
@@ -48,16 +56,76 @@ export default function KeiriDashboard() {
           .eq('type', 'expense')
           .gte('date', start)
           .lt('date', nextMonth),
+        supabase
+          .from('orders')
+          .select('amount')
+          .eq('status', 'pending_bank_transfer')
+          .gte('created_at', start + 'T00:00:00+09:00')
+          .lt('created_at', nextMonth + 'T00:00:00+09:00'),
       ])
+      if (cancelled) return
       setIncome((incRes.data ?? []) as IncomeRow[])
       setExpenses((expRes.data ?? []) as ExpenseRow[])
+      setPendingBank((pendRes.data ?? []) as PendingRow[])
       setLoading(false)
     })()
+    return () => {
+      cancelled = true
+    }
   }, [month, router, supabase])
 
-  const totalIncome = income.reduce((s, r) => s + (r.amount || 0), 0)
+  useEffect(() => {
+    const isCurrentMonth = month === thisMonthJST()
+    if (!isCurrentMonth) {
+      setSquare(null)
+      setSquareError(null)
+      return
+    }
+    let cancelled = false
+    const fetchSquare = async () => {
+      setSquareLoading(true)
+      setSquareError(null)
+      try {
+        const res = await fetch('/api/keiri/square-sales')
+        const data = await res.json()
+        if (cancelled) return
+        if (!res.ok) {
+          setSquareError(typeof data.error === 'string' ? data.error : 'Square API エラー')
+          return
+        }
+        setSquare(data as SquareSales)
+      } catch (e) {
+        if (cancelled) return
+        setSquareError(e instanceof Error ? e.message : 'fetch error')
+      } finally {
+        if (!cancelled) setSquareLoading(false)
+      }
+    }
+    fetchSquare()
+    const interval = setInterval(fetchSquare, 30000)
+    const onFocus = () => fetchSquare()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [month])
+
+  const stripeTotal = income.filter(r => r.source === 'stripe').reduce((s, r) => s + (r.amount || 0), 0)
+  const manualIncomeTotal = income
+    .filter(r => r.source === 'manual')
+    .reduce((s, r) => s + (r.amount || 0), 0)
+  const otherIncomeTotal = income
+    .filter(r => r.source !== 'stripe' && r.source !== 'manual')
+    .reduce((s, r) => s + (r.amount || 0), 0)
+  const pendingBankTotal = pendingBank.reduce((s, r) => s + (r.amount || 0), 0)
+  const squareThisMonth = square?.thisMonth ?? 0
+  const squareToday = square?.today ?? 0
+
+  const totalConfirmed = stripeTotal + manualIncomeTotal + otherIncomeTotal + squareThisMonth
   const totalExpense = expenses.reduce((s, r) => s + (r.amount || 0), 0)
-  const profit = totalIncome - totalExpense
+  const profit = totalConfirmed - totalExpense
 
   const incomeByTax = income.reduce<Record<string, number>>((acc, r) => {
     const key = r.tax_category ?? '未分類'
@@ -67,9 +135,11 @@ export default function KeiriDashboard() {
 
   return (
     <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
-      <div className="max-w-lg mx-auto space-y-4">
+      <div className="max-w-lg mx-auto space-y-3">
         <div className="flex items-center justify-between">
-          <button onClick={() => router.push('/admin')} className="text-stone-500 text-sm">← 戻る</button>
+          <button onClick={() => router.push('/admin')} className="text-stone-500 text-sm">
+            ← 戻る
+          </button>
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">経理</h1>
           <input
             type="month"
@@ -84,22 +154,79 @@ export default function KeiriDashboard() {
         ) : (
           <>
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl shadow-sm p-5">
-              <p className="text-xs text-emerald-700 tracking-wider">売上</p>
-              <p className="text-3xl font-light text-emerald-900 mt-1">¥{totalIncome.toLocaleString()}</p>
+              <p className="text-xs text-emerald-700 tracking-wider">💳 Stripe (EC)</p>
+              <p className="text-3xl font-light text-emerald-900 mt-1">¥{stripeTotal.toLocaleString()}</p>
             </div>
 
-            <div className="bg-rose-50 border border-rose-200 rounded-2xl shadow-sm p-5">
-              <p className="text-xs text-rose-700 tracking-wider">経費</p>
-              <p className="text-3xl font-light text-rose-900 mt-1">¥{totalExpense.toLocaleString()}</p>
+            {pendingBankTotal > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
+                <p className="text-xs text-amber-700 tracking-wider">🏦 銀行振込（入金待ち）</p>
+                <p className="text-3xl font-light text-amber-900 mt-1">¥{pendingBankTotal.toLocaleString()}</p>
+                <p className="text-xs text-amber-600 mt-1">
+                  {pendingBank.length}件・入金確認後に売上計上
+                </p>
+              </div>
+            )}
+
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-blue-700 tracking-wider">🟦 Square (店舗)</p>
+                {squareLoading && <span className="text-xs text-blue-500">更新中…</span>}
+              </div>
+              {squareError ? (
+                <p className="text-sm text-rose-600 mt-1">{squareError}</p>
+              ) : (
+                <>
+                  <p className="text-3xl font-light text-blue-900 mt-1">
+                    ¥{squareThisMonth.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    本日 ¥{squareToday.toLocaleString()}・{square?.count ?? 0}件
+                  </p>
+                </>
+              )}
             </div>
 
-            <div className="bg-stone-800 rounded-2xl shadow-sm p-5">
-              <p className="text-xs text-stone-400 tracking-wider">粗利</p>
-              <p className="text-3xl font-light text-white mt-1">¥{profit.toLocaleString()}</p>
+            {(manualIncomeTotal > 0 || otherIncomeTotal > 0) && (
+              <div className="bg-stone-50 border border-stone-200 rounded-2xl shadow-sm p-4 text-sm space-y-1">
+                {manualIncomeTotal > 0 && (
+                  <div className="flex justify-between text-stone-700">
+                    <span>手動売上</span>
+                    <span className="tabular-nums">¥{manualIncomeTotal.toLocaleString()}</span>
+                  </div>
+                )}
+                {otherIncomeTotal > 0 && (
+                  <div className="flex justify-between text-stone-700">
+                    <span>その他売上</span>
+                    <span className="tabular-nums">¥{otherIncomeTotal.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="bg-stone-800 rounded-2xl shadow-sm p-5 space-y-2">
+              <div className="flex justify-between items-baseline">
+                <span className="text-xs text-stone-400 tracking-wider">📊 売上合計</span>
+                <span className="text-2xl font-light text-white tabular-nums">
+                  ¥{totalConfirmed.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-xs text-stone-400 tracking-wider">経費</span>
+                <span className="text-base text-rose-300 tabular-nums">
+                  −¥{totalExpense.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between items-baseline pt-2 border-t border-stone-700">
+                <span className="text-xs text-stone-400 tracking-wider">粗利</span>
+                <span className="text-2xl font-light text-emerald-300 tabular-nums">
+                  ¥{profit.toLocaleString()}
+                </span>
+              </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm p-5">
-              <p className="text-xs text-stone-500 tracking-wider mb-3">税区分別売上</p>
+              <p className="text-xs text-stone-500 tracking-wider mb-3">税区分別売上（DB分のみ）</p>
               {Object.keys(incomeByTax).length === 0 ? (
                 <p className="text-stone-400 text-sm">なし</p>
               ) : (
@@ -109,7 +236,9 @@ export default function KeiriDashboard() {
                     .map(([cat, amt]) => (
                       <li key={cat} className="flex items-center justify-between text-sm">
                         <span className="text-stone-600">{cat}</span>
-                        <span className="text-stone-800 font-medium">¥{amt.toLocaleString()}</span>
+                        <span className="text-stone-800 font-medium tabular-nums">
+                          ¥{amt.toLocaleString()}
+                        </span>
                       </li>
                     ))}
                 </ul>
