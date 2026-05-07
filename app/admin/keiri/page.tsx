@@ -32,6 +32,8 @@ export default function KeiriDashboard() {
   const [squareError, setSquareError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const isCurrentMonth = month === thisMonthJST()
+
   useEffect(() => {
     if (!getAdminSession()) {
       router.replace('/admin')
@@ -74,8 +76,9 @@ export default function KeiriDashboard() {
     }
   }, [month, router, supabase])
 
+  // Square API only for current month (real-time refresh).
+  // For past months, we display square from keiri_income_view (monthly_revenue aggregate).
   useEffect(() => {
-    const isCurrentMonth = month === thisMonthJST()
     if (!isCurrentMonth) {
       setSquare(null)
       setSquareError(null)
@@ -110,20 +113,37 @@ export default function KeiriDashboard() {
       clearInterval(interval)
       window.removeEventListener('focus', onFocus)
     }
-  }, [month])
+  }, [isCurrentMonth])
 
   const stripeTotal = income.filter(r => r.source === 'stripe').reduce((s, r) => s + (r.amount || 0), 0)
+  const squareFromView = income
+    .filter(r => r.source === 'square' || r.source === 'freee')
+    .reduce((s, r) => s + (r.amount || 0), 0)
   const manualIncomeTotal = income
     .filter(r => r.source === 'manual')
     .reduce((s, r) => s + (r.amount || 0), 0)
   const otherIncomeTotal = income
-    .filter(r => r.source !== 'stripe' && r.source !== 'manual')
+    .filter(
+      r =>
+        r.source !== 'stripe' &&
+        r.source !== 'manual' &&
+        r.source !== 'square' &&
+        r.source !== 'freee',
+    )
     .reduce((s, r) => s + (r.amount || 0), 0)
-  const pendingBankTotal = pendingBank.reduce((s, r) => s + (r.amount || 0), 0)
-  const squareThisMonth = square?.thisMonth ?? 0
-  const squareToday = square?.today ?? 0
 
-  const totalConfirmed = stripeTotal + manualIncomeTotal + otherIncomeTotal + squareThisMonth
+  // Square value to display: for current month prefer live API, fallback to view.
+  // For past months use view aggregate (monthly_revenue).
+  const squareLiveThisMonth = square?.thisMonth ?? null
+  const squareDisplayed = isCurrentMonth
+    ? squareLiveThisMonth ?? squareFromView
+    : squareFromView
+  const squareToday = isCurrentMonth ? square?.today ?? 0 : 0
+  const squareCount = isCurrentMonth ? square?.count ?? null : null
+
+  const pendingBankTotal = pendingBank.reduce((s, r) => s + (r.amount || 0), 0)
+
+  const totalConfirmed = stripeTotal + manualIncomeTotal + otherIncomeTotal + squareDisplayed
   const totalExpense = expenses.reduce((s, r) => s + (r.amount || 0), 0)
   const profit = totalConfirmed - totalExpense
 
@@ -171,18 +191,26 @@ export default function KeiriDashboard() {
             <div className="bg-blue-50 border border-blue-200 rounded-2xl shadow-sm p-5">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-blue-700 tracking-wider">🟦 Square (店舗)</p>
-                {squareLoading && <span className="text-xs text-blue-500">更新中…</span>}
+                {isCurrentMonth && squareLoading && (
+                  <span className="text-xs text-blue-500">更新中…</span>
+                )}
               </div>
-              {squareError ? (
+              {isCurrentMonth && squareError && squareDisplayed === 0 ? (
                 <p className="text-sm text-rose-600 mt-1">{squareError}</p>
               ) : (
                 <>
                   <p className="text-3xl font-light text-blue-900 mt-1">
-                    ¥{squareThisMonth.toLocaleString()}
+                    ¥{squareDisplayed.toLocaleString()}
                   </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    本日 ¥{squareToday.toLocaleString()}・{square?.count ?? 0}件
-                  </p>
+                  {isCurrentMonth ? (
+                    <p className="text-xs text-blue-600 mt-1">
+                      本日 ¥{squareToday.toLocaleString()}
+                      {squareCount !== null ? `・${squareCount}件` : ''}
+                      {squareLiveThisMonth === null && squareFromView > 0 && '（月次集計）'}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-blue-600 mt-1">月次集計（過去月）</p>
+                  )}
                 </>
               )}
             </div>
