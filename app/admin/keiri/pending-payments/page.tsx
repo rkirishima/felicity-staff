@@ -155,7 +155,7 @@ export default function PendingPaymentsPage() {
                         </div>
                         <p className="text-xs text-stone-400 mt-0.5">
                           {inv.invoice_number ?? '-'}・発行 {elapsedDays}日経過
-                          {inv.due_date && （`期限 ${inv.due_date}`）}
+                          {inv.due_date ? `（期限 ${inv.due_date}）` : ''}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
