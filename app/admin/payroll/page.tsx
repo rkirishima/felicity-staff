@@ -181,9 +181,13 @@ export default function PayrollPage() {
                   {r.salary && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-900 text-violet-200">正社員</span>}
                   {r.cash && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-900 text-amber-200">現金</span>}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 tabular-nums">
                   <span className="text-xs text-stone-500">{r.hours.toFixed(1)}h</span>
-                  <span className={`text-sm ${r.salary ? 'text-stone-600 line-through' : 'text-stone-300'}`}>¥{r.pay.toLocaleString()}</span>
+                  {r.salary ? (
+                    <span className="text-xs text-violet-300 tracking-wider">月給制</span>
+                  ) : (
+                    <span className="text-sm text-stone-300">¥{r.pay.toLocaleString('ja-JP')}</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -244,8 +248,12 @@ export default function PayrollPage() {
                       </div>
                       <p className="text-xs text-stone-400 mt-0.5">{s.days}日 / {s.hours.toFixed(1)}h / ¥{s.hourly_rate.toLocaleString()}/h</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <p className={`text-lg font-medium ${s.allSalaryPeriod ? 'text-stone-300 line-through' : s.paymentMethod === 'cash' ? 'text-amber-700' : 'text-stone-800'}`}>¥{pay.toLocaleString()}</p>
+                    <div className="flex items-center gap-2 tabular-nums">
+                      {s.allSalaryPeriod ? (
+                        <span className="text-xs text-violet-700 tracking-wider">月給制</span>
+                      ) : (
+                        <p className={`text-lg font-medium ${s.paymentMethod === 'cash' ? 'text-amber-700' : 'text-stone-800'}`}>¥{pay.toLocaleString('ja-JP')}</p>
+                      )}
                       <span className="text-stone-300 text-sm">{isOpen ? '▲' : '▼'}</span>
                     </div>
                   </button>

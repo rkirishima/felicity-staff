@@ -93,16 +93,15 @@ export default function AdminPage() {
   )
 
   const sections = [
-    { label: '👥 在籍状況', sub: 'リアルタイム', path: '/admin/live', color: 'bg-teal-50 border border-teal-200' },
-    { label: '💰 EC売上', sub: '売上集計・注文一覧', path: '/admin/sales', color: 'bg-amber-50 border border-amber-200' },
-    { label: '📦 発送管理', sub: '追跡番号・発送通知', path: '/admin/shipping', color: 'bg-white' },
-    { label: '⏱ タイムカード', sub: '打刻修正・記録', path: '/admin/timeclock', color: 'bg-white' },
-    { label: '💴 給与管理', sub: '月次・時給設定', path: '/admin/payroll', color: 'bg-white' },
-    { label: '📊 経理', sub: 'レシートOCR・請求書・月次', path: '/admin/keiri', color: 'bg-rose-50 border border-rose-200' },
-    { label: '📋 シフト申請', sub: '承認・却下', path: '/admin/shifts', color: 'bg-white' },
-    { label: '📅 シフト管理', sub: 'カレンダー', path: '/schedule', color: 'bg-white' },
-    { label: '🏷 ラベル印刷', sub: 'ドリップ・業販ラベル', path: '/label', color: 'bg-white' },
-    { label: '🎉 イベント管理', sub: '準備タスク・GCal連携', path: '/admin/events', color: 'bg-white' },
+    { label: '👥 在籍状況', sub: 'リアルタイム', path: '/admin/live', color: 'bg-white border border-stone-100' },
+    { label: '⏱ タイムカード', sub: '打刻修正・記録', path: '/admin/timeclock', color: 'bg-white border border-stone-100' },
+    { label: '📅 シフト管理', sub: 'カレンダー', path: '/schedule', color: 'bg-white border border-stone-100' },
+    { label: '💰 EC売上', sub: '売上集計・注文一覧', path: '/admin/sales', color: 'bg-white border border-stone-100' },
+    { label: '📊 経理', sub: 'レシートOCR・請求書・月次', path: '/admin/keiri', color: 'bg-white border border-stone-100' },
+    { label: '💴 給与管理', sub: '月次・時給設定', path: '/admin/payroll', color: 'bg-white border border-stone-100' },
+    { label: '📦 発送管理', sub: '追跡番号・発送通知', path: '/admin/shipping', color: 'bg-white border border-stone-100' },
+    { label: '🏷 ラベル印刷', sub: 'ドリップ・業販ラベル', path: '/label', color: 'bg-white border border-stone-100' },
+    { label: '🎉 イベント管理', sub: '準備タスク・GCal連携', path: '/admin/events', color: 'bg-white border border-stone-100' },
   ]
 
   return (
@@ -110,7 +109,7 @@ export default function AdminPage() {
       <div className="text-center">
         <h1 className="text-3xl font-bold tracking-[0.3em] text-stone-800">FELICITY</h1>
         <p className="text-stone-400 text-xs mt-1 tracking-widest">ADMIN</p>
-        <p className="text-stone-300 text-xs mt-0.5 tracking-widest">v1.7</p>
+        <p className="text-stone-300 text-xs mt-0.5 tracking-widest">v1.8</p>
       </div>
 
       {/* 今日のリアルタイムコスト */}

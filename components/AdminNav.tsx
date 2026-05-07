@@ -19,16 +19,19 @@ export default function AdminNav() {
   const isAdmin = useIsAdmin()
   if (!path.startsWith('/admin') && !isAdmin) return null
   return (
-    <nav className="fixed bottom-0 left-0 right-0 flex z-50"
-      style={{ backgroundColor: '#1c1917', borderTop: '1px solid #292524' }}>
+    <nav className="fixed bottom-0 left-0 right-0 flex z-50 bg-stone-100/95 backdrop-blur-sm border-t border-stone-200">
       {items.map(({ href, label, icon: Icon }) => {
         const active = href === '/admin'
           ? (path === '/admin' || path === '/admin/live')
           : path.startsWith(href)
         return (
-          <Link key={href} href={href}
-            className="flex-1 flex flex-col items-center py-3 gap-1 transition-colors"
-            style={{ color: active ? '#5eead4' : '#78716c' }}>
+          <Link
+            key={href}
+            href={href}
+            className={`flex-1 flex flex-col items-center py-3 gap-1 transition-colors ${
+              active ? 'text-emerald-600' : 'text-stone-500'
+            }`}
+          >
             <Icon size={20} strokeWidth={active ? 2 : 1.5} />
             <span className="text-[10px] tracking-wider">{label}</span>
           </Link>
