@@ -3,7 +3,19 @@
 import { createClient } from '@/lib/supabase/server'
 
 export async function verifyAdminPin(pin: string): Promise<boolean> {
-  return pin === process.env.ADMIN_PIN
+  if (pin === process.env.ADMIN_PIN) return true
+
+  const sb = await createClient()
+  const { data, error } = await sb
+    .from('staff')
+    .select('id')
+    .in('role', ['admin', 'accountant'])
+    .eq('pin', pin)
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle()
+  if (error) return false
+  return !!data
 }
 
 export async function verifyStaffPin(staffId: string, pin: string): Promise<boolean> {
