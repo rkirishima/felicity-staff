@@ -291,7 +291,12 @@ export default function KeiriDashboard() {
             {/* Stripe */}
             {stripeTotal > 0 && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-2xl shadow-sm p-5">
-                <p className="text-xs text-emerald-700 tracking-wider">💳 Stripe (EC)</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-emerald-700 tracking-wider">💳 Stripe (EC)</p>
+                  <Link href={`/admin/keiri/stripe?month=${month}`} className="text-xs text-emerald-700">
+                    → 明細
+                  </Link>
+                </div>
                 <p className="text-3xl font-light text-emerald-900 mt-1">¥{stripeTotal.toLocaleString()}</p>
               </div>
             )}
@@ -423,8 +428,14 @@ export default function KeiriDashboard() {
                 🟦 Square 売上
               </Link>
               <Link
-                href="/admin/keiri/bank"
+                href="/admin/keiri/stripe"
                 className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm"
+              >
+                💳 Stripe (EC) 売上
+              </Link>
+              <Link
+                href="/admin/keiri/bank"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
               >
                 🏦 銀行入金
               </Link>
