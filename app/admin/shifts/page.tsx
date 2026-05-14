@@ -63,7 +63,7 @@ export default function AdminShiftsPage() {
     const m = String(viewMonth.getMonth() + 1).padStart(2,'0')
     const last = new Date(y, viewMonth.getMonth() + 1, 0).getDate()
     const { data, error } = await supabase.from('shifts')
-      .select('id, staff_id, date, start_time, end_time, status, location')
+      .select('id, staff_id, date, start_time, end_time, status, location, note')
       .gte('date', `${y}-${m}-01`)
       .lte('date', `${y}-${m}-${last}`)
       .order('date')
@@ -72,7 +72,11 @@ export default function AdminShiftsPage() {
     const { data: staffData } = await supabase.from('staff').select('id, name')
     const staffMap: Record<string, string> = {}
     ;(staffData ?? []).forEach((s: any) => { staffMap[s.id] = s.name })
-    setShifts((data ?? []).map((sh: any) => ({ ...sh, staffName: staffMap[sh.staff_id] ?? '' })))
+    setShifts((data ?? []).map((sh: any) => ({
+      ...sh,
+      staffName: sh.staff_id ? (staffMap[sh.staff_id] ?? '') : '募集中',
+      isOpen: !sh.staff_id,
+    })))
   }
 
   async function loadPending() {
@@ -222,7 +226,23 @@ export default function AdminShiftsPage() {
   }
 
   async function approveRequest(id: string) {
+    // 承認対象のシフト情報を取得
+    const target = pending.find(p => p.id === id)
     await supabase.from('shifts').update({ status: 'approved' }).eq('id', id)
+    // 対応する募集枠（同じ日付・時間・staff_id=null）を1件削除
+    if (target) {
+      const { data: openings } = await supabase.from('shifts')
+        .select('id')
+        .eq('date', target.date)
+        .eq('start_time', target.start_time)
+        .eq('end_time', target.end_time)
+        .is('staff_id', null)
+        .eq('status', 'approved')
+        .limit(1)
+      if (openings && openings.length > 0) {
+        await supabase.from('shifts').delete().eq('id', openings[0].id)
+      }
+    }
     toast.success('承認しました')
     loadPending(); loadShifts()
   }
@@ -295,9 +315,9 @@ export default function AdminShiftsPage() {
                       const meta = LOCATION_META[locationOf(s)]
                       const isAbsent = s.status === 'absent'
                       return (
-                        <div key={j} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${isAbsent?'bg-red-400':meta.dot}`}
+                        <div key={j} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${isAbsent?'bg-red-400':s.isOpen?'bg-amber-400 border border-amber-600':meta.dot}`}
                           style={{fontSize:'6px', color:'white', fontWeight:'bold'}}>
-                          {s.staffName.slice(-1)}
+                          {s.isOpen ? '?' : s.staffName.slice(-1)}
                         </div>
                       )
                     })}
@@ -323,11 +343,14 @@ export default function AdminShiftsPage() {
                     const meta = LOCATION_META[loc]
                     const isAbsent = s.status === 'absent'
                     return (
-                      <div key={s.id} className={`flex items-center justify-between rounded-xl px-3 py-2 ${isAbsent?'bg-red-50':loc==='cafe'?'bg-stone-50':meta.cell}`}>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${isAbsent?'bg-red-400':meta.dot}`} />
-                          <span className={`text-sm ${isAbsent?'text-red-500 line-through':'text-stone-700'}`}>{s.staffName}</span>
-                          {loc !== 'cafe' && !isAbsent && (
+                      <div key={s.id} className={`flex items-center justify-between rounded-xl px-3 py-2 ${isAbsent?'bg-red-50':s.isOpen?'bg-amber-50 border border-amber-200':loc==='cafe'?'bg-stone-50':meta.cell}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isAbsent?'bg-red-400':s.isOpen?'bg-amber-400':meta.dot}`} />
+                          <span className={`text-sm ${isAbsent?'text-red-500 line-through':s.isOpen?'text-amber-700 font-medium':'text-stone-700'}`}>
+                            {s.isOpen ? '🔔 募集中' : s.staffName}
+                          </span>
+                          {s.note && <span className="text-[10px] text-stone-500 truncate">{s.note}</span>}
+                          {loc !== 'cafe' && !isAbsent && !s.isOpen && (
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${meta.badge}`}>{meta.emoji} {meta.label}</span>
                           )}
                           {isAbsent && <span className="text-xs text-red-400">欠勤</span>}

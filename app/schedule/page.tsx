@@ -9,7 +9,7 @@ import { verifyStaffPin } from '@/app/admin/actions'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
-type Shift = { id: string; staff_id: string; date: string; start_time: string; end_time: string; status: string; location: string | null; staff: { name: string } }
+type Shift = { id: string; staff_id: string | null; date: string; start_time: string; end_time: string; status: string; location: string | null; note: string | null; staff: { name: string } }
 type Staff = { id: string; name: string; role: string }
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土']
@@ -23,6 +23,15 @@ function isWeekend(d: Date) { return d.getDay() === 0 || d.getDay() === 6 }
 function isFoodTruck(d: Date) { return d.getDay() === 3 || d.getDay() === 4 }
 function getDayType(d: Date, specialDays: string[]) {
   return (isWeekend(d) || specialDays.includes(d.toISOString().split('T')[0])) ? 'weekend' : 'weekday'
+}
+// 曜日別テンプレート用：祝日・特別日・土日は 'weekend'、平日は曜日コード
+function getTemplateDayType(d: Date, specialDays: string[], holidays: Record<string, string>): string {
+  const dateStr = d.toISOString().split('T')[0]
+  const dow = d.getDay()
+  if (dow === 0 || dow === 6 || holidays[dateStr] || specialDays.includes(dateStr)) {
+    return 'weekend'
+  }
+  return ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][dow]
 }
 
 export default function SchedulePage() {
@@ -64,6 +73,13 @@ export default function SchedulePage() {
     }
   }, [])
 
+  // 日付を切り替えたら選択状態をリセット
+  useEffect(() => {
+    setSelectedTemplate('')
+    setCustomStart('')
+    setCustomEnd('')
+  }, [selectedDate])
+
   useEffect(() => {
     const year = viewMonth.getFullYear()
     const hs = getHolidaysOf(year)
@@ -87,7 +103,7 @@ export default function SchedulePage() {
     const y = viewMonth.getFullYear()
     const m = String(viewMonth.getMonth() + 1).padStart(2, '0')
     const lastDay = new Date(y, viewMonth.getMonth() + 1, 0).getDate()
-    supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status, location, staff!shifts_staff_id_fkey(name)')
+    supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status, location, note, staff!shifts_staff_id_fkey(name)')
       .gte('date', y + '-' + m + '-01')
       .lte('date', y + '-' + m + '-' + lastDay)
       .in('status', ['approved', 'pending'])
@@ -146,6 +162,7 @@ export default function SchedulePage() {
       end_time: endTime,
       status,
       location: shiftLocation,
+      template_id: tmpl?.id ?? null,
     })
     if (error) { toast.error('エラー: ' + error.message); setLoading(false); return }
     if (isAdmin) {
@@ -244,6 +261,7 @@ export default function SchedulePage() {
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white border border-teal-400 inline-block" />土日</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-200 inline-block" />祝日</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-200 inline-block" />キッチンカー</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 border border-amber-600 inline-block" />募集中</span>
         {!isAdmin && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-200 border border-yellow-400 inline-block" />申請中</span>}
       </div>
 
@@ -276,11 +294,12 @@ export default function SchedulePage() {
               <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                 {approvedShifts.slice(0,3).map((s, j) => {
                   const n = (s.staff as any)?.name ?? ''
+                  const isOpen = !s.staff_id
                   const meta = LOCATION_META[locationOf(s)]
                   return (
-                    <div key={j} className={'w-4 h-4 rounded-full flex items-center justify-center ' + meta.dot}
+                    <div key={j} className={'w-4 h-4 rounded-full flex items-center justify-center ' + (isOpen ? 'bg-amber-400 border border-amber-600' : meta.dot)}
                       style={{ fontSize:'7px', color:'white', fontWeight:'bold' }}>
-                      {n.slice(-1)}
+                      {isOpen ? '?' : n.slice(-1)}
                     </div>
                   )
                 })}
@@ -318,12 +337,16 @@ export default function SchedulePage() {
               {shifts.filter(s => s.date === selectedDate).map(s => {
                 const loc = locationOf(s)
                 const meta = LOCATION_META[loc]
+                const isOpen = !s.staff_id
                 return (
-                <div key={s.id} className={'flex justify-between items-center rounded-xl px-3 py-2 text-sm ' + (s.status === 'pending' ? 'bg-yellow-50 border border-yellow-200' : loc === 'cafe' ? 'bg-stone-50' : meta.cell)}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                    <span className="text-stone-700">{(s.staff as any)?.name}</span>
-                    {loc !== 'cafe' && (
+                <div key={s.id} className={'flex justify-between items-center rounded-xl px-3 py-2 text-sm ' + (isOpen ? 'bg-amber-50 border border-amber-200' : s.status === 'pending' ? 'bg-yellow-50 border border-yellow-200' : loc === 'cafe' ? 'bg-stone-50' : meta.cell)}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOpen ? 'bg-amber-400' : meta.dot}`} />
+                    <span className={isOpen ? 'text-amber-700 font-medium' : 'text-stone-700'}>
+                      {isOpen ? '🔔 募集中' : (s.staff as any)?.name}
+                    </span>
+                    {s.note && <span className="text-[10px] text-stone-500 truncate">{s.note}</span>}
+                    {loc !== 'cafe' && !isOpen && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${meta.badge}`}>{meta.emoji} {meta.label}</span>
                     )}
                     {s.status === 'pending' && <span className="ml-1 text-xs text-yellow-600">申請中</span>}
@@ -382,18 +405,26 @@ export default function SchedulePage() {
                 {isAdmin ? 'シフト' : '希望シフト'}
               </p>
               <div className="space-y-1">
-                {templates.filter(t => {
-                  const d = new Date(selectedDate + 'T12:00:00')
-                  return t.day_type === (getDayType(d, specialDays) === 'weekend' || holidays[selectedDate] ? 'weekend' : 'weekday')
-                }).map(t => (
-                  <button key={t.id} onClick={() => { setSelectedTemplate(t.id); setCustomStart(''); setCustomEnd('') }}
-                    className={'w-full flex justify-between px-3 py-2 rounded-xl text-sm transition-all ' + (
-                      selectedTemplate === t.id && !customStart ? 'bg-stone-800 text-white' : 'bg-stone-100 text-stone-700'
-                    )}>
-                    <span>{t.name}</span>
-                    <span className="opacity-60">{t.start_time.slice(0,5)}〜{t.end_time.slice(0,5)}</span>
-                  </button>
-                ))}
+                {(() => {
+                  const dayType = getTemplateDayType(new Date(selectedDate + 'T12:00:00'), specialDays, holidays)
+                  const dayTemplates = templates.filter(t => t.day_type === dayType)
+                  if (dayTemplates.length === 0) {
+                    return (
+                      <p className="text-xs text-stone-400 text-center py-2">
+                        この曜日のテンプレートはありません{isAdmin ? '（下のカスタム時間で入力）' : ''}
+                      </p>
+                    )
+                  }
+                  return dayTemplates.map(t => (
+                    <button key={t.id} onClick={() => { setSelectedTemplate(t.id); setCustomStart(''); setCustomEnd('') }}
+                      className={'w-full flex justify-between px-3 py-2 rounded-xl text-sm transition-all ' + (
+                        selectedTemplate === t.id && !customStart ? 'bg-stone-800 text-white' : 'bg-stone-100 text-stone-700'
+                      )}>
+                      <span>{t.name}</span>
+                      <span className="opacity-60">{t.start_time.slice(0,5)}〜{t.end_time.slice(0,5)}</span>
+                    </button>
+                  ))
+                })()}
                 <div className="mt-2 p-3 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
                   <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間</p>
                   <div className="flex items-center gap-2">

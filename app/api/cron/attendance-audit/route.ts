@@ -39,7 +39,8 @@ export async function GET(req: Request) {
     sb.from('shifts')
       .select('staff_id, start_time, end_time, staff(name)')
       .eq('date', todayJST)
-      .eq('status', 'approved'),
+      .eq('status', 'approved')
+      .not('staff_id', 'is', null),
     sb.from('timeclock')
       .select('staff_id, clock_in, clock_out, staff(name, hourly_rate)')
       .gte('clock_in', `${todayJST}T00:00:00+09:00`)
