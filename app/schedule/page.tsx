@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { getHolidaysOf } from 'japanese-holidays'
-import { getSession, saveSession, getAdminSession } from '@/lib/session'
+import { getSession, getAdminSession } from '@/lib/session'
 import { verifyStaffPin } from '@/app/admin/actions'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 
@@ -21,9 +21,6 @@ for (let h = 7; h <= 19; h++) {
 
 function isWeekend(d: Date) { return d.getDay() === 0 || d.getDay() === 6 }
 function isFoodTruck(d: Date) { return d.getDay() === 3 || d.getDay() === 4 }
-function getDayType(d: Date, specialDays: string[]) {
-  return (isWeekend(d) || specialDays.includes(d.toISOString().split('T')[0])) ? 'weekend' : 'weekday'
-}
 // 曜日別テンプレート用：祝日・特別日・土日は 'weekend'、平日は曜日コード
 function getTemplateDayType(d: Date, specialDays: string[], holidays: Record<string, string>): string {
   const dateStr = d.toISOString().split('T')[0]
@@ -164,7 +161,15 @@ export default function SchedulePage() {
       location: shiftLocation,
       template_id: tmpl?.id ?? null,
     })
-    if (error) { toast.error('エラー: ' + error.message); setLoading(false); return }
+    if (error) {
+      // 23505 = PostgreSQL unique violation
+      if (error.code === '23505') {
+        toast.error('このシフトは既に申請済みです')
+      } else {
+        toast.error('エラー: ' + error.message)
+      }
+      setLoading(false); return
+    }
     if (isAdmin) {
       toast.success('シフトを登録しました！')
     } else {

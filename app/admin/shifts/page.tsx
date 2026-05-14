@@ -81,7 +81,7 @@ export default function AdminShiftsPage() {
 
   async function loadPending() {
     const { data, error } = await supabase.from('shifts')
-      .select('id, staff_id, date, start_time, end_time, status, location')
+      .select('id, staff_id, date, start_time, end_time, status, location, template_id')
       .eq('status', 'pending').order('date')
     if (error) { console.error(error); return }
     const { data: staffData } = await supabase.from('staff').select('id, name')
@@ -229,16 +229,30 @@ export default function AdminShiftsPage() {
     // 承認対象のシフト情報を取得
     const target = pending.find(p => p.id === id)
     await supabase.from('shifts').update({ status: 'approved' }).eq('id', id)
-    // 対応する募集枠（同じ日付・時間・staff_id=null）を1件削除
+    // 対応する募集枠を1件削除（template_id 優先、なければ時間一致でフォールバック）
     if (target) {
-      const { data: openings } = await supabase.from('shifts')
-        .select('id')
-        .eq('date', target.date)
-        .eq('start_time', target.start_time)
-        .eq('end_time', target.end_time)
-        .is('staff_id', null)
-        .eq('status', 'approved')
-        .limit(1)
+      let openings: { id: string }[] | null = null
+      if (target.template_id) {
+        const { data } = await supabase.from('shifts')
+          .select('id')
+          .eq('date', target.date)
+          .eq('template_id', target.template_id)
+          .is('staff_id', null)
+          .eq('status', 'approved')
+          .limit(1)
+        openings = data
+      }
+      if (!openings || openings.length === 0) {
+        const { data } = await supabase.from('shifts')
+          .select('id')
+          .eq('date', target.date)
+          .eq('start_time', target.start_time)
+          .eq('end_time', target.end_time)
+          .is('staff_id', null)
+          .eq('status', 'approved')
+          .limit(1)
+        openings = data
+      }
       if (openings && openings.length > 0) {
         await supabase.from('shifts').delete().eq('id', openings[0].id)
       }
