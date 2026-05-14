@@ -411,7 +411,9 @@ export default function SchedulePage() {
                   if (dayTemplates.length === 0) {
                     return (
                       <p className="text-xs text-stone-400 text-center py-2">
-                        この曜日のテンプレートはありません{isAdmin ? '（下のカスタム時間で入力）' : ''}
+                        {isAdmin
+                          ? 'この曜日のテンプレートはありません（下のカスタム時間で入力）'
+                          : 'この日は申請できるシフト枠がありません'}
                       </p>
                     )
                   }
@@ -425,34 +427,42 @@ export default function SchedulePage() {
                     </button>
                   ))
                 })()}
-                <div className="mt-2 p-3 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
-                  <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間</p>
-                  <div className="flex items-center gap-2">
-                    <select className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white text-stone-700"
-                      onChange={e => { setCustomStart(e.target.value); setSelectedTemplate('') }}>
-                      <option value="">開始</option>
-                      {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <span className="text-stone-400 text-sm">〜</span>
-                    <select className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white text-stone-700"
-                      onChange={e => { setCustomEnd(e.target.value); setSelectedTemplate('') }}>
-                      <option value="">終了</option>
-                      {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                {isAdmin && (
+                  <div className="mt-2 p-3 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
+                    <p className="text-xs text-teal-600 font-medium">⚙️ カスタム時間（admin専用）</p>
+                    <div className="flex items-center gap-2">
+                      <select className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white text-stone-700"
+                        onChange={e => { setCustomStart(e.target.value); setSelectedTemplate('') }}>
+                        <option value="">開始</option>
+                        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <span className="text-stone-400 text-sm">〜</span>
+                      <select className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white text-stone-700"
+                        onChange={e => { setCustomEnd(e.target.value); setSelectedTemplate('') }}>
+                        <option value="">終了</option>
+                        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    {customStart && customEnd && (
+                      <p className="text-xs text-teal-600 text-center font-medium">{customStart}〜{customEnd} ✓</p>
+                    )}
                   </div>
-                  {customStart && customEnd && (
-                    <p className="text-xs text-teal-600 text-center font-medium">{customStart}〜{customEnd} ✓</p>
-                  )}
-                </div>
+                )}
               </div>
             </div>
 
-            <button onClick={submitShift} disabled={loading}
+            <button onClick={submitShift} disabled={loading || (!isAdmin && !selectedTemplate)}
               className={'w-full py-3 rounded-xl font-medium transition-all tracking-wider ' + (
                 isAdmin ? 'bg-stone-800 text-white disabled:opacity-50' :
                 'bg-teal-600 text-white disabled:opacity-50'
               )}>
-              {loading ? '処理中...' : isAdmin ? 'シフト登録' : 'シフトを申請する'}
+              {loading
+                ? '処理中...'
+                : isAdmin
+                  ? 'シフト登録'
+                  : selectedTemplate
+                    ? 'シフトを申請する'
+                    : 'シフト枠を選んでください'}
             </button>
           </div>
         </div>
