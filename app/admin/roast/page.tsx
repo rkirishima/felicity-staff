@@ -7,7 +7,15 @@ import { useRouter } from 'next/navigation'
 import { useIsAdmin } from '@/lib/admin-context'
 import { getSession } from '@/lib/session'
 import { toast } from 'sonner'
-import { Flame, Trash2, Coffee } from 'lucide-react'
+import { Flame, Trash2, Coffee, Thermometer, Lightbulb, AlertTriangle } from 'lucide-react'
+import {
+  profileFor,
+  profilesForBean,
+  chargeTempFor,
+  heatMethodJa,
+  ROAST_LEVEL_LABELS,
+  type RoastLevel,
+} from '@/lib/roast-profiles'
 
 type Bean = {
   id: string
@@ -30,6 +38,7 @@ type RoastLog = {
 }
 
 const MACHINES = ['Probat P05III', 'Roest L100P']
+const BATCH_PRESETS = [1.0, 2.0, 3.6]
 
 // JST datetime-local の現在時刻文字列(YYYY-MM-DDTHH:mm)
 function nowJSTLocal(): string {
@@ -63,11 +72,26 @@ export default function RoastPage() {
 
   // フォーム状態
   const [beanId, setBeanId] = useState('')
+  const [roastLevel, setRoastLevel] = useState<RoastLevel | ''>('')
   const [datetime, setDatetime] = useState(nowJSTLocal())
   const [greenKg, setGreenKg] = useState('')
   const [roastedKg, setRoastedKg] = useState('')
   const [machine, setMachine] = useState(MACHINES[0])
   const [notes, setNotes] = useState('')
+
+  // 豆選択時に利用可能なローストレベルから最初のものを自動選択
+  useEffect(() => {
+    if (!beanId) { setRoastLevel(''); return }
+    const profiles = profilesForBean(beanId)
+    if (profiles.length > 0) {
+      // 既存のレベルが選択中の豆にあればそれを保持、無ければ最初のもの
+      const cur = profiles.find((p) => p.roast_level === roastLevel)
+      if (!cur) setRoastLevel(profiles[0].roast_level)
+    } else {
+      setRoastLevel('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beanId])
 
   useEffect(() => {
     setIsStaff(!!getSession())
@@ -129,6 +153,7 @@ export default function RoastPage() {
       green_kg: Number(greenKg),
       roasted_kg: roastedKg ? Number(roastedKg) : null,
       machine,
+      roast_level: roastLevel || null,
       notes: notes.trim() || null,
       source: 'ipad_manual',
     })
@@ -202,6 +227,90 @@ export default function RoastPage() {
             </select>
           </div>
 
+          {/* ローストレベル選択(豆選択時に表示) */}
+          {beanId && profilesForBean(beanId).length > 0 && (
+            <div>
+              <label className="block text-xs text-stone-400 mb-1">ローストレベル</label>
+              <div className="flex flex-wrap gap-2">
+                {profilesForBean(beanId).map((p) => (
+                  <button
+                    key={p.roast_level}
+                    type="button"
+                    onClick={() => setRoastLevel(p.roast_level)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      roastLevel === p.roast_level
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-stone-900 text-stone-400 border border-stone-700 hover:border-amber-500'
+                    }`}
+                  >
+                    {ROAST_LEVEL_LABELS[p.roast_level]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 焙煎プロファイル(豆 × レベル選択時に表示) */}
+          {(() => {
+            if (!beanId) return null
+            const p = profileFor(beanId, (roastLevel || undefined) as RoastLevel | undefined)
+            if (!p) return (
+              <div className="rounded-lg p-3 text-xs text-stone-400" style={{ backgroundColor: '#1c1917', border: '1px solid #3f3f3f' }}>
+                この豆のプロファイル未登録。経験値で焙煎してください。
+              </div>
+            )
+            const kgNum = Number(greenKg) || 1
+            const charge = chargeTempFor(p, kgNum)
+            return (
+              <div className="rounded-lg p-3 space-y-2" style={{ backgroundColor: '#1c1917', border: '1px solid #44403c' }}>
+                <div className="flex items-center gap-2 text-xs text-amber-400">
+                  <Thermometer size={14} />
+                  <span className="font-semibold tracking-wider">推奨プロファイル</span>
+                  <span className="ml-auto text-stone-500">{p.group}</span>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="bg-stone-900 rounded p-2">
+                    <p className="text-[10px] text-stone-500">CHARGE</p>
+                    <p className="text-base font-bold text-white">{charge}°C</p>
+                    <p className="text-[9px] text-stone-600">{kgNum}kg時</p>
+                  </div>
+                  <div className="bg-stone-900 rounded p-2">
+                    <p className="text-[10px] text-stone-500">FC</p>
+                    <p className="text-base font-bold text-white">{p.fc_c}°C</p>
+                  </div>
+                  <div className="bg-stone-900 rounded p-2">
+                    <p className="text-[10px] text-stone-500">DROP</p>
+                    <p className="text-base font-bold text-amber-400">{p.drop_c}°C</p>
+                  </div>
+                  <div className="bg-stone-900 rounded p-2">
+                    <p className="text-[10px] text-stone-500">TIME</p>
+                    <p className="text-base font-bold text-white">{p.total_time_min}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 text-[10px]">
+                  <span className="px-2 py-0.5 rounded bg-blue-900 text-blue-200">熱量: {heatMethodJa(p.heat_method)}</span>
+                  <span className="px-2 py-0.5 rounded bg-stone-700 text-stone-300">ドラム: {p.drum_rpm} RPM</span>
+                  {p.soak && <span className="px-2 py-0.5 rounded bg-emerald-900 text-emerald-200">SOAK 60秒(CHARGE後30%)</span>}
+                  {p.drum_note && <span className="px-2 py-0.5 rounded bg-rose-900 text-rose-200">{p.drum_note}</span>}
+                </div>
+
+                <div className="text-xs text-stone-300 leading-relaxed">
+                  <span className="text-amber-400">🎯</span> {p.flavor}
+                </div>
+                <div className="text-xs text-stone-400 leading-relaxed">
+                  <Lightbulb size={12} className="inline text-amber-500 mr-1" />
+                  {p.strategy}
+                </div>
+                <div className="text-xs text-stone-300 leading-relaxed border-l-2 border-rose-700 pl-2">
+                  <AlertTriangle size={12} className="inline text-rose-400 mr-1" />
+                  {p.pro_tip}
+                </div>
+              </div>
+            )
+          })()}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-stone-400 mb-1">焙煎日時</label>
@@ -229,14 +338,30 @@ export default function RoastPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-stone-400 mb-1">生豆 (kg)</label>
+              <div className="flex gap-2 mb-2">
+                {BATCH_PRESETS.map((kg) => (
+                  <button
+                    key={kg}
+                    type="button"
+                    onClick={() => setGreenKg(String(kg))}
+                    className={`flex-1 px-2 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                      Number(greenKg) === kg
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-stone-900 text-stone-400 border border-stone-700 hover:border-amber-500'
+                    }`}
+                  >
+                    {kg}kg
+                  </button>
+                ))}
+              </div>
               <input
                 type="number"
                 step="0.1"
                 inputMode="decimal"
                 value={greenKg}
                 onChange={(e) => setGreenKg(e.target.value)}
-                placeholder="3.6"
-                className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-base border border-stone-700 focus:border-amber-500 focus:outline-none"
+                placeholder="カスタム (例 1.3)"
+                className="w-full bg-stone-900 text-white rounded-lg px-3 py-2 text-sm border border-stone-700 focus:border-amber-500 focus:outline-none"
               />
             </div>
             <div>
