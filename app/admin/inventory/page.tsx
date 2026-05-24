@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useIsAdmin } from '@/lib/admin-context'
 import { getSession } from '@/lib/session'
 import { toast } from 'sonner'
-import { Package, Plus, Pencil, Trash2, Boxes, AlertTriangle, X } from 'lucide-react'
+import Link from 'next/link'
+import { Package, Plus, Pencil, Trash2, Boxes, AlertTriangle, X, Link2 } from 'lucide-react'
 
 type Classification = 'apparel' | 'goods' | 'drip_pack' | 'coffee_beans' | 'food_other' | 'other'
 
@@ -136,9 +137,15 @@ export default function InventoryPage() {
         <div className="flex items-center gap-2">
           <Boxes size={20} className="text-emerald-400" />
           <h1 className="text-lg font-bold text-white tracking-wider">在庫管理</h1>
+          <Link
+            href="/admin/inventory/sync"
+            className="ml-auto bg-stone-700 hover:bg-stone-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            <Link2 size={14} /> POS紐付け
+          </Link>
           <button
             onClick={() => setShowAdd(true)}
-            className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
           >
             <Plus size={14} /> 新規SKU
           </button>
