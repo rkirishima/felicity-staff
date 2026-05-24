@@ -99,6 +99,7 @@ export default function AdminPage() {
     { label: '💰 EC売上', sub: '売上集計・注文一覧', path: '/admin/sales', color: 'bg-white border border-stone-100' },
     { label: '📊 経理', sub: 'レシートOCR・請求書・月次', path: '/admin/keiri', color: 'bg-white border border-stone-100' },
     { label: '🔥 焙煎ログ', sub: 'Probat記録・FCR在庫', path: '/admin/roast', color: 'bg-white border border-stone-100' },
+    { label: '📦 在庫管理', sub: 'アパレル・グッズ・SKU', path: '/admin/inventory', color: 'bg-white border border-stone-100' },
     { label: '💴 給与管理', sub: '月次・時給設定', path: '/admin/payroll', color: 'bg-white border border-stone-100' },
     { label: '📦 発送管理', sub: '追跡番号・発送通知', path: '/admin/shipping', color: 'bg-white border border-stone-100' },
     { label: '🏷 ラベル印刷', sub: 'ドリップ・業販ラベル', path: '/label', color: 'bg-white border border-stone-100' },
