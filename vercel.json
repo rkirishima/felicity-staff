@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/monthly-roast-invoice",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/cron/tax-anomaly-check",
+      "schedule": "0 0 * * 1"
     }
   ],
   "headers": [

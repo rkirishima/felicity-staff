@@ -138,8 +138,14 @@ export default function InventoryPage() {
           <Boxes size={20} className="text-emerald-400" />
           <h1 className="text-lg font-bold text-white tracking-wider">在庫管理</h1>
           <Link
+            href="/admin/inventory/count"
+            className="ml-auto bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            <Boxes size={14} /> 棚卸し
+          </Link>
+          <Link
             href="/admin/inventory/sync"
-            className="ml-auto bg-stone-700 hover:bg-stone-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
+            className="bg-stone-700 hover:bg-stone-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
           >
             <Link2 size={14} /> POS紐付け
           </Link>
