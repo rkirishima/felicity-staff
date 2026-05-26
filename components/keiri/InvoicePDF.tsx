@@ -27,9 +27,11 @@ export type InvoicePDFLine = {
 }
 
 export type InvoicePDFInput = {
+  documentType?: 'invoice' | 'quote'
   invoice_number: string | null
   issue_date: string
   due_date: string | null
+  expiry_date?: string | null
   client_name: string
   client_contact: string | null
   client_postal: string | null
@@ -39,6 +41,7 @@ export type InvoicePDFInput = {
   summary: TaxSummary
   company: CompanyInfo
   stamp_url?: string | null
+  showBank?: boolean
 }
 
 const COLOR = {
@@ -304,25 +307,35 @@ function MetaRow({ k, v }: { k: string; v: string }) {
 
 export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
   const c = data.company
-  const isDraft = !data.invoice_number
+  const isQuote = data.documentType === 'quote'
+  const isDraft = !isQuote && !data.invoice_number
   const subtotal = data.summary.subtotal_10 + data.summary.subtotal_8
   const taxTotal = data.summary.tax_10 + data.summary.tax_8
   const fullCompanyAddress = c.postal ? `〒${c.postal}  ${c.address}` : c.address
+
+  const titleText = isQuote ? '見 積 書' : '請 求 書'
+  const numberLabel = isQuote ? 'No.' : 'No.'
+  const dateLabel = '発行日'
+  const expiryLabel = isQuote ? '有効期限' : '支払期限'
+  const expiryDate = isQuote ? (data.expiry_date ?? null) : (data.due_date ?? null)
+  const bannerAmountLabel = isQuote ? '御見積金額（税込）' : 'ご請求金額（税込）'
+  const bannerNote = isQuote ? '下記の通りお見積もり申し上げます。' : '下記の通りご請求申し上げます。'
+  const showBank = data.showBank !== false && !!c.bank
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         {/* HEADER */}
         <View style={styles.titleWrap}>
-          <Text style={styles.title}>請 求 書</Text>
+          <Text style={styles.title}>{titleText}</Text>
           <View style={styles.metaAbs}>
             {isDraft ? (
               <Text style={styles.draftBadge}>下 書 き</Text>
-            ) : (
-              <MetaRow k="No." v={data.invoice_number ?? ''} />
-            )}
-            <MetaRow k="発行日" v={data.issue_date} />
-            {data.due_date && <MetaRow k="支払期限" v={data.due_date} />}
+            ) : data.invoice_number ? (
+              <MetaRow k={numberLabel} v={data.invoice_number} />
+            ) : null}
+            <MetaRow k={dateLabel} v={data.issue_date} />
+            {expiryDate && <MetaRow k={expiryLabel} v={expiryDate} />}
           </View>
         </View>
         <View style={styles.ruleStrong} />
@@ -330,7 +343,7 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
         {/* PARTIES */}
         <View style={styles.parties}>
           <View style={styles.partyLeft}>
-            <Text style={styles.partyLabel}>請　求　先</Text>
+            <Text style={styles.partyLabel}>{isQuote ? '御　見　積　先' : '請　求　先'}</Text>
             <Text style={styles.clientName}>{normalizeOrgPrefix(data.client_name)}　御中</Text>
             {data.client_contact && (
               <Text style={styles.clientContact}>{data.client_contact}　様</Text>
@@ -343,7 +356,7 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
             )}
           </View>
           <View style={styles.partyRight}>
-            <Text style={styles.partyLabel}>請　求　元</Text>
+            <Text style={styles.partyLabel}>{isQuote ? '見　積　元' : '請　求　元'}</Text>
             <Text style={styles.companyName}>{c.name}</Text>
             {(c.postal || c.address) && (
               <Text style={styles.addrLine}>{fullCompanyAddress}</Text>
@@ -363,10 +376,10 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
         {/* TOTAL BANNER (2-col) */}
         <View style={styles.bannerRow}>
           <View style={styles.bannerNoteCol}>
-            <Text style={styles.bannerNote}>下記の通りご請求申し上げます。</Text>
+            <Text style={styles.bannerNote}>{bannerNote}</Text>
           </View>
           <View style={styles.bannerAmtCol}>
-            <Text style={styles.bannerLabel}>ご請求金額（税込）</Text>
+            <Text style={styles.bannerLabel}>{bannerAmountLabel}</Text>
             <Text style={styles.bannerAmount}>
               ¥ {data.summary.total.toLocaleString('ja-JP')} -
             </Text>
@@ -424,7 +437,7 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
         </View>
 
         {/* BANK */}
-        {c.bank && (
+        {showBank && (
           <View style={styles.bankCard}>
             <Text style={styles.bankHeader}>お振込先</Text>
             <Text style={styles.bankBody}>{c.bank}</Text>
