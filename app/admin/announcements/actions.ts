@@ -73,3 +73,58 @@ export async function togglePublished(id: string, published: boolean): Promise<v
   if (error) throw new Error(error.message)
   revalidatePath('/admin/announcements')
 }
+
+export async function sendTelegramTest(id: string): Promise<{ ok: boolean; message: string }> {
+  const sb = await createClient()
+  const { data, error } = await sb
+    .from('announcements')
+    .select('id, title, banner_text, body, event_date, event_start_time, event_end_time, type, link_url')
+    .eq('id', id)
+    .maybeSingle()
+  if (error || !data) return { ok: false, message: error?.message ?? 'not found' }
+
+  const { sendTelegramMessage } = await import('@/lib/telegram')
+
+  const typeEmoji: Record<string, string> = {
+    closure: '🏷',
+    event: '🎉',
+    menu: '☕',
+    other: '📌',
+  }
+  const emoji = typeEmoji[data.type as string] ?? '📢'
+
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  let dateLabel = ''
+  let timeLabel = ''
+  if (data.event_date) {
+    const d = new Date((data.event_date as string) + 'T00:00:00+09:00')
+    const day = ['日', '月', '火', '水', '木', '金', '土'][d.getUTCDay()]
+    dateLabel = `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${day})`
+    if (data.event_start_time && data.event_end_time) {
+      timeLabel = ` ${(data.event_start_time as string).slice(0, 5)}〜${(data.event_end_time as string).slice(0, 5)}`
+    }
+  }
+  const editUrl = `https://staff.felicity.cafe/admin/announcements/${id}`
+
+  const lines = [
+    `${emoji} <b>[テスト送信] 1週間前リマインダー</b>`,
+    '',
+    `<b>${escapeHtml(data.title as string)}</b>`,
+  ]
+  if (dateLabel) lines.push(`📅 ${escapeHtml(dateLabel)}${escapeHtml(timeLabel)}`)
+  lines.push('', escapeHtml(data.banner_text as string))
+  if (data.body) lines.push('', escapeHtml(data.body as string))
+  lines.push('', `<a href="${editUrl}">▶ 編集ページを開く</a>`)
+
+  const result = await sendTelegramMessage({
+    text: lines.join('\n'),
+    parseMode: 'HTML',
+    disablePreview: true,
+  })
+  if (result.ok) {
+    return { ok: true, message: result.skipped ? 'env未設定でスキップ' : '送信しました' }
+  }
+  return { ok: false, message: result.error }
+}

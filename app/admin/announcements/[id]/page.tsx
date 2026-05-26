@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
-import { updateAnnouncement, deleteAnnouncement, type AnnouncementInput } from '../actions'
+import { updateAnnouncement, deleteAnnouncement, sendTelegramTest, type AnnouncementInput } from '../actions'
 import { AnnouncementForm } from '../new/page'
 
 export default function EditAnnouncementPage({ params }: { params: Promise<{ id: string }> }) {
@@ -109,6 +109,20 @@ export default function EditAnnouncementPage({ params }: { params: Promise<{ id:
           className="w-full bg-stone-800 text-white py-3 rounded-2xl font-medium disabled:opacity-50"
         >
           {saving ? '保存中…' : '保存'}
+        </button>
+        <button
+          onClick={async () => {
+            try {
+              const res = await sendTelegramTest(id)
+              if (res.ok) toast.success(`Telegram: ${res.message}`)
+              else toast.error(`Telegram: ${res.message}`)
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : 'failed')
+            }
+          }}
+          className="w-full bg-white border border-sky-300 text-sky-700 py-3 rounded-2xl font-medium"
+        >
+          📲 Telegram でテスト送信
         </button>
         <button
           onClick={handleDelete}
