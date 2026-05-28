@@ -237,9 +237,22 @@ export async function GET(req: Request): Promise<Response> {
     }
 
     if (lineRows.length > 0) {
-      const { error: lineErr } = await sb
+      // Try upsert with revenue_category. If the column doesn't exist yet
+      // (migration not applied), retry without it so sync still succeeds.
+      let { error: lineErr } = await sb
         .from('keiri_square_line_items')
         .upsert(lineRows, { onConflict: 'order_id,line_uid' })
+      if (lineErr && /revenue_category|column .* does not exist/i.test(lineErr.message)) {
+        const lineRowsWithoutRC = lineRows.map(r => {
+          const copy: Record<string, unknown> = { ...r }
+          delete copy.revenue_category
+          return copy
+        })
+        const retry = await sb
+          .from('keiri_square_line_items')
+          .upsert(lineRowsWithoutRC, { onConflict: 'order_id,line_uid' })
+        lineErr = retry.error
+      }
       if (lineErr) {
         return NextResponse.json(
           { error: lineErr.message, detail: 'keiri_square_line_items upsert failed' },

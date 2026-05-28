@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
+import { classifyRevenue } from '@/lib/keiri/classifyRevenue'
 
 function thisMonthJST(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
@@ -39,7 +40,6 @@ type LineItem = {
   payment_id: string | null
   gross_amount: number
   quantity: number
-  revenue_category: string | null
 }
 
 const REVENUE_LABEL: Record<string, string> = {
@@ -113,7 +113,7 @@ function SquareSalesInner() {
           .maybeSingle(),
         supabase
           .from('keiri_square_line_items')
-          .select('tax_rate, category, item_name, variation_name, payment_id, gross_amount, quantity, revenue_category')
+          .select('tax_rate, category, item_name, variation_name, payment_id, gross_amount, quantity')
           .gte('date', start)
           .lt('date', next),
       ])
@@ -207,7 +207,11 @@ function SquareSalesInner() {
   }
   const categoryBuckets = new Map<string, TaxBucket>()
   for (const li of lineItems) {
-    const rc = li.revenue_category ?? 'unknown'
+    const rc = classifyRevenue({
+      taxRate: li.tax_rate,
+      itemName: li.item_name,
+      category: li.category,
+    })
     const bucket = revenueBuckets[rc] ?? revenueBuckets.unknown
     bucket.gross += li.gross_amount || 0
     bucket.count += 1
