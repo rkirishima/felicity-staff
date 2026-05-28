@@ -31,7 +31,7 @@ export async function GET(req: Request): Promise<Response> {
   const sb = createServiceClient()
   const overrides = await loadSquareOverrides(sb)
 
-  const [sqRes, stripeRes, invRes, expRes, bankRes, ordersRes] = await Promise.all([
+  const [sqRes, stripeRes, invRes, expRes, bankRes, ordersRes, payoutsRes] = await Promise.all([
     sb.from('keiri_square_line_items')
       .select('date, created_at_jst, item_name, variation_name, category, quantity, gross_amount, tax_amount, tax_rate, payment_id')
       .gte('date', start).lt('date', end)
@@ -57,6 +57,10 @@ export async function GET(req: Request): Promise<Response> {
       .select('amount, status')
       .in('status', ['paid', 'shipped', 'completed'])
       .gte('created_at', beginIso).lt('created_at', endIso),
+    sb.from('keiri_square_payouts')
+      .select('payout_id, completed_at, amount, fee_amount, gross_amount, period_start, period_end, status')
+      .gte('completed_at', beginIso).lt('completed_at', endIso)
+      .order('completed_at'),
   ])
 
   type SqLine = { date: string; created_at_jst: string; item_name: string | null; variation_name: string | null; category: string | null; quantity: number; gross_amount: number; tax_amount: number | null; tax_rate: number | null; payment_id: string | null }
@@ -71,6 +75,10 @@ export async function GET(req: Request): Promise<Response> {
   const expenses = (expRes.data ?? []) as ExpRow[]
   const bank = (bankRes.data ?? []) as BankRow[]
   const orderTotal = (ordersRes.data ?? []).reduce((s: number, o: { amount?: number }) => s + (o.amount ?? 0), 0)
+  type PayoutRow = { payout_id: string; completed_at: string | null; amount: number; fee_amount: number; gross_amount: number; period_start: string | null; period_end: string | null; status: string | null }
+  const payouts = (payoutsRes?.data ?? []) as PayoutRow[]
+  const payoutTotal = payouts.reduce((s, p) => s + p.amount, 0)
+  const feeTotal = payouts.reduce((s, p) => s + p.fee_amount, 0)
 
   // 4-bucket totals
   const buckets = { dine_in_10: 0, goods_10: 0, beans_8: 0, takeout_8: 0, unknown: 0 }
@@ -122,6 +130,8 @@ export async function GET(req: Request): Promise<Response> {
   push('粗利', (sqTotal + orderTotal + invTotal) - expTotal)
   push('銀行入金合計（参考）', bankCredit)
   push('銀行出金合計（参考）', bankDebit)
+  push('Square 入金（銀行振込実額）', payoutTotal)
+  push('Square 手数料合計', feeTotal)
   push('')
 
   push('2) 店舗 Square 売上明細')
@@ -201,6 +211,22 @@ export async function GET(req: Request): Promise<Response> {
   push('日付', '摘要', '出金', '入金', '残高')
   for (const b of bank) {
     push(b.date, b.description, b.debit, b.credit, b.balance)
+  }
+  push('')
+
+  push('7) Square 入金（銀行振込・手数料）')
+  push('Payout ID', '入金日', '対象期間 開始', '対象期間 終了', '売上総額', '手数料', '入金額（実額）', 'ステータス')
+  for (const p of payouts) {
+    push(
+      p.payout_id,
+      p.completed_at ? p.completed_at.slice(0, 10) : null,
+      p.period_start,
+      p.period_end,
+      p.gross_amount,
+      p.fee_amount,
+      p.amount,
+      p.status,
+    )
   }
 
   // UTF-8 BOM so Excel opens with correct encoding

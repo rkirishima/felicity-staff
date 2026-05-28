@@ -45,6 +45,17 @@ type LineItem = {
   created_at_jst: string
 }
 
+type PayoutRow = {
+  payout_id: string
+  status: string | null
+  completed_at: string | null
+  amount: number
+  fee_amount: number
+  gross_amount: number
+  period_start: string | null
+  period_end: string | null
+}
+
 const REVENUE_LABEL: Record<string, string> = {
   dine_in_10: '🍽 10% イートイン',
   goods_10: '👕 10% 物販（グッズ）',
@@ -82,10 +93,12 @@ function SquareSalesInner() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [overrides, setOverrides] = useState<Map<string, RevenueCategory>>(new Map())
+  const [payouts, setPayouts] = useState<PayoutRow[]>([])
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [monthTotalCached, setMonthTotalCached] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [syncingPayouts, setSyncingPayouts] = useState(false)
   const [reload, setReload] = useState(0)
   const [view, setView] = useState<'product' | 'payment'>('product')
 
@@ -103,7 +116,7 @@ function SquareSalesInner() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const [pRes, mrRes, liRes, ovRes] = await Promise.all([
+      const [pRes, mrRes, liRes, ovRes, poRes] = await Promise.all([
         supabase
           .from('keiri_square_payments')
           .select('id, payment_id, date, created_at_jst, amount, card_brand, last_4')
@@ -125,6 +138,12 @@ function SquareSalesInner() {
         supabase
           .from('keiri_square_item_overrides')
           .select('item_name, revenue_category'),
+        supabase
+          .from('keiri_square_payouts')
+          .select('payout_id, status, completed_at, amount, fee_amount, gross_amount, period_start, period_end')
+          .gte('completed_at', new Date(`${start}T00:00:00+09:00`).toISOString())
+          .lt('completed_at', new Date(`${next}T00:00:00+09:00`).toISOString())
+          .order('completed_at', { ascending: false }),
       ])
       if (cancelled) return
       setPayments((pRes.data ?? []) as Payment[])
@@ -134,6 +153,7 @@ function SquareSalesInner() {
         ovMap.set(o.item_name, o.revenue_category as RevenueCategory)
       }
       setOverrides(ovMap)
+      setPayouts((poRes?.data ?? []) as PayoutRow[])
       setMonthTotalCached((mrRes.data?.amount as number | undefined) ?? null)
       setLastSync((mrRes.data?.last_synced_at as string | undefined) ?? null)
       setLoading(false)
@@ -180,6 +200,27 @@ function SquareSalesInner() {
       alert(e instanceof Error ? e.message : '同期失敗')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function syncPayouts() {
+    setSyncingPayouts(true)
+    try {
+      const [y, m] = month.split('-').map(s => parseInt(s, 10))
+      const from = `${month}-01`
+      const nextYm = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
+      const to = `${nextYm}-01`
+      const res = await fetch(`/api/keiri/square-payouts-sync?from=${from}&to=${to}`)
+      const data = await res.json()
+      if (!res.ok) {
+        alert(`入金同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
+      } else {
+        setReload(n => n + 1)
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '入金同期失敗')
+    } finally {
+      setSyncingPayouts(false)
     }
   }
 
@@ -375,6 +416,58 @@ function SquareSalesInner() {
             )}
           </div>
         )}
+
+        <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-stone-500 tracking-wider">Square 入金（銀行振込・手数料）</p>
+            <button
+              onClick={syncPayouts}
+              disabled={syncingPayouts}
+              className="text-xs text-blue-700 underline disabled:opacity-50"
+            >
+              {syncingPayouts ? '同期中…' : '🔄 入金を同期'}
+            </button>
+          </div>
+          {payouts.length === 0 ? (
+            <p className="text-stone-400 text-xs">この月の入金記録はまだありません。「🔄 入金を同期」を押してください。</p>
+          ) : (
+            <ul className="space-y-2">
+              {payouts.map(p => (
+                <li key={p.payout_id} className="border-t border-stone-100 pt-2 first:border-0 first:pt-0">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-stone-700">
+                      {p.completed_at ? new Date(p.completed_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }) : '—'}
+                      <span className="text-[10px] text-stone-400 ml-2">入金</span>
+                    </span>
+                    <span className="tabular-nums text-stone-900 font-medium">
+                      ¥{p.amount.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-stone-500 mt-0.5">
+                    <span>
+                      {p.period_start && p.period_end
+                        ? `対象 ${p.period_start.slice(5)}〜${p.period_end.slice(5)}`
+                        : '対象期間: —'}
+                    </span>
+                    <span className="tabular-nums">
+                      手数料 ¥{p.fee_amount.toLocaleString()}
+                      <span className="text-stone-400 ml-2">/ 売上総額 ¥{p.gross_amount.toLocaleString()}</span>
+                    </span>
+                  </div>
+                </li>
+              ))}
+              <li className="border-t border-stone-200 pt-2 flex justify-between text-sm font-medium">
+                <span className="text-stone-700">入金合計</span>
+                <span className="tabular-nums text-stone-900">
+                  ¥{payouts.reduce((s, p) => s + p.amount, 0).toLocaleString()}
+                  <span className="text-[10px] text-stone-400 ml-2">
+                    手数料 ¥{payouts.reduce((s, p) => s + p.fee_amount, 0).toLocaleString()}
+                  </span>
+                </span>
+              </li>
+            </ul>
+          )}
+        </div>
 
         {loading ? (
           <p className="text-center text-stone-400 text-sm py-12">読み込み中...</p>
