@@ -33,6 +33,7 @@ type Payment = {
 }
 
 type LineItem = {
+  id: string
   tax_rate: number | null
   category: string | null
   item_name: string | null
@@ -40,6 +41,8 @@ type LineItem = {
   payment_id: string | null
   gross_amount: number
   quantity: number
+  date: string
+  created_at_jst: string
 }
 
 const REVENUE_LABEL: Record<string, string> = {
@@ -83,6 +86,7 @@ function SquareSalesInner() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [reload, setReload] = useState(0)
+  const [view, setView] = useState<'product' | 'payment'>('product')
 
   useEffect(() => {
     if (!getAdminSession()) {
@@ -113,9 +117,10 @@ function SquareSalesInner() {
           .maybeSingle(),
         supabase
           .from('keiri_square_line_items')
-          .select('tax_rate, category, item_name, variation_name, payment_id, gross_amount, quantity')
+          .select('id, tax_rate, category, item_name, variation_name, payment_id, gross_amount, quantity, date, created_at_jst')
           .gte('date', start)
-          .lt('date', next),
+          .lt('date', next)
+          .order('created_at_jst', { ascending: false }),
       ])
       if (cancelled) return
       setPayments((pRes.data ?? []) as Payment[])
@@ -180,6 +185,19 @@ function SquareSalesInner() {
     }
     return Array.from(map.values()).sort((a, b) => (a.date < b.date ? 1 : -1))
   }, [payments])
+
+  type ItemDayGroup = { date: string; total: number; count: number; items: LineItem[] }
+  const itemDayGroups: ItemDayGroup[] = useMemo(() => {
+    const map = new Map<string, ItemDayGroup>()
+    for (const li of lineItems) {
+      const cur = map.get(li.date) ?? { date: li.date, total: 0, count: 0, items: [] }
+      cur.total += li.gross_amount || 0
+      cur.count += 1
+      cur.items.push(li)
+      map.set(li.date, cur)
+    }
+    return Array.from(map.values()).sort((a, b) => (a.date < b.date ? 1 : -1))
+  }, [lineItems])
 
   const monthTotal = payments.reduce((s, p) => s + p.amount, 0)
   const monthCount = payments.length
@@ -358,69 +376,132 @@ function SquareSalesInner() {
             <p className="text-stone-400 text-xs mb-4">「🔄 この月を同期」で Square から取り込めます</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {dayGroups.map(g => (
-              <div key={g.date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div className="flex justify-between items-baseline px-4 py-3 bg-stone-50 border-b border-stone-100">
-                  <p className="text-sm font-medium text-stone-700">
-                    {new Date(g.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' })}
-                  </p>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-xs text-stone-400">{g.count}件</span>
-                    <span className="text-base font-medium text-blue-700 tabular-nums">
-                      ¥{g.total.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-                <ul className="divide-y divide-stone-100">
-                  {g.payments.map(p => {
-                    const lines = linesByPayment.get(p.payment_id) ?? []
-                    return (
-                      <li key={p.id} className="px-4 py-2.5">
-                        <div className="flex justify-between items-center text-sm">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs text-stone-400 tabular-nums">
-                              {new Date(p.created_at_jst).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })}
+          <>
+            <div className="flex gap-1 bg-white rounded-2xl p-1 shadow-sm">
+              <button
+                onClick={() => setView('product')}
+                className={`flex-1 py-2 text-xs rounded-xl transition ${
+                  view === 'product' ? 'bg-stone-800 text-white font-medium' : 'text-stone-500'
+                }`}
+              >
+                商品単位
+              </button>
+              <button
+                onClick={() => setView('payment')}
+                className={`flex-1 py-2 text-xs rounded-xl transition ${
+                  view === 'payment' ? 'bg-stone-800 text-white font-medium' : 'text-stone-500'
+                }`}
+              >
+                決済単位
+              </button>
+            </div>
+
+            {view === 'product' ? (
+              <div className="space-y-3">
+                {itemDayGroups.map(g => (
+                  <div key={g.date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <div className="flex justify-between items-baseline px-4 py-3 bg-stone-50 border-b border-stone-100">
+                      <p className="text-sm font-medium text-stone-700">
+                        {new Date(g.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' })}
+                      </p>
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-xs text-stone-400">{g.count}点</span>
+                        <span className="text-base font-medium text-blue-700 tabular-nums">
+                          ¥{g.total.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <ul className="divide-y divide-stone-100">
+                      {g.items.map(li => (
+                        <li key={li.id} className="px-4 py-2 flex justify-between items-center text-sm gap-3">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="text-xs text-stone-400 tabular-nums whitespace-nowrap">
+                              {new Date(li.created_at_jst).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })}
                             </span>
-                            {p.card_brand && (
-                              <span className="text-[10px] px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded">
-                                {p.card_brand}
-                                {p.last_4 ? ` ····${p.last_4}` : ''}
-                              </span>
-                            )}
+                            <span className="truncate text-stone-800">
+                              {li.item_name ?? '(unnamed)'}
+                              {li.variation_name && <span className="text-stone-500"> / {li.variation_name}</span>}
+                              {li.quantity > 1 && <span className="text-stone-500"> ×{li.quantity}</span>}
+                            </span>
                           </div>
-                          <span className="text-stone-800 font-medium tabular-nums">
-                            ¥{p.amount.toLocaleString()}
+                          <span className="tabular-nums text-stone-800 font-medium whitespace-nowrap">
+                            ¥{li.gross_amount.toLocaleString()}
+                            {li.tax_rate !== null && (
+                              <span className="text-stone-400 ml-1 text-[10px]">[{li.tax_rate}%]</span>
+                            )}
                           </span>
-                        </div>
-                        {lines.length > 0 ? (
-                          <ul className="mt-1.5 pl-12 space-y-0.5">
-                            {lines.map((li, idx) => (
-                              <li key={idx} className="flex justify-between items-baseline text-[11px] text-stone-500">
-                                <span className="truncate pr-2">
-                                  {li.item_name ?? '(unnamed)'}
-                                  {li.variation_name && <span className="text-stone-400"> / {li.variation_name}</span>}
-                                  {li.quantity > 1 && <span className="text-stone-400"> ×{li.quantity}</span>}
-                                </span>
-                                <span className="tabular-nums text-stone-600 whitespace-nowrap">
-                                  ¥{li.gross_amount.toLocaleString()}
-                                  {li.tax_rate !== null && (
-                                    <span className="text-stone-400 ml-1">[{li.tax_rate}%]</span>
-                                  )}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="mt-1 pl-12 text-[10px] text-stone-300">明細未取得</p>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            ) : (
+              <div className="space-y-3">
+                {dayGroups.map(g => (
+                  <div key={g.date} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <div className="flex justify-between items-baseline px-4 py-3 bg-stone-50 border-b border-stone-100">
+                      <p className="text-sm font-medium text-stone-700">
+                        {new Date(g.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' })}
+                      </p>
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-xs text-stone-400">{g.count}件</span>
+                        <span className="text-base font-medium text-blue-700 tabular-nums">
+                          ¥{g.total.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <ul className="divide-y divide-stone-100">
+                      {g.payments.map(p => {
+                        const lines = linesByPayment.get(p.payment_id) ?? []
+                        return (
+                          <li key={p.id} className="px-4 py-2.5">
+                            <div className="flex justify-between items-center text-sm">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs text-stone-400 tabular-nums">
+                                  {new Date(p.created_at_jst).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                {p.card_brand && (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded">
+                                    {p.card_brand}
+                                    {p.last_4 ? ` ····${p.last_4}` : ''}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-stone-800 font-medium tabular-nums">
+                                ¥{p.amount.toLocaleString()}
+                              </span>
+                            </div>
+                            {lines.length > 0 ? (
+                              <ul className="mt-1.5 pl-12 space-y-0.5">
+                                {lines.map((li, idx) => (
+                                  <li key={idx} className="flex justify-between items-baseline text-[11px] text-stone-500">
+                                    <span className="truncate pr-2">
+                                      {li.item_name ?? '(unnamed)'}
+                                      {li.variation_name && <span className="text-stone-400"> / {li.variation_name}</span>}
+                                      {li.quantity > 1 && <span className="text-stone-400"> ×{li.quantity}</span>}
+                                    </span>
+                                    <span className="tabular-nums text-stone-600 whitespace-nowrap">
+                                      ¥{li.gross_amount.toLocaleString()}
+                                      {li.tax_rate !== null && (
+                                        <span className="text-stone-400 ml-1">[{li.tax_rate}%]</span>
+                                      )}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-1 pl-12 text-[10px] text-stone-300">明細未取得</p>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>
