@@ -39,6 +39,15 @@ type LineItem = {
   payment_id: string | null
   gross_amount: number
   quantity: number
+  revenue_category: string | null
+}
+
+const REVENUE_LABEL: Record<string, string> = {
+  dine_in_10: '🍽 10% イートイン',
+  goods_10: '👕 10% 物販（グッズ）',
+  beans_8: '☕ 8% 豆等の物販',
+  takeout_8: '🥡 8% テイクアウト',
+  unknown: '❓ 未分類',
 }
 
 type DayGroup = {
@@ -104,7 +113,7 @@ function SquareSalesInner() {
           .maybeSingle(),
         supabase
           .from('keiri_square_line_items')
-          .select('tax_rate, category, item_name, variation_name, payment_id, gross_amount, quantity')
+          .select('tax_rate, category, item_name, variation_name, payment_id, gross_amount, quantity, revenue_category')
           .gte('date', start)
           .lt('date', next),
       ])
@@ -189,23 +198,28 @@ function SquareSalesInner() {
   }, [lineItems])
 
   type TaxBucket = { gross: number; count: number }
-  const taxBuckets: { '10': TaxBucket; '8': TaxBucket; unknown: TaxBucket } = {
-    '10': { gross: 0, count: 0 },
-    '8': { gross: 0, count: 0 },
+  const revenueBuckets: Record<string, TaxBucket> = {
+    dine_in_10: { gross: 0, count: 0 },
+    goods_10: { gross: 0, count: 0 },
+    beans_8: { gross: 0, count: 0 },
+    takeout_8: { gross: 0, count: 0 },
     unknown: { gross: 0, count: 0 },
   }
   const categoryBuckets = new Map<string, TaxBucket>()
   for (const li of lineItems) {
-    const key = li.tax_rate === 10 ? '10' : li.tax_rate === 8 ? '8' : 'unknown'
-    taxBuckets[key].gross += li.gross_amount || 0
-    taxBuckets[key].count += 1
+    const rc = li.revenue_category ?? 'unknown'
+    const bucket = revenueBuckets[rc] ?? revenueBuckets.unknown
+    bucket.gross += li.gross_amount || 0
+    bucket.count += 1
     const cat = li.category ?? '未分類'
     const cur = categoryBuckets.get(cat) ?? { gross: 0, count: 0 }
     cur.gross += li.gross_amount || 0
     cur.count += 1
     categoryBuckets.set(cat, cur)
   }
-  const lineItemSubtotal = taxBuckets['10'].gross + taxBuckets['8'].gross + taxBuckets.unknown.gross
+  const sub10 = revenueBuckets.dine_in_10.gross + revenueBuckets.goods_10.gross
+  const sub8 = revenueBuckets.beans_8.gross + revenueBuckets.takeout_8.gross
+  const lineItemSubtotal = sub10 + sub8 + revenueBuckets.unknown.gross
 
   return (
     <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
@@ -268,20 +282,36 @@ function SquareSalesInner() {
 
         {!loading && lineItems.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
-            <p className="text-xs text-stone-500 tracking-wider">税区分別売上（商品ライン集計）</p>
+            <p className="text-xs text-stone-500 tracking-wider">税区分別売上（税理士提出用 4区分）</p>
             <ul className="space-y-1.5 text-sm">
               <li className="flex justify-between">
-                <span className="text-stone-700">10% 課税売上</span>
-                <span className="tabular-nums text-stone-900 font-medium">¥{taxBuckets['10'].gross.toLocaleString()}</span>
+                <span className="text-stone-700">{REVENUE_LABEL.dine_in_10}</span>
+                <span className="tabular-nums text-stone-900 font-medium">¥{revenueBuckets.dine_in_10.gross.toLocaleString()}</span>
               </li>
               <li className="flex justify-between">
-                <span className="text-stone-700">8% 軽減税率売上</span>
-                <span className="tabular-nums text-stone-900 font-medium">¥{taxBuckets['8'].gross.toLocaleString()}</span>
+                <span className="text-stone-700">{REVENUE_LABEL.goods_10}</span>
+                <span className="tabular-nums text-stone-900 font-medium">¥{revenueBuckets.goods_10.gross.toLocaleString()}</span>
               </li>
-              {taxBuckets.unknown.gross > 0 && (
-                <li className="flex justify-between text-amber-700">
-                  <span>未分類（要設定）</span>
-                  <span className="tabular-nums font-medium">¥{taxBuckets.unknown.gross.toLocaleString()}</span>
+              <li className="flex justify-between text-xs pt-1 border-t border-stone-50">
+                <span className="text-stone-400">10% 合計</span>
+                <span className="tabular-nums text-stone-500">¥{sub10.toLocaleString()}</span>
+              </li>
+              <li className="flex justify-between pt-2">
+                <span className="text-stone-700">{REVENUE_LABEL.beans_8}</span>
+                <span className="tabular-nums text-stone-900 font-medium">¥{revenueBuckets.beans_8.gross.toLocaleString()}</span>
+              </li>
+              <li className="flex justify-between">
+                <span className="text-stone-700">{REVENUE_LABEL.takeout_8}</span>
+                <span className="tabular-nums text-stone-900 font-medium">¥{revenueBuckets.takeout_8.gross.toLocaleString()}</span>
+              </li>
+              <li className="flex justify-between text-xs pt-1 border-t border-stone-50">
+                <span className="text-stone-400">8% 合計</span>
+                <span className="tabular-nums text-stone-500">¥{sub8.toLocaleString()}</span>
+              </li>
+              {revenueBuckets.unknown.gross > 0 && (
+                <li className="flex justify-between text-amber-700 pt-2">
+                  <span>{REVENUE_LABEL.unknown}（要設定）</span>
+                  <span className="tabular-nums font-medium">¥{revenueBuckets.unknown.gross.toLocaleString()}</span>
                 </li>
               )}
               <li className="flex justify-between pt-2 border-t border-stone-100">
@@ -290,14 +320,14 @@ function SquareSalesInner() {
               </li>
               {monthTotal > 0 && Math.abs(monthTotal - lineItemSubtotal) > 1 && (
                 <li className="text-[10px] text-amber-600">
-                  ※ 決済合計 ¥{monthTotal.toLocaleString()} と差分 ¥{(monthTotal - lineItemSubtotal).toLocaleString()}（手数料・割引・端数）
+                  ※ 決済合計 ¥{monthTotal.toLocaleString()} と差分 ¥{(monthTotal - lineItemSubtotal).toLocaleString()}（手数料・割引・端数・分類前明細）
                 </li>
               )}
             </ul>
 
             {categoryBuckets.size > 0 && (
               <details className="pt-1">
-                <summary className="text-xs text-stone-500 cursor-pointer">カテゴリ別内訳</summary>
+                <summary className="text-xs text-stone-500 cursor-pointer">Square カテゴリ別内訳</summary>
                 <ul className="mt-2 space-y-1 text-xs">
                   {Array.from(categoryBuckets.entries())
                     .sort((a, b) => b[1].gross - a[1].gross)

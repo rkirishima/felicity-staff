@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { classifyRevenue } from '@/lib/keiri/classifyRevenue'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -208,6 +209,12 @@ export async function GET(req: Request): Promise<Response> {
           taxBreakdown[key] = cur
         }
 
+        const revenue_category = classifyRevenue({
+          taxRate,
+          itemName: li.name ?? null,
+          category: li.category_name ?? null,
+        })
+
         lineRows.push({
           order_id: order.id,
           payment_id: payment?.id ?? null,
@@ -220,6 +227,7 @@ export async function GET(req: Request): Promise<Response> {
           gross_amount: gross,
           tax_amount: taxAmt,
           tax_rate: taxRate,
+          revenue_category,
           date: dateJst,
           created_at_jst: created,
           raw: li,
