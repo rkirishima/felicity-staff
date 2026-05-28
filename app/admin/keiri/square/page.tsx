@@ -35,6 +35,8 @@ type LineItem = {
   tax_rate: number | null
   category: string | null
   item_name: string | null
+  variation_name: string | null
+  payment_id: string | null
   gross_amount: number
   quantity: number
 }
@@ -102,7 +104,7 @@ function SquareSalesInner() {
           .maybeSingle(),
         supabase
           .from('keiri_square_line_items')
-          .select('tax_rate, category, item_name, gross_amount, quantity')
+          .select('tax_rate, category, item_name, variation_name, payment_id, gross_amount, quantity')
           .gte('date', start)
           .lt('date', next),
       ])
@@ -173,6 +175,18 @@ function SquareSalesInner() {
   const monthTotal = payments.reduce((s, p) => s + p.amount, 0)
   const monthCount = payments.length
   const showCachedFallback = monthCount === 0 && monthTotalCached !== null && monthTotalCached > 0
+
+  // Group line items by payment_id for inline product display
+  const linesByPayment = useMemo(() => {
+    const map = new Map<string, LineItem[]>()
+    for (const li of lineItems) {
+      if (!li.payment_id) continue
+      const arr = map.get(li.payment_id) ?? []
+      arr.push(li)
+      map.set(li.payment_id, arr)
+    }
+    return map
+  }, [lineItems])
 
   type TaxBucket = { gross: number; count: number }
   const taxBuckets: { '10': TaxBucket; '8': TaxBucket; unknown: TaxBucket } = {
@@ -325,24 +339,50 @@ function SquareSalesInner() {
                   </div>
                 </div>
                 <ul className="divide-y divide-stone-100">
-                  {g.payments.map(p => (
-                    <li key={p.id} className="px-4 py-2.5 flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs text-stone-400 tabular-nums">
-                          {new Date(p.created_at_jst).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        {p.card_brand && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded">
-                            {p.card_brand}
-                            {p.last_4 ? ` ····${p.last_4}` : ''}
+                  {g.payments.map(p => {
+                    const lines = linesByPayment.get(p.payment_id) ?? []
+                    return (
+                      <li key={p.id} className="px-4 py-2.5">
+                        <div className="flex justify-between items-center text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs text-stone-400 tabular-nums">
+                              {new Date(p.created_at_jst).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {p.card_brand && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded">
+                                {p.card_brand}
+                                {p.last_4 ? ` ····${p.last_4}` : ''}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-stone-800 font-medium tabular-nums">
+                            ¥{p.amount.toLocaleString()}
                           </span>
+                        </div>
+                        {lines.length > 0 ? (
+                          <ul className="mt-1.5 pl-12 space-y-0.5">
+                            {lines.map((li, idx) => (
+                              <li key={idx} className="flex justify-between items-baseline text-[11px] text-stone-500">
+                                <span className="truncate pr-2">
+                                  {li.item_name ?? '(unnamed)'}
+                                  {li.variation_name && <span className="text-stone-400"> / {li.variation_name}</span>}
+                                  {li.quantity > 1 && <span className="text-stone-400"> ×{li.quantity}</span>}
+                                </span>
+                                <span className="tabular-nums text-stone-600 whitespace-nowrap">
+                                  ¥{li.gross_amount.toLocaleString()}
+                                  {li.tax_rate !== null && (
+                                    <span className="text-stone-400 ml-1">[{li.tax_rate}%]</span>
+                                  )}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 pl-12 text-[10px] text-stone-300">明細未取得</p>
                         )}
-                      </div>
-                      <span className="text-stone-800 font-medium tabular-nums">
-                        ¥{p.amount.toLocaleString()}
-                      </span>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             ))}
