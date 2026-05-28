@@ -236,6 +236,39 @@ export async function GET(req: Request): Promise<Response> {
       }
     }
 
+    // Add synthetic line for every payment that Square didn't return line items
+    // for, so the month total reconciles with sum of line items.
+    const paymentsWithLines = new Set<string>()
+    for (const r of lineRows) {
+      const pid = (r as { payment_id?: string | null }).payment_id
+      if (pid) paymentsWithLines.add(pid)
+    }
+    let syntheticAdded = 0
+    for (const p of completed) {
+      if (paymentsWithLines.has(p.id)) continue
+      const createdJst = new Date(new Date(p.created_at).getTime() + 9 * 60 * 60 * 1000)
+      const dateJst = createdJst.toISOString().slice(0, 10)
+      lineRows.push({
+        order_id: `synthetic_${p.id}`,
+        payment_id: p.id,
+        line_uid: 'synthetic_no_order',
+        item_name: '(明細なし)',
+        variation_name: null,
+        catalog_object_id: null,
+        category: null,
+        quantity: 1,
+        gross_amount: p.total_money?.amount ?? 0,
+        tax_amount: 0,
+        tax_rate: null,
+        revenue_category: 'unknown',
+        date: dateJst,
+        created_at_jst: p.created_at,
+        raw: { synthetic: true, reason: 'no_line_items_from_square_api' },
+        synced_at: new Date().toISOString(),
+      })
+      syntheticAdded++
+    }
+
     if (lineRows.length > 0) {
       // Try upsert with revenue_category. If the column doesn't exist yet
       // (migration not applied), retry without it so sync still succeeds.
