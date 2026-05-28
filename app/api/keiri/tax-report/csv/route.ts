@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
-import { classifyRevenue, REVENUE_CATEGORY_LABEL } from '@/lib/keiri/classifyRevenue'
+import { effectiveRevenueCategory, REVENUE_CATEGORY_LABEL } from '@/lib/keiri/classifyRevenue'
+import { loadSquareOverrides } from '@/lib/keiri/loadSquareOverrides'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -28,6 +29,7 @@ export async function GET(req: Request): Promise<Response> {
   const endIso = new Date(`${nextMonth}-01T00:00:00+09:00`).toISOString()
 
   const sb = createServiceClient()
+  const overrides = await loadSquareOverrides(sb)
 
   const [sqRes, stripeRes, invRes, expRes, bankRes, ordersRes] = await Promise.all([
     sb.from('keiri_square_line_items')
@@ -73,7 +75,10 @@ export async function GET(req: Request): Promise<Response> {
   // 4-bucket totals
   const buckets = { dine_in_10: 0, goods_10: 0, beans_8: 0, takeout_8: 0, unknown: 0 }
   for (const li of sqLines) {
-    const rc = classifyRevenue({ taxRate: li.tax_rate, itemName: li.item_name, category: li.category })
+    const rc = effectiveRevenueCategory(
+      { tax_rate: li.tax_rate, item_name: li.item_name, category: li.category },
+      overrides,
+    )
     buckets[rc] += li.gross_amount || 0
   }
   const stripeByRate: Record<string, number> = { '10': 0, '8': 0, unknown: 0 }
@@ -122,7 +127,10 @@ export async function GET(req: Request): Promise<Response> {
   push('2) 店舗 Square 売上明細')
   push('日付', '時刻', '商品名', 'バリエーション', 'カテゴリ', '数量', '税抜金額', '消費税', '税率', '区分')
   for (const li of sqLines) {
-    const rc = classifyRevenue({ taxRate: li.tax_rate, itemName: li.item_name, category: li.category })
+    const rc = effectiveRevenueCategory(
+      { tax_rate: li.tax_rate, item_name: li.item_name, category: li.category },
+      overrides,
+    )
     push(
       li.date,
       timeFromIso(li.created_at_jst),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { classifyRevenue } from '@/lib/keiri/classifyRevenue'
+import { effectiveRevenueCategory } from '@/lib/keiri/classifyRevenue'
+import { loadSquareOverrides } from '@/lib/keiri/loadSquareOverrides'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -136,6 +137,7 @@ export async function GET(req: Request): Promise<Response> {
   const completed = all.filter(p => p.status === 'COMPLETED')
 
   const sb = createClient(supabaseUrl, serviceKey)
+  const overrides = await loadSquareOverrides(sb)
 
   const paymentRows = completed.map(p => {
     const createdJst = new Date(new Date(p.created_at).getTime() + 9 * 60 * 60 * 1000)
@@ -209,11 +211,14 @@ export async function GET(req: Request): Promise<Response> {
           taxBreakdown[key] = cur
         }
 
-        const revenue_category = classifyRevenue({
-          taxRate,
-          itemName: li.name ?? null,
-          category: li.category_name ?? null,
-        })
+        const revenue_category = effectiveRevenueCategory(
+          {
+            tax_rate: taxRate,
+            item_name: li.name ?? null,
+            category: li.category_name ?? null,
+          },
+          overrides,
+        )
 
         lineRows.push({
           order_id: order.id,
@@ -248,6 +253,10 @@ export async function GET(req: Request): Promise<Response> {
       if (paymentsWithLines.has(p.id)) continue
       const createdJst = new Date(new Date(p.created_at).getTime() + 9 * 60 * 60 * 1000)
       const dateJst = createdJst.toISOString().slice(0, 10)
+      const synthRC = effectiveRevenueCategory(
+        { tax_rate: null, item_name: '(明細なし)', category: null },
+        overrides,
+      )
       lineRows.push({
         order_id: `synthetic_${p.id}`,
         payment_id: p.id,
@@ -260,7 +269,7 @@ export async function GET(req: Request): Promise<Response> {
         gross_amount: p.total_money?.amount ?? 0,
         tax_amount: 0,
         tax_rate: null,
-        revenue_category: 'unknown',
+        revenue_category: synthRC,
         date: dateJst,
         created_at_jst: p.created_at,
         raw: { synthetic: true, reason: 'no_line_items_from_square_api' },

@@ -1,7 +1,8 @@
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { getCompanyInfo } from '@/lib/keiri/company'
-import { classifyRevenue } from '@/lib/keiri/classifyRevenue'
+import { effectiveRevenueCategory } from '@/lib/keiri/classifyRevenue'
+import { loadSquareOverrides } from '@/lib/keiri/loadSquareOverrides'
 import { TaxReportPDF, type TaxReportPDFInput } from '@/components/keiri/TaxReportPDF'
 
 export const runtime = 'nodejs'
@@ -21,6 +22,7 @@ export async function GET(req: Request): Promise<Response> {
   const endIso = new Date(`${nextMonth}-01T00:00:00+09:00`).toISOString()
 
   const sb = createServiceClient()
+  const overrides = await loadSquareOverrides(sb)
 
   const [sqRes, stripeRes, invRes, expRes, bankRes, ordRes] = await Promise.all([
     sb.from('keiri_square_line_items')
@@ -55,7 +57,10 @@ export async function GET(req: Request): Promise<Response> {
 
   const buckets = { dine_in_10: 0, goods_10: 0, beans_8: 0, takeout_8: 0, unknown: 0 }
   for (const li of (sqRes.data ?? []) as SqLine[]) {
-    const rc = classifyRevenue({ taxRate: li.tax_rate, itemName: li.item_name, category: li.category })
+    const rc = effectiveRevenueCategory(
+      { tax_rate: li.tax_rate, item_name: li.item_name, category: li.category },
+      overrides,
+    )
     buckets[rc] += li.gross_amount || 0
   }
   const stripeByRate = { '10': 0, '8': 0, unknown: 0 } as TaxReportPDFInput['stripeByRate']

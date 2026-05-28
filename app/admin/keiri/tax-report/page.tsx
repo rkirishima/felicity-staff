@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
-import { classifyRevenue } from '@/lib/keiri/classifyRevenue'
+import { effectiveRevenueCategory, type RevenueCategory } from '@/lib/keiri/classifyRevenue'
 
 function thisMonthJST(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
@@ -56,7 +56,7 @@ export default function TaxReportPage() {
       const beginIso = new Date(`${month}-01T00:00:00+09:00`).toISOString()
       const endIso = new Date(`${nextMonth}-01T00:00:00+09:00`).toISOString()
 
-      const [sqRes, stripeRes, invRes, expRes, bankRes, ordRes] = await Promise.all([
+      const [sqRes, stripeRes, invRes, expRes, bankRes, ordRes, ovRes] = await Promise.all([
         supabase.from('keiri_square_line_items')
           .select('tax_rate, category, item_name, gross_amount')
           .gte('date', start).lt('date', end),
@@ -78,12 +78,21 @@ export default function TaxReportPage() {
           .select('amount, status')
           .in('status', ['paid', 'shipped', 'completed'])
           .gte('created_at', beginIso).lt('created_at', endIso),
+        supabase.from('keiri_square_item_overrides').select('item_name, revenue_category'),
       ])
       if (cancelled) return
 
+      const overrides = new Map<string, RevenueCategory>()
+      for (const o of (ovRes?.data ?? []) as { item_name: string; revenue_category: string }[]) {
+        overrides.set(o.item_name, o.revenue_category as RevenueCategory)
+      }
+
       const buckets = { dine_in_10: 0, goods_10: 0, beans_8: 0, takeout_8: 0, unknown: 0 }
       for (const li of (sqRes.data ?? []) as { tax_rate: number | null; category: string | null; item_name: string | null; gross_amount: number }[]) {
-        const rc = classifyRevenue({ taxRate: li.tax_rate, itemName: li.item_name, category: li.category })
+        const rc = effectiveRevenueCategory(
+          { tax_rate: li.tax_rate, item_name: li.item_name, category: li.category },
+          overrides,
+        )
         buckets[rc] += li.gross_amount || 0
       }
       const stripeByRate = { '10': 0, '8': 0, unknown: 0 } as Preview['stripeByRate']

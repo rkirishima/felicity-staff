@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
-import { classifyRevenue } from '@/lib/keiri/classifyRevenue'
+import { effectiveRevenueCategory, type RevenueCategory } from '@/lib/keiri/classifyRevenue'
 
 function thisMonthJST(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
@@ -81,6 +81,7 @@ function SquareSalesInner() {
   const [month, setMonth] = useState(initialMonth)
   const [payments, setPayments] = useState<Payment[]>([])
   const [lineItems, setLineItems] = useState<LineItem[]>([])
+  const [overrides, setOverrides] = useState<Map<string, RevenueCategory>>(new Map())
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [monthTotalCached, setMonthTotalCached] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -102,7 +103,7 @@ function SquareSalesInner() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const [pRes, mrRes, liRes] = await Promise.all([
+      const [pRes, mrRes, liRes, ovRes] = await Promise.all([
         supabase
           .from('keiri_square_payments')
           .select('id, payment_id, date, created_at_jst, amount, card_brand, last_4')
@@ -121,10 +122,18 @@ function SquareSalesInner() {
           .gte('date', start)
           .lt('date', next)
           .order('created_at_jst', { ascending: false }),
+        supabase
+          .from('keiri_square_item_overrides')
+          .select('item_name, revenue_category'),
       ])
       if (cancelled) return
       setPayments((pRes.data ?? []) as Payment[])
       setLineItems((liRes.data ?? []) as LineItem[])
+      const ovMap = new Map<string, RevenueCategory>()
+      for (const o of (ovRes?.data ?? []) as { item_name: string; revenue_category: string }[]) {
+        ovMap.set(o.item_name, o.revenue_category as RevenueCategory)
+      }
+      setOverrides(ovMap)
       setMonthTotalCached((mrRes.data?.amount as number | undefined) ?? null)
       setLastSync((mrRes.data?.last_synced_at as string | undefined) ?? null)
       setLoading(false)
@@ -225,11 +234,10 @@ function SquareSalesInner() {
   }
   const categoryBuckets = new Map<string, TaxBucket>()
   for (const li of lineItems) {
-    const rc = classifyRevenue({
-      taxRate: li.tax_rate,
-      itemName: li.item_name,
-      category: li.category,
-    })
+    const rc = effectiveRevenueCategory(
+      { tax_rate: li.tax_rate, item_name: li.item_name, category: li.category },
+      overrides,
+    )
     const bucket = revenueBuckets[rc] ?? revenueBuckets.unknown
     bucket.gross += li.gross_amount || 0
     bucket.count += 1
