@@ -31,6 +31,8 @@ type Preview = {
   bankDebit: number
   sqTotal: number
   orderTotal: number
+  inventoryTotal: number
+  monthEnd: string
 }
 
 export default function TaxReportPage() {
@@ -56,7 +58,12 @@ export default function TaxReportPage() {
       const beginIso = new Date(`${month}-01T00:00:00+09:00`).toISOString()
       const endIso = new Date(`${nextMonth}-01T00:00:00+09:00`).toISOString()
 
-      const [sqRes, stripeRes, invRes, expRes, bankRes, ordRes, ovRes] = await Promise.all([
+      // month-end date
+      const monthEndDate = new Date(`${nextMonth}-01T00:00:00+09:00`)
+      monthEndDate.setUTCDate(monthEndDate.getUTCDate() - 1)
+      const monthEndStr = monthEndDate.toISOString().slice(0, 10)
+
+      const [sqRes, stripeRes, invRes, expRes, bankRes, ordRes, ovRes, inventoryRes] = await Promise.all([
         supabase.from('keiri_square_line_items')
           .select('tax_rate, category, item_name, gross_amount')
           .gte('date', start).lt('date', end),
@@ -79,6 +86,7 @@ export default function TaxReportPage() {
           .in('status', ['paid', 'shipped', 'completed'])
           .gte('created_at', beginIso).lt('created_at', endIso),
         supabase.from('keiri_square_item_overrides').select('item_name, revenue_category'),
+        supabase.from('keiri_inventory_snapshots').select('unit_price, quantity').eq('snapshot_date', monthEndStr),
       ])
       if (cancelled) return
 
@@ -100,6 +108,9 @@ export default function TaxReportPage() {
         const k = li.tax_rate === 10 ? '10' : li.tax_rate === 8 ? '8' : 'unknown'
         stripeByRate[k] += li.amount || 0
       }
+      const inventoryTotal = ((inventoryRes?.data ?? []) as { unit_price: number; quantity: number }[])
+        .reduce((s, r) => s + Math.round((r.unit_price || 0) * (r.quantity || 0)), 0)
+
       setPreview({
         buckets,
         stripeByRate,
@@ -109,6 +120,8 @@ export default function TaxReportPage() {
         bankDebit: (bankRes.data ?? []).reduce((s: number, r: { debit: number | null }) => s + (r.debit || 0), 0),
         orderTotal: (ordRes.data ?? []).reduce((s: number, r: { amount: number }) => s + (r.amount || 0), 0),
         sqTotal: buckets.dine_in_10 + buckets.goods_10 + buckets.beans_8 + buckets.takeout_8 + buckets.unknown,
+        inventoryTotal,
+        monthEnd: monthEndStr,
       })
       setLoading(false)
     })()
@@ -191,6 +204,9 @@ export default function TaxReportPage() {
 
                 <p className="text-xs text-stone-500 pt-3">経費</p>
                 <SummaryRow label="📒 経費合計" value={preview.expTotal} bold border />
+
+                <p className="text-xs text-stone-500 pt-3">月末在庫（{preview.monthEnd}）</p>
+                <SummaryRow label="📦 在庫合計" value={preview.inventoryTotal} bold border />
               </div>
             </div>
 
@@ -217,6 +233,9 @@ export default function TaxReportPage() {
               <p>4) 業販請求書（入金確認済）</p>
               <p>5) 経費明細</p>
               <p>6) 銀行入出金（参考・売上合計には未加算）</p>
+              <p>7) Square 入金（実額・対象期間・手数料）</p>
+              <p>8) Stripe 入金（実額・対象期間・手数料）</p>
+              <p>9) 月末在庫（食材・グッズ・資材）</p>
               <p className="text-[10px] text-stone-400 pt-1">UTF-8 BOM 付きで Excel でも文字化けしません</p>
             </div>
           </>

@@ -31,7 +31,12 @@ export async function GET(req: Request): Promise<Response> {
   const sb = createServiceClient()
   const overrides = await loadSquareOverrides(sb)
 
-  const [sqRes, stripeRes, invRes, expRes, bankRes, ordersRes, payoutsRes, stripePayoutsRes] = await Promise.all([
+  // Month-end snapshot date (last day of month)
+  const monthEnd = new Date(`${nextMonth}-01T00:00:00+09:00`)
+  monthEnd.setUTCDate(monthEnd.getUTCDate() - 1)
+  const monthEndStr = monthEnd.toISOString().slice(0, 10)
+
+  const [sqRes, stripeRes, invRes, expRes, bankRes, ordersRes, payoutsRes, stripePayoutsRes, invRes2] = await Promise.all([
     sb.from('keiri_square_line_items')
       .select('date, created_at_jst, item_name, variation_name, category, quantity, gross_amount, tax_amount, tax_rate, payment_id')
       .gte('date', start).lt('date', end)
@@ -65,6 +70,11 @@ export async function GET(req: Request): Promise<Response> {
       .select('payout_id, arrival_date, amount, fee_amount, gross_amount, charge_count, refund_count, period_start, period_end, status')
       .gte('arrival_date', start).lt('arrival_date', end)
       .order('arrival_date'),
+    sb.from('keiri_inventory_snapshots')
+      .select('item_name, category, unit_price, quantity, unit, note')
+      .eq('snapshot_date', monthEndStr)
+      .order('category')
+      .order('item_name'),
   ])
 
   type SqLine = { date: string; created_at_jst: string; item_name: string | null; variation_name: string | null; category: string | null; quantity: number; gross_amount: number; tax_amount: number | null; tax_rate: number | null; payment_id: string | null }
@@ -81,8 +91,15 @@ export async function GET(req: Request): Promise<Response> {
   const orderTotal = (ordersRes.data ?? []).reduce((s: number, o: { amount?: number }) => s + (o.amount ?? 0), 0)
   type PayoutRow = { payout_id: string; completed_at: string | null; amount: number; fee_amount: number; gross_amount: number; period_start: string | null; period_end: string | null; status: string | null }
   type StripePayoutRow = { payout_id: string; arrival_date: string | null; amount: number; fee_amount: number; gross_amount: number; charge_count: number; refund_count: number; period_start: string | null; period_end: string | null; status: string | null }
+  type InvRow2 = { item_name: string; category: string; unit_price: number; quantity: number; unit: string | null; note: string | null }
   const payouts = (payoutsRes?.data ?? []) as PayoutRow[]
   const stripePayouts = (stripePayoutsRes?.data ?? []) as StripePayoutRow[]
+  const inventory = (invRes2?.data ?? []) as InvRow2[]
+  const invByCat = { ingredients: 0, goods: 0, supplies: 0 } as Record<string, number>
+  for (const r of inventory) {
+    invByCat[r.category] = (invByCat[r.category] ?? 0) + Math.round(r.unit_price * r.quantity)
+  }
+  const invTotalSum = invByCat.ingredients + invByCat.goods + invByCat.supplies
   const payoutTotal = payouts.reduce((s, p) => s + p.amount, 0)
   const feeTotal = payouts.reduce((s, p) => s + p.fee_amount, 0)
   const stripePayoutTotal = stripePayouts.reduce((s, p) => s + p.amount, 0)
@@ -142,6 +159,10 @@ export async function GET(req: Request): Promise<Response> {
   push('Square 手数料合計', feeTotal)
   push('Stripe 入金（銀行振込実額）', stripePayoutTotal)
   push('Stripe 手数料合計', stripeFeeTotal)
+  push(`月末在庫（${monthEndStr} 時点）食材`, invByCat.ingredients)
+  push(`月末在庫（${monthEndStr} 時点）グッズ`, invByCat.goods)
+  push(`月末在庫（${monthEndStr} 時点）資材`, invByCat.supplies)
+  push(`月末在庫 合計`, invTotalSum)
   push('')
 
   push('2) 店舗 Square 売上明細')
@@ -254,6 +275,22 @@ export async function GET(req: Request): Promise<Response> {
       p.charge_count,
       p.refund_count,
       p.status,
+    )
+  }
+  push('')
+
+  push(`9) 月末在庫（${monthEndStr} 時点）`)
+  push('カテゴリ', '品名', '仕入単価', '残数', '単位', '小計', 'メモ')
+  for (const r of inventory) {
+    const catLabel = r.category === 'ingredients' ? '食材' : r.category === 'goods' ? 'グッズ' : '資材'
+    push(
+      catLabel,
+      r.item_name,
+      r.unit_price,
+      r.quantity,
+      r.unit,
+      Math.round(r.unit_price * r.quantity),
+      r.note,
     )
   }
 
