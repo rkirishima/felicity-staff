@@ -127,7 +127,7 @@ function fingerprint(r: { date: string; description: string; debit: number; cred
   return `${r.date}|${r.description}|${r.debit}|${r.credit}|${r.balance ?? ''}`
 }
 
-export async function importBankCsv(formData: FormData): Promise<{ inserted: number; skipped: number; total: number }> {
+export async function importBankCsv(formData: FormData): Promise<{ inserted: number; skipped: number; total: number; payablesMatched: number }> {
   const file = formData.get('file') as File | null
   if (!file) throw new Error('ファイルがありません')
 
@@ -172,22 +172,94 @@ export async function importBankCsv(formData: FormData): Promise<{ inserted: num
     fresh.push(r)
   }
 
+  const insertedIds = new Map<string, string>() // fingerprint -> bank tx id
   if (fresh.length > 0) {
-    const { error } = await sb.from('keiri_bank_transactions').insert(
-      fresh.map(r => ({
-        date: r.date,
-        description: r.description,
-        debit: r.debit,
-        credit: r.credit,
-        balance: r.balance,
-        source_file: file.name,
-      })),
-    )
+    const { data: ins, error } = await sb
+      .from('keiri_bank_transactions')
+      .insert(
+        fresh.map(r => ({
+          date: r.date,
+          description: r.description,
+          debit: r.debit,
+          credit: r.credit,
+          balance: r.balance,
+          source_file: file.name,
+        })),
+      )
+      .select('id, date, description, debit, credit, balance')
     if (error) throw new Error(error.message)
+    for (const row of (ins ?? []) as Array<{ id: string; date: string; description: string; debit: number; credit: number; balance: number | null }>) {
+      insertedIds.set(fingerprint(row), row.id)
+    }
+  }
+
+  // Auto-match debit rows (出金) to pending payables. A match requires:
+  //   - bank.debit > 0
+  //   - bank.debit === payable.amount (exact)
+  //   - vendor token appears in bank.description (case-insensitive)
+  //   - payable.due_date within ±14 days of bank.date
+  // On match, mark the payable as paid and link bank_transaction_id.
+  let payablesMatched = 0
+  if (fresh.length > 0) {
+    const debits = fresh.filter(r => r.debit > 0)
+    if (debits.length > 0) {
+      const debitMin = debits.reduce((min, r) => r.date < min ? r.date : min, debits[0].date)
+      const debitMax = debits.reduce((max, r) => r.date > max ? r.date : max, debits[0].date)
+      const minDateWindow = isoDate(debitMin, -14)
+      const maxDateWindow = isoDate(debitMax, +14)
+      const { data: payables } = await sb
+        .from('keiri_payables')
+        .select('id, vendor, amount, due_date')
+        .eq('status', 'pending')
+        .gte('due_date', minDateWindow)
+        .lte('due_date', maxDateWindow)
+
+      const candidates = ((payables ?? []) as Array<{ id: string; vendor: string; amount: number; due_date: string }>)
+      for (const d of debits) {
+        const txId = insertedIds.get(fingerprint(d))
+        if (!txId) continue
+        const desc = (d.description || '').toLowerCase()
+        const match = candidates.find(p => {
+          if (p.amount !== d.debit) return false
+          const vendorLower = p.vendor.toLowerCase()
+          // vendor name (or any whitespace-separated token >=2 chars) appears in description
+          if (desc.includes(vendorLower)) return true
+          const tokens = vendorLower.split(/\s+/).filter(t => t.length >= 2)
+          return tokens.some(t => desc.includes(t))
+        })
+        if (match) {
+          const { error: updErr } = await sb
+            .from('keiri_payables')
+            .update({
+              status: 'paid',
+              paid_at: new Date(d.date + 'T00:00:00+09:00').toISOString(),
+              paid_amount: d.debit,
+              paid_via: 'bank_transfer',
+              bank_transaction_id: txId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', match.id)
+            .eq('status', 'pending') // race guard
+          if (!updErr) {
+            payablesMatched++
+            // remove from candidates so we don't match same payable twice
+            const idx = candidates.indexOf(match)
+            if (idx >= 0) candidates.splice(idx, 1)
+          }
+        }
+      }
+    }
   }
 
   revalidatePath('/admin/keiri/bank')
-  return { inserted: fresh.length, skipped, total: rows.length }
+  if (payablesMatched > 0) revalidatePath('/admin/keiri/payables')
+  return { inserted: fresh.length, skipped, total: rows.length, payablesMatched }
+}
+
+function isoDate(base: string, deltaDays: number): string {
+  const d = new Date(base + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + deltaDays)
+  return d.toISOString().slice(0, 10)
 }
 
 export async function deleteBankTransaction(id: string): Promise<void> {

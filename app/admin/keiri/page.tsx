@@ -446,6 +446,12 @@ export default function KeiriDashboard() {
                 🏷 商品分類（未分類SKUの手動分類）
               </Link>
               <Link
+                href="/admin/keiri/payables"
+                className="bg-amber-700 text-white py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
+              >
+                💸 仕入れ未払（支払期日リマインダー）
+              </Link>
+              <Link
                 href="/admin/keiri/inventory"
                 className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
               >

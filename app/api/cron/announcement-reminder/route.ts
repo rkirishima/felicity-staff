@@ -21,26 +21,39 @@ export async function GET(req: Request): Promise<Response> {
   }
   const sb = createClient(supabaseUrl, serviceKey)
 
-  // today+7 in JST
+  // today+7 in JST + today
   const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000)
   const target = new Date(nowJst)
   target.setUTCDate(target.getUTCDate() + 7)
   const targetDate = target.toISOString().slice(0, 10)
+  const todayDate = nowJst.toISOString().slice(0, 10)
 
   const announcementsResult = await processAnnouncements(sb, targetDate)
   const eventsResult = await processEvents(sb, targetDate)
+  const payables7dayResult = await processPayables7Day(sb, targetDate)
+  const payablesTodayResult = await processPayablesToday(sb, todayDate)
 
-  const totalSent = announcementsResult.sent + eventsResult.sent
-  const totalFound = announcementsResult.found + eventsResult.found
-  const allFailures = [...announcementsResult.failures, ...eventsResult.failures]
+  const totalSent =
+    announcementsResult.sent + eventsResult.sent + payables7dayResult.sent + payablesTodayResult.sent
+  const totalFound =
+    announcementsResult.found + eventsResult.found + payables7dayResult.found + payablesTodayResult.found
+  const allFailures = [
+    ...announcementsResult.failures,
+    ...eventsResult.failures,
+    ...payables7dayResult.failures,
+    ...payablesTodayResult.failures,
+  ]
 
   return NextResponse.json({
     ok: allFailures.length === 0,
     targetDate,
+    todayDate,
     found: totalFound,
     sent: totalSent,
     announcements: announcementsResult,
     events: eventsResult,
+    payables7day: payables7dayResult,
+    payablesToday: payablesTodayResult,
   })
 }
 
@@ -210,5 +223,109 @@ function formatEventMessage(e: {
   if (e.description) lines.push('', escapeHtml(e.description))
   if (e.notes) lines.push('', `📝 ${escapeHtml(e.notes)}`)
   lines.push('', `<a href="https://staff.felicity.cafe/admin/events">▶ イベント管理を開く</a>`)
+  return lines.join('\n')
+}
+
+async function processPayables7Day(sb: SbClient, targetDate: string) {
+  const { data, error } = await sb
+    .from('keiri_payables')
+    .select('id, vendor, description, amount, invoice_number, due_date, notes')
+    .eq('status', 'pending')
+    .eq('due_date', targetDate)
+    .is('reminded_7day_at', null)
+  if (error) return { found: 0, sent: 0, sentIds: [], failures: [{ id: 'query', error: error.message }] }
+  const rows = data ?? []
+  const sentIds: string[] = []
+  const failures: { id: string; error: string }[] = []
+  for (const r of rows) {
+    const text = formatPayableMessage(
+      {
+        id: r.id as string,
+        vendor: r.vendor as string,
+        description: (r.description as string | null) ?? null,
+        amount: r.amount as number,
+        invoice_number: (r.invoice_number as string | null) ?? null,
+        due_date: r.due_date as string,
+        notes: (r.notes as string | null) ?? null,
+      },
+      '7days',
+    )
+    const result = await sendTelegramMessage({ text, parseMode: 'HTML', disablePreview: true })
+    if (result.ok) {
+      const { error: upErr } = await sb
+        .from('keiri_payables')
+        .update({ reminded_7day_at: new Date().toISOString() })
+        .eq('id', r.id as string)
+      if (upErr) failures.push({ id: r.id as string, error: `stamp: ${upErr.message}` })
+      else sentIds.push(r.id as string)
+    } else {
+      failures.push({ id: r.id as string, error: result.error })
+    }
+  }
+  return { found: rows.length, sent: sentIds.length, sentIds, failures }
+}
+
+async function processPayablesToday(sb: SbClient, targetDate: string) {
+  const { data, error } = await sb
+    .from('keiri_payables')
+    .select('id, vendor, description, amount, invoice_number, due_date, notes')
+    .eq('status', 'pending')
+    .eq('due_date', targetDate)
+    .is('reminded_same_day_at', null)
+  if (error) return { found: 0, sent: 0, sentIds: [], failures: [{ id: 'query', error: error.message }] }
+  const rows = data ?? []
+  const sentIds: string[] = []
+  const failures: { id: string; error: string }[] = []
+  for (const r of rows) {
+    const text = formatPayableMessage(
+      {
+        id: r.id as string,
+        vendor: r.vendor as string,
+        description: (r.description as string | null) ?? null,
+        amount: r.amount as number,
+        invoice_number: (r.invoice_number as string | null) ?? null,
+        due_date: r.due_date as string,
+        notes: (r.notes as string | null) ?? null,
+      },
+      'today',
+    )
+    const result = await sendTelegramMessage({ text, parseMode: 'HTML', disablePreview: true })
+    if (result.ok) {
+      const { error: upErr } = await sb
+        .from('keiri_payables')
+        .update({ reminded_same_day_at: new Date().toISOString() })
+        .eq('id', r.id as string)
+      if (upErr) failures.push({ id: r.id as string, error: `stamp: ${upErr.message}` })
+      else sentIds.push(r.id as string)
+    } else {
+      failures.push({ id: r.id as string, error: result.error })
+    }
+  }
+  return { found: rows.length, sent: sentIds.length, sentIds, failures }
+}
+
+function formatPayableMessage(
+  p: {
+    id: string
+    vendor: string
+    description: string | null
+    amount: number
+    invoice_number: string | null
+    due_date: string
+    notes: string | null
+  },
+  kind: '7days' | 'today',
+): string {
+  const heading = kind === '7days' ? '💸 仕入支払 1週間前リマインダー' : '🔴 仕入支払 本日が期日'
+  const lines = [
+    `<b>${heading}</b>`,
+    '',
+    `<b>${escapeHtml(p.vendor)}</b>  ¥${p.amount.toLocaleString()}`,
+    `📅 期日 ${escapeHtml(dateLabelJST(p.due_date))}`,
+  ]
+  if (p.description) lines.push(escapeHtml(p.description))
+  if (p.invoice_number) lines.push(`請求書 ${escapeHtml(p.invoice_number)}`)
+  if (p.notes) lines.push('', `📝 ${escapeHtml(p.notes)}`)
+  lines.push('', `<a href="https://staff.felicity.cafe/admin/keiri/payables">▶ 未払一覧を開く</a>`)
   return lines.join('\n')
 }

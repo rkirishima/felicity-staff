@@ -25,12 +25,13 @@ export default function BankImportPage() {
       const fd = new FormData()
       fd.append('file', file)
       const res = await importBankCsv(fd)
+      const payableHint = res.payablesMatched > 0 ? `／未払${res.payablesMatched}件を自動支払済` : ''
       if (res.skipped > 0 && res.inserted === 0) {
-        toast.success(`全${res.total}件すべて取込済み（重複スキップ）`)
+        toast.success(`全${res.total}件すべて取込済み（重複スキップ）${payableHint}`)
       } else if (res.skipped > 0) {
-        toast.success(`${res.inserted}件取込／${res.skipped}件は重複スキップ`)
+        toast.success(`${res.inserted}件取込／${res.skipped}件は重複スキップ${payableHint}`)
       } else {
-        toast.success(`${res.inserted}件 取り込みました`)
+        toast.success(`${res.inserted}件 取り込みました${payableHint}`)
       }
       router.push('/admin/keiri/bank')
     } catch (e) {
