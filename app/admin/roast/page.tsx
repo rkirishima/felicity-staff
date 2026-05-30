@@ -192,7 +192,7 @@ export default function RoastPage() {
   }
 
   return (
-    <main className="min-h-screen pb-24" style={{ backgroundColor: '#1c1917' }}>
+    <main className="min-h-screen pb-24" style={{ backgroundColor: '#1c1917', colorScheme: 'dark' }}>
       <div className="sticky top-0 z-10 px-4 pt-12 pb-4" style={{ backgroundColor: '#1c1917', borderBottom: '1px solid #292524' }}>
         <div className="flex items-center gap-2">
           <Flame size={20} className="text-amber-400" />
@@ -217,6 +217,7 @@ export default function RoastPage() {
               value={beanId}
               onChange={(e) => setBeanId(e.target.value)}
               className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-sm border border-stone-700 focus:border-amber-500 focus:outline-none"
+              style={{ colorScheme: 'dark', WebkitTextFillColor: 'white' }}
             >
               <option value="">選択してください</option>
               {beans.map((b) => (
@@ -319,6 +320,7 @@ export default function RoastPage() {
                 value={datetime}
                 onChange={(e) => setDatetime(e.target.value)}
                 className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-sm border border-stone-700 focus:border-amber-500 focus:outline-none"
+                style={{ colorScheme: 'dark', WebkitTextFillColor: 'white' }}
               />
             </div>
             <div>
@@ -327,6 +329,7 @@ export default function RoastPage() {
                 value={machine}
                 onChange={(e) => setMachine(e.target.value)}
                 className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-sm border border-stone-700 focus:border-amber-500 focus:outline-none"
+                style={{ colorScheme: 'dark', WebkitTextFillColor: 'white' }}
               >
                 {MACHINES.map((m) => (
                   <option key={m} value={m}>{m}</option>
