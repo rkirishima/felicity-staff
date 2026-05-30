@@ -31,7 +31,7 @@ export async function GET(req: Request): Promise<Response> {
   const sb = createServiceClient()
   const overrides = await loadSquareOverrides(sb)
 
-  const [sqRes, stripeRes, invRes, expRes, bankRes, ordersRes, payoutsRes] = await Promise.all([
+  const [sqRes, stripeRes, invRes, expRes, bankRes, ordersRes, payoutsRes, stripePayoutsRes] = await Promise.all([
     sb.from('keiri_square_line_items')
       .select('date, created_at_jst, item_name, variation_name, category, quantity, gross_amount, tax_amount, tax_rate, payment_id')
       .gte('date', start).lt('date', end)
@@ -61,6 +61,10 @@ export async function GET(req: Request): Promise<Response> {
       .select('payout_id, completed_at, amount, fee_amount, gross_amount, period_start, period_end, status')
       .gte('completed_at', beginIso).lt('completed_at', endIso)
       .order('completed_at'),
+    sb.from('keiri_stripe_payouts')
+      .select('payout_id, arrival_date, amount, fee_amount, gross_amount, charge_count, refund_count, period_start, period_end, status')
+      .gte('arrival_date', start).lt('arrival_date', end)
+      .order('arrival_date'),
   ])
 
   type SqLine = { date: string; created_at_jst: string; item_name: string | null; variation_name: string | null; category: string | null; quantity: number; gross_amount: number; tax_amount: number | null; tax_rate: number | null; payment_id: string | null }
@@ -76,9 +80,13 @@ export async function GET(req: Request): Promise<Response> {
   const bank = (bankRes.data ?? []) as BankRow[]
   const orderTotal = (ordersRes.data ?? []).reduce((s: number, o: { amount?: number }) => s + (o.amount ?? 0), 0)
   type PayoutRow = { payout_id: string; completed_at: string | null; amount: number; fee_amount: number; gross_amount: number; period_start: string | null; period_end: string | null; status: string | null }
+  type StripePayoutRow = { payout_id: string; arrival_date: string | null; amount: number; fee_amount: number; gross_amount: number; charge_count: number; refund_count: number; period_start: string | null; period_end: string | null; status: string | null }
   const payouts = (payoutsRes?.data ?? []) as PayoutRow[]
+  const stripePayouts = (stripePayoutsRes?.data ?? []) as StripePayoutRow[]
   const payoutTotal = payouts.reduce((s, p) => s + p.amount, 0)
   const feeTotal = payouts.reduce((s, p) => s + p.fee_amount, 0)
+  const stripePayoutTotal = stripePayouts.reduce((s, p) => s + p.amount, 0)
+  const stripeFeeTotal = stripePayouts.reduce((s, p) => s + p.fee_amount, 0)
 
   // 4-bucket totals
   const buckets = { dine_in_10: 0, goods_10: 0, beans_8: 0, takeout_8: 0, unknown: 0 }
@@ -132,6 +140,8 @@ export async function GET(req: Request): Promise<Response> {
   push('銀行出金合計（参考）', bankDebit)
   push('Square 入金（銀行振込実額）', payoutTotal)
   push('Square 手数料合計', feeTotal)
+  push('Stripe 入金（銀行振込実額）', stripePayoutTotal)
+  push('Stripe 手数料合計', stripeFeeTotal)
   push('')
 
   push('2) 店舗 Square 売上明細')
@@ -225,6 +235,24 @@ export async function GET(req: Request): Promise<Response> {
       p.gross_amount,
       p.fee_amount,
       p.amount,
+      p.status,
+    )
+  }
+  push('')
+
+  push('8) Stripe 入金（銀行振込・手数料）')
+  push('Payout ID', '入金日', '対象期間 開始', '対象期間 終了', '売上総額', '手数料', '入金額（実額）', '決済件数', '返金件数', 'ステータス')
+  for (const p of stripePayouts) {
+    push(
+      p.payout_id,
+      p.arrival_date,
+      p.period_start,
+      p.period_end,
+      p.gross_amount,
+      p.fee_amount,
+      p.amount,
+      p.charge_count,
+      p.refund_count,
       p.status,
     )
   }

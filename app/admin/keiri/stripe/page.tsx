@@ -36,6 +36,19 @@ type LineItem = {
 
 type DayGroup = { date: string; total: number; count: number; items: LineItem[] }
 
+type PayoutRow = {
+  payout_id: string
+  status: string | null
+  arrival_date: string | null
+  amount: number
+  fee_amount: number
+  gross_amount: number
+  charge_count: number
+  refund_count: number
+  period_start: string | null
+  period_end: string | null
+}
+
 const CLASSIFICATION_LABEL: Record<string, string> = {
   coffee_beans: '☕ 豆',
   drip_pack: '💧 ドリップパック',
@@ -66,8 +79,10 @@ function StripeInner() {
   const [items, setItems] = useState<LineItem[]>([])
   const [orderTotal, setOrderTotal] = useState<number>(0)
   const [orderCount, setOrderCount] = useState<number>(0)
+  const [payouts, setPayouts] = useState<PayoutRow[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [syncingPayouts, setSyncingPayouts] = useState(false)
   const [reload, setReload] = useState(0)
 
   useEffect(() => {
@@ -82,7 +97,7 @@ function StripeInner() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const [liRes, ordRes] = await Promise.all([
+      const [liRes, ordRes, poRes] = await Promise.all([
         supabase
           .from('keiri_stripe_line_items')
           .select('id, order_id, product_id, product_name, quantity, amount, tax_rate, classification, date, created_at_jst')
@@ -95,12 +110,19 @@ function StripeInner() {
           .in('status', ['paid', 'shipped', 'completed'])
           .gte('created_at', new Date(`${start}T00:00:00+09:00`).toISOString())
           .lt('created_at', new Date(`${next}T00:00:00+09:00`).toISOString()),
+        supabase
+          .from('keiri_stripe_payouts')
+          .select('payout_id, status, arrival_date, amount, fee_amount, gross_amount, charge_count, refund_count, period_start, period_end')
+          .gte('arrival_date', start)
+          .lt('arrival_date', next)
+          .order('arrival_date', { ascending: false }),
       ])
       if (cancelled) return
       setItems((liRes.data ?? []) as LineItem[])
       const ord = (ordRes.data ?? []) as { amount: number }[]
       setOrderTotal(ord.reduce((s, o) => s + (o.amount || 0), 0))
       setOrderCount(ord.length)
+      setPayouts((poRes?.data ?? []) as PayoutRow[])
       setLoading(false)
     })()
     return () => { cancelled = true }
@@ -120,6 +142,27 @@ function StripeInner() {
       alert(e instanceof Error ? e.message : '同期失敗')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function syncPayouts() {
+    setSyncingPayouts(true)
+    try {
+      const [y, m] = month.split('-').map(s => parseInt(s, 10))
+      const from = `${month}-01`
+      const nextYm = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
+      const to = `${nextYm}-01`
+      const res = await fetch(`/api/keiri/stripe-payouts-sync?from=${from}&to=${to}`)
+      const data = await res.json()
+      if (!res.ok) {
+        alert(`入金同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
+      } else {
+        setReload(n => n + 1)
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '入金同期失敗')
+    } finally {
+      setSyncingPayouts(false)
     }
   }
 
@@ -247,6 +290,60 @@ function StripeInner() {
             )}
           </div>
         )}
+
+        <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-stone-500 tracking-wider">Stripe 入金（銀行振込・手数料）</p>
+            <button
+              onClick={syncPayouts}
+              disabled={syncingPayouts}
+              className="text-xs text-emerald-700 underline disabled:opacity-50"
+            >
+              {syncingPayouts ? '同期中…' : '🔄 入金を同期'}
+            </button>
+          </div>
+          {payouts.length === 0 ? (
+            <p className="text-stone-400 text-xs">この月の入金記録はまだありません。「🔄 入金を同期」を押してください。<br/><span className="text-[10px]">※ Vercel env に STRIPE_SECRET_KEY が必要</span></p>
+          ) : (
+            <ul className="space-y-2">
+              {payouts.map(p => (
+                <li key={p.payout_id} className="border-t border-stone-100 pt-2 first:border-0 first:pt-0">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-stone-700">
+                      {p.arrival_date ? new Date(p.arrival_date + 'T00:00:00+09:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }) : '—'}
+                      <span className="text-[10px] text-stone-400 ml-2">入金</span>
+                    </span>
+                    <span className="tabular-nums text-stone-900 font-medium">
+                      ¥{p.amount.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-stone-500 mt-0.5">
+                    <span>
+                      {p.period_start && p.period_end
+                        ? `対象 ${p.period_start.slice(5)}〜${p.period_end.slice(5)}`
+                        : '対象期間: —'}
+                      {p.charge_count > 0 && <span className="ml-2 text-stone-400">{p.charge_count}件</span>}
+                      {p.refund_count > 0 && <span className="ml-1 text-rose-500">返金{p.refund_count}件</span>}
+                    </span>
+                    <span className="tabular-nums">
+                      手数料 ¥{p.fee_amount.toLocaleString()}
+                      <span className="text-stone-400 ml-2">/ 売上 ¥{p.gross_amount.toLocaleString()}</span>
+                    </span>
+                  </div>
+                </li>
+              ))}
+              <li className="border-t border-stone-200 pt-2 flex justify-between text-sm font-medium">
+                <span className="text-stone-700">入金合計</span>
+                <span className="tabular-nums text-stone-900">
+                  ¥{payouts.reduce((s, p) => s + p.amount, 0).toLocaleString()}
+                  <span className="text-[10px] text-stone-400 ml-2">
+                    手数料 ¥{payouts.reduce((s, p) => s + p.fee_amount, 0).toLocaleString()}
+                  </span>
+                </span>
+              </li>
+            </ul>
+          )}
+        </div>
 
         {loading ? (
           <p className="text-center text-stone-400 text-sm py-12">読み込み中...</p>
