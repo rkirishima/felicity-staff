@@ -54,7 +54,25 @@ export async function buildAndPersistInvoice(opts: {
   }
   const meta = defaultMeta(data)
 
-  // 1) PDF render
+  // 1) 既存請求書チェック（確定済みは絶対に上書きしない）
+  //    paid/sent などドラフト以外を見つけたら、PDF生成もDB書込もせず中止する。
+  //    2026-05 の二重請求事故（cronがpaid請求書を上書き）の再発防止。
+  const supabase = admin()
+  const { data: existing } = await supabase
+    .from('keiri_invoices')
+    .select('id, status')
+    .eq('invoice_number', meta.invoiceNumber)
+    .maybeSingle()
+
+  if (existing && existing.status !== 'draft') {
+    throw new Error(
+      `${meta.invoiceNumber} は既に status='${existing.status}'。` +
+        `確定済み請求書の自動上書きを中止しました。` +
+        `追加焙煎分は手動で別請求書（例: ${meta.invoiceNumber}B）を作成してください。`,
+    )
+  }
+
+  // 2) PDF render
   const pdfBuffer = await renderToBuffer(<InvoiceDocument meta={meta} />)
   const pdfPath = await uploadInvoicePdf({
     year: opts.year,
@@ -62,14 +80,6 @@ export async function buildAndPersistInvoice(opts: {
     recipientSlug: 'FELICITY',
     bytes: pdfBuffer,
   })
-
-  // 2) 既存ドラフトを探す
-  const supabase = admin()
-  const { data: existing } = await supabase
-    .from('keiri_invoices')
-    .select('id')
-    .eq('invoice_number', meta.invoiceNumber)
-    .maybeSingle()
 
   // 3) UPSERT keiri_invoices
   const invoiceRow = {
