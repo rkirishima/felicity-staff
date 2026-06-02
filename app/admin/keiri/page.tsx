@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
+import { effectiveRevenueCategory, type RevenueCategory } from '@/lib/keiri/classifyRevenue'
 
 function todayJST() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -29,6 +30,8 @@ function monthOptions(count = 24): { value: string; label: string }[] {
 type IncomeRow = { date: string; amount: number; tax_category: string | null; source: string | null }
 type ExpenseRow = { date: string; amount: number }
 type PendingRow = { amount: number }
+type SqLineRow = { tax_rate: number | null; category: string | null; item_name: string | null; gross_amount: number }
+type PayoutRow = { amount: number; fee_amount: number; gross_amount: number; completed_at: string | null; period_start: string | null; period_end: string | null }
 
 type SquareSales = { today: number; thisMonth: number; count: number; asOf: string }
 
@@ -41,6 +44,9 @@ export default function KeiriDashboard() {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [pendingBank, setPendingBank] = useState<PendingRow[]>([])
   const [pendingInvoices, setPendingInvoices] = useState<{ total: number }[]>([])
+  const [squareLines, setSquareLines] = useState<SqLineRow[]>([])
+  const [squareOverrides, setSquareOverrides] = useState<Map<string, RevenueCategory>>(new Map())
+  const [payouts, setPayouts] = useState<PayoutRow[]>([])
   const [square, setSquare] = useState<SquareSales | null>(null)
   const [squareLoading, setSquareLoading] = useState(false)
   const [squareError, setSquareError] = useState<string | null>(null)
@@ -62,7 +68,7 @@ export default function KeiriDashboard() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const [incRes, expRes, pendBankRes, pendInvRes] = await Promise.all([
+      const [incRes, expRes, pendBankRes, pendInvRes, sqLinesRes, ovRes, poRes] = await Promise.all([
         supabase
           .from('keiri_income_view')
           .select('date, amount, tax_category, source')
@@ -82,12 +88,33 @@ export default function KeiriDashboard() {
           .from('keiri_invoices')
           .select('total')
           .eq('status', 'sent'),
+        supabase
+          .from('keiri_square_line_items')
+          .select('tax_rate, category, item_name, gross_amount')
+          .gte('date', start)
+          .lt('date', nextMonth),
+        supabase
+          .from('keiri_square_item_overrides')
+          .select('item_name, revenue_category'),
+        supabase
+          .from('keiri_square_payouts')
+          .select('amount, fee_amount, gross_amount, completed_at, period_start, period_end')
+          .gte('completed_at', new Date(`${start}T00:00:00+09:00`).toISOString())
+          .lt('completed_at', new Date(nextMonth + 'T00:00:00+09:00').toISOString())
+          .order('completed_at'),
       ])
       if (cancelled) return
       setIncome((incRes.data ?? []) as IncomeRow[])
       setExpenses((expRes.data ?? []) as ExpenseRow[])
       setPendingBank((pendBankRes.data ?? []) as PendingRow[])
       setPendingInvoices((pendInvRes.data ?? []) as { total: number }[])
+      setSquareLines((sqLinesRes?.data ?? []) as SqLineRow[])
+      const ovMap = new Map<string, RevenueCategory>()
+      for (const o of (ovRes?.data ?? []) as { item_name: string; revenue_category: string }[]) {
+        ovMap.set(o.item_name, o.revenue_category as RevenueCategory)
+      }
+      setSquareOverrides(ovMap)
+      setPayouts((poRes?.data ?? []) as PayoutRow[])
       setLoading(false)
     })()
     return () => {
@@ -190,14 +217,20 @@ export default function KeiriDashboard() {
   const totalExpense = expenses.reduce((s, r) => s + (r.amount || 0), 0)
   const profit = totalConfirmed - totalExpense
 
-  // 税区分別も bank_csv は除外（売上ではなく着金フロー扱いのため）
-  const incomeByTax = income
-    .filter(r => r.source !== 'bank_csv')
-    .reduce<Record<string, number>>((acc, r) => {
-      const key = r.tax_category ?? '未分類'
-      acc[key] = (acc[key] || 0) + (r.amount || 0)
-      return acc
-    }, {})
+  // 4区分の Square 売上を line items から算出（豆販売 8% と テイクアウト 8% を別表示）
+  const squareBuckets = { dine_in_10: 0, goods_10: 0, beans_8: 0, takeout_8: 0, unknown: 0 }
+  for (const li of squareLines) {
+    const rc = effectiveRevenueCategory(
+      { tax_rate: li.tax_rate, item_name: li.item_name, category: li.category },
+      squareOverrides,
+    )
+    squareBuckets[rc] += li.gross_amount || 0
+  }
+
+  // Square Payout 集計（毎週金曜入金）
+  const payoutDepositTotal = payouts.reduce((s, p) => s + p.amount, 0)
+  const payoutFeeTotal = payouts.reduce((s, p) => s + p.fee_amount, 0)
+  const payoutGrossTotal = payouts.reduce((s, p) => s + p.gross_amount, 0)
 
   return (
     <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
@@ -356,25 +389,81 @@ export default function KeiriDashboard() {
               </div>
             </div>
 
-            {/* 税区分別売上 */}
-            <div className="bg-white rounded-2xl shadow-sm p-5">
-              <p className="text-xs text-stone-500 tracking-wider mb-3">税区分別売上</p>
-              {Object.keys(incomeByTax).length === 0 ? (
-                <p className="text-stone-400 text-sm">なし</p>
-              ) : (
-                <ul className="space-y-2">
-                  {Object.entries(incomeByTax)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([cat, amt]) => (
-                      <li key={cat} className="flex items-center justify-between text-sm">
-                        <span className="text-stone-600">{cat}</span>
-                        <span className="text-stone-800 font-medium tabular-nums">
-                          ¥{amt.toLocaleString()}
-                        </span>
-                      </li>
-                    ))}
+            {/* Square 入金（毎週金曜・銀行振込・手数料） */}
+            {payouts.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm p-5 space-y-2">
+                <p className="text-xs text-stone-500 tracking-wider">Square 入金（毎週金曜）</p>
+                <ul className="space-y-1.5">
+                  {payouts.map((p, idx) => (
+                    <li key={idx} className="flex justify-between items-baseline text-sm">
+                      <span className="text-stone-600">
+                        {p.completed_at ? new Date(p.completed_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }) : '—'}
+                        {p.period_start && p.period_end && (
+                          <span className="text-[10px] text-stone-400 ml-2">対象 {p.period_start.slice(5)}〜{p.period_end.slice(5)}</span>
+                        )}
+                      </span>
+                      <span className="tabular-nums text-stone-800">
+                        ¥{p.amount.toLocaleString()}
+                        <span className="text-[10px] text-stone-400 ml-2">手数料 ¥{p.fee_amount.toLocaleString()}</span>
+                      </span>
+                    </li>
+                  ))}
+                  <li className="border-t border-stone-100 pt-2 mt-2 flex justify-between text-sm font-medium">
+                    <span className="text-stone-700">入金合計</span>
+                    <span className="tabular-nums text-stone-900">
+                      ¥{payoutDepositTotal.toLocaleString()}
+                      <span className="text-[10px] text-stone-400 ml-2">手数料 ¥{payoutFeeTotal.toLocaleString()} / 売上総額 ¥{payoutGrossTotal.toLocaleString()}</span>
+                    </span>
+                  </li>
                 </ul>
-              )}
+              </div>
+            )}
+
+            {/* 税区分別売上（4区分） */}
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <p className="text-xs text-stone-500 tracking-wider mb-3">税区分別売上（税理士提出用 4区分）</p>
+              <ul className="space-y-1.5 text-sm">
+                <li className="flex justify-between">
+                  <span className="text-stone-600">🍽 10% イートイン（店舗）</span>
+                  <span className="tabular-nums text-stone-800 font-medium">¥{squareBuckets.dine_in_10.toLocaleString()}</span>
+                </li>
+                <li className="flex justify-between">
+                  <span className="text-stone-600">👕 10% 物販グッズ（店舗）</span>
+                  <span className="tabular-nums text-stone-800 font-medium">¥{squareBuckets.goods_10.toLocaleString()}</span>
+                </li>
+                <li className="flex justify-between border-t border-stone-50 pt-1.5">
+                  <span className="text-stone-600">☕ 8% 豆等の物販（店舗）</span>
+                  <span className="tabular-nums text-stone-800 font-medium">¥{squareBuckets.beans_8.toLocaleString()}</span>
+                </li>
+                <li className="flex justify-between">
+                  <span className="text-stone-600">🥡 8% テイクアウト（店舗）</span>
+                  <span className="tabular-nums text-stone-800 font-medium">¥{squareBuckets.takeout_8.toLocaleString()}</span>
+                </li>
+                {squareBuckets.unknown > 0 && (
+                  <li className="flex justify-between text-amber-700">
+                    <span>❓ 未分類（店舗）</span>
+                    <span className="tabular-nums font-medium">¥{squareBuckets.unknown.toLocaleString()}</span>
+                  </li>
+                )}
+                {stripeTotal > 0 && (
+                  <li className="flex justify-between border-t border-stone-50 pt-1.5">
+                    <span className="text-stone-600">💳 Stripe (EC) 10% 物販</span>
+                    <span className="tabular-nums text-stone-800 font-medium">¥{stripeTotal.toLocaleString()}</span>
+                  </li>
+                )}
+                {invoiceIncomeTotal > 0 && (
+                  <li className="flex justify-between">
+                    <span className="text-stone-600">📨 業販請求書（入金確認済）</span>
+                    <span className="tabular-nums text-stone-800 font-medium">¥{invoiceIncomeTotal.toLocaleString()}</span>
+                  </li>
+                )}
+                {manualIncomeTotal > 0 && (
+                  <li className="flex justify-between">
+                    <span className="text-stone-600">手動売上</span>
+                    <span className="tabular-nums text-stone-800 font-medium">¥{manualIncomeTotal.toLocaleString()}</span>
+                  </li>
+                )}
+              </ul>
             </div>
 
             {/* メニュー */}
