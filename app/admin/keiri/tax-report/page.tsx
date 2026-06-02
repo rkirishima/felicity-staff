@@ -404,13 +404,32 @@ function PayoutsSection({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-stone-800">{title}</p>
-          <p className="text-[10px] text-stone-400 mt-0.5">売上総額 → 手数料 → 実入金額 を入金ごとに</p>
+          <p className="text-[10px] text-stone-400 mt-0.5">売上総額 → 差引手数料 → 実入金額 を入金ごとに</p>
         </div>
         <div className="flex gap-1.5 shrink-0">
           <button onClick={onCsv} className="text-xs px-2.5 py-1.5 bg-stone-800 text-white rounded-lg whitespace-nowrap">📄 CSV</button>
           <button onClick={onPdf} className="text-xs px-2.5 py-1.5 bg-rose-700 text-white rounded-lg whitespace-nowrap">🗎 PDF</button>
         </div>
       </div>
+
+      {/* 月内サマリー: 売上 / 手数料 / 実入金額 を3カラムで大きく明示 */}
+      {payouts.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-stone-50 rounded-xl p-2.5 text-center">
+            <p className="text-[10px] text-stone-500">売上総額</p>
+            <p className="text-sm font-medium text-stone-800 tabular-nums mt-0.5">¥{grossTotal.toLocaleString()}</p>
+          </div>
+          <div className="bg-rose-50 rounded-xl p-2.5 text-center border border-rose-100">
+            <p className="text-[10px] text-rose-700">差引手数料</p>
+            <p className="text-sm font-medium text-rose-900 tabular-nums mt-0.5">−¥{feeTotal.toLocaleString()}</p>
+          </div>
+          <div className="bg-emerald-50 rounded-xl p-2.5 text-center border border-emerald-200">
+            <p className="text-[10px] text-emerald-700">実入金額</p>
+            <p className="text-sm font-medium text-emerald-900 tabular-nums mt-0.5">¥{netTotal.toLocaleString()}</p>
+          </div>
+        </div>
+      )}
+
       {payouts.length === 0 ? (
         <p className="text-xs text-stone-400 text-center py-3">この月の入金記録はありません</p>
       ) : (

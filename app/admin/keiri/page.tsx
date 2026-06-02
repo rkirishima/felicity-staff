@@ -391,30 +391,44 @@ export default function KeiriDashboard() {
 
             {/* Square 入金（毎週金曜・銀行振込・手数料） */}
             {payouts.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm p-5 space-y-2">
-                <p className="text-xs text-stone-500 tracking-wider">Square 入金（毎週金曜）</p>
+              <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+                <p className="text-xs text-stone-500 tracking-wider">🟦 Square 入金（毎週金曜）</p>
+
+                {/* 月内 合計サマリー — 売上総額 / 手数料 / 実入金額 を3カラムで明示 */}
+                <div className="grid grid-cols-3 gap-2 pb-3 border-b border-stone-100">
+                  <div className="bg-stone-50 rounded-xl p-2 text-center">
+                    <p className="text-[10px] text-stone-500">売上総額</p>
+                    <p className="text-sm font-medium text-stone-800 tabular-nums mt-0.5">¥{payoutGrossTotal.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-rose-50 rounded-xl p-2 text-center border border-rose-100">
+                    <p className="text-[10px] text-rose-700">差引手数料</p>
+                    <p className="text-sm font-medium text-rose-900 tabular-nums mt-0.5">−¥{payoutFeeTotal.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl p-2 text-center border border-emerald-200">
+                    <p className="text-[10px] text-emerald-700">実入金額</p>
+                    <p className="text-sm font-medium text-emerald-900 tabular-nums mt-0.5">¥{payoutDepositTotal.toLocaleString()}</p>
+                  </div>
+                </div>
+
                 <ul className="space-y-1.5">
                   {payouts.map((p, idx) => (
-                    <li key={idx} className="flex justify-between items-baseline text-sm">
-                      <span className="text-stone-600">
-                        {p.completed_at ? new Date(p.completed_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }) : '—'}
-                        {p.period_start && p.period_end && (
-                          <span className="text-[10px] text-stone-400 ml-2">対象 {p.period_start.slice(5)}〜{p.period_end.slice(5)}</span>
-                        )}
-                      </span>
-                      <span className="tabular-nums text-stone-800">
-                        ¥{p.amount.toLocaleString()}
-                        <span className="text-[10px] text-stone-400 ml-2">手数料 ¥{p.fee_amount.toLocaleString()}</span>
-                      </span>
+                    <li key={idx} className="text-sm">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-stone-600">
+                          {p.completed_at ? new Date(p.completed_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }) : '—'}
+                          {p.period_start && p.period_end && (
+                            <span className="text-[10px] text-stone-400 ml-2">対象 {p.period_start.slice(5)}〜{p.period_end.slice(5)}</span>
+                          )}
+                        </span>
+                        <span className="tabular-nums text-stone-800">
+                          ¥{p.amount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-stone-500 flex justify-end mt-0.5 tabular-nums">
+                        売上 ¥{p.gross_amount.toLocaleString()} − 手数料 <span className="text-rose-600 ml-1">¥{p.fee_amount.toLocaleString()}</span>
+                      </div>
                     </li>
                   ))}
-                  <li className="border-t border-stone-100 pt-2 mt-2 flex justify-between text-sm font-medium">
-                    <span className="text-stone-700">入金合計</span>
-                    <span className="tabular-nums text-stone-900">
-                      ¥{payoutDepositTotal.toLocaleString()}
-                      <span className="text-[10px] text-stone-400 ml-2">手数料 ¥{payoutFeeTotal.toLocaleString()} / 売上総額 ¥{payoutGrossTotal.toLocaleString()}</span>
-                    </span>
-                  </li>
                 </ul>
               </div>
             )}
