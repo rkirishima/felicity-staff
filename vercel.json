@@ -26,7 +26,7 @@
     },
     {
       "path": "/api/cron/gmail-poll",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/cron/keiri-csv-reminder",
