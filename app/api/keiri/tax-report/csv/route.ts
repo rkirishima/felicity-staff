@@ -18,6 +18,7 @@ export const maxDuration = 30
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url)
   const month = url.searchParams.get('month')
+  const section = url.searchParams.get('section') // null = all sections
   if (!month || !/^\d{4}-\d{2}$/.test(month)) {
     return NextResponse.json({ error: 'month must be YYYY-MM' }, { status: 400 })
   }
@@ -132,9 +133,14 @@ export async function GET(req: Request): Promise<Response> {
   const lines: string[] = []
   const push = (...cells: (string | number | null | undefined)[]) => lines.push(cells.map(escCsv).join(','))
 
-  push(`【FELICITY 月次税務レポート】 ${month}`)
+  push(`【FELICITY 月次税務レポート】 ${month}${section ? ` — ${section}` : ''}`)
   push('')
 
+  const want = (s: string) => !section || section === s
+  let fileName = `felicity-tax-report-${month}.csv`
+  if (section) fileName = `felicity-tax-report-${month}-${section}.csv`
+
+  if (want('summary')) {
   push('1) 月次サマリー')
   push('項目', '金額')
   push('店舗 Square — 10% イートイン', buckets.dine_in_10)
@@ -164,7 +170,9 @@ export async function GET(req: Request): Promise<Response> {
   push(`月末在庫（${monthEndStr} 時点）資材`, invByCat.supplies)
   push(`月末在庫 合計`, invTotalSum)
   push('')
+  }
 
+  if (want('square-lines')) {
   push('2) 店舗 Square 売上明細')
   push('日付', '時刻', '商品名', 'バリエーション', 'カテゴリ', '数量', '税抜金額', '消費税', '税率', '区分')
   for (const li of sqLines) {
@@ -186,7 +194,9 @@ export async function GET(req: Request): Promise<Response> {
     )
   }
   push('')
+  }
 
+  if (want('stripe-lines')) {
   push('3) EC Stripe 売上明細')
   push('日付', '時刻', '商品ID', '商品名', '数量', '金額', '税率', '分類')
   for (const li of stripeLines) {
@@ -202,7 +212,9 @@ export async function GET(req: Request): Promise<Response> {
     )
   }
   push('')
+  }
 
+  if (want('invoices')) {
   push('4) 業販請求書（入金確認済）')
   push('請求書番号', '発行日', '入金日', '請求先', '10%税抜', '8%税抜', '消費税10%', '消費税8%', '合計（税込）')
   for (const i of invoices) {
@@ -220,7 +232,9 @@ export async function GET(req: Request): Promise<Response> {
     )
   }
   push('')
+  }
 
+  if (want('expenses')) {
   push('5) 経費明細')
   push('日付', '勘定科目', '取引先', '摘要', '金額', '消費税', '税区分', '支払方法')
   for (const e of expenses) {
@@ -237,14 +251,19 @@ export async function GET(req: Request): Promise<Response> {
     )
   }
   push('')
+  }
 
+  if (want('bank')) {
   push('6) 銀行入出金（参考）')
   push('日付', '摘要', '出金', '入金', '残高')
   for (const b of bank) {
     push(b.date, b.description, b.debit, b.credit, b.balance)
   }
   push('')
+  }
+  push('')
 
+  if (want('square-payouts')) {
   push('7) Square 入金（銀行振込・手数料）')
   push('Payout ID', '入金日', '対象期間 開始', '対象期間 終了', '売上総額', '手数料', '入金額（実額）', 'ステータス')
   for (const p of payouts) {
@@ -260,7 +279,9 @@ export async function GET(req: Request): Promise<Response> {
     )
   }
   push('')
+  }
 
+  if (want('stripe-payouts')) {
   push('8) Stripe 入金（銀行振込・手数料）')
   push('Payout ID', '入金日', '対象期間 開始', '対象期間 終了', '売上総額', '手数料', '入金額（実額）', '決済件数', '返金件数', 'ステータス')
   for (const p of stripePayouts) {
@@ -278,7 +299,9 @@ export async function GET(req: Request): Promise<Response> {
     )
   }
   push('')
+  }
 
+  if (want('inventory')) {
   push(`9) 月末在庫（${monthEndStr} 時点）`)
   push('カテゴリ', '品名', '仕入単価', '残数', '単位', '小計', 'メモ')
   for (const r of inventory) {
@@ -293,6 +316,7 @@ export async function GET(req: Request): Promise<Response> {
       r.note,
     )
   }
+  }
 
   // UTF-8 BOM so Excel opens with correct encoding
   const csv = '﻿' + lines.join('\r\n') + '\r\n'
@@ -301,7 +325,7 @@ export async function GET(req: Request): Promise<Response> {
     status: 200,
     headers: {
       'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="felicity-tax-report-${month}.csv"`,
+      'content-disposition': `attachment; filename="${fileName}"`,
       'cache-control': 'private, no-store',
     },
   })

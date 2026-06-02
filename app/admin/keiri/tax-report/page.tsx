@@ -22,6 +22,28 @@ function monthOptions(count = 36): { value: string; label: string }[] {
   return list
 }
 
+type SquarePayoutRow = {
+  payout_id: string
+  completed_at: string | null
+  amount: number
+  fee_amount: number
+  gross_amount: number
+  period_start: string | null
+  period_end: string | null
+}
+
+type StripePayoutRow = {
+  payout_id: string
+  arrival_date: string | null
+  amount: number
+  fee_amount: number
+  gross_amount: number
+  charge_count: number
+  refund_count: number
+  period_start: string | null
+  period_end: string | null
+}
+
 type Preview = {
   buckets: { dine_in_10: number; goods_10: number; beans_8: number; takeout_8: number; unknown: number }
   stripeByRate: { '10': number; '8': number; unknown: number }
@@ -33,6 +55,8 @@ type Preview = {
   orderTotal: number
   inventoryTotal: number
   monthEnd: string
+  squarePayouts: SquarePayoutRow[]
+  stripePayouts: StripePayoutRow[]
 }
 
 export default function TaxReportPage() {
@@ -58,12 +82,11 @@ export default function TaxReportPage() {
       const beginIso = new Date(`${month}-01T00:00:00+09:00`).toISOString()
       const endIso = new Date(`${nextMonth}-01T00:00:00+09:00`).toISOString()
 
-      // month-end date
       const monthEndDate = new Date(`${nextMonth}-01T00:00:00+09:00`)
       monthEndDate.setUTCDate(monthEndDate.getUTCDate() - 1)
       const monthEndStr = monthEndDate.toISOString().slice(0, 10)
 
-      const [sqRes, stripeRes, invRes, expRes, bankRes, ordRes, ovRes, inventoryRes] = await Promise.all([
+      const [sqRes, stripeRes, invRes, expRes, bankRes, ordRes, ovRes, inventoryRes, sqPayoutRes, stPayoutRes] = await Promise.all([
         supabase.from('keiri_square_line_items')
           .select('tax_rate, category, item_name, gross_amount')
           .gte('date', start).lt('date', end),
@@ -87,6 +110,14 @@ export default function TaxReportPage() {
           .gte('created_at', beginIso).lt('created_at', endIso),
         supabase.from('keiri_square_item_overrides').select('item_name, revenue_category'),
         supabase.from('keiri_inventory_snapshots').select('unit_price, quantity').eq('snapshot_date', monthEndStr),
+        supabase.from('keiri_square_payouts')
+          .select('payout_id, completed_at, amount, fee_amount, gross_amount, period_start, period_end')
+          .gte('completed_at', beginIso).lt('completed_at', endIso)
+          .order('completed_at'),
+        supabase.from('keiri_stripe_payouts')
+          .select('payout_id, arrival_date, amount, fee_amount, gross_amount, charge_count, refund_count, period_start, period_end')
+          .gte('arrival_date', start).lt('arrival_date', end)
+          .order('arrival_date'),
       ])
       if (cancelled) return
 
@@ -122,18 +153,21 @@ export default function TaxReportPage() {
         sqTotal: buckets.dine_in_10 + buckets.goods_10 + buckets.beans_8 + buckets.takeout_8 + buckets.unknown,
         inventoryTotal,
         monthEnd: monthEndStr,
+        squarePayouts: (sqPayoutRes?.data ?? []) as SquarePayoutRow[],
+        stripePayouts: (stPayoutRes?.data ?? []) as StripePayoutRow[],
       })
       setLoading(false)
     })()
     return () => { cancelled = true }
   }, [month, supabase])
 
-  function downloadCsv() {
-    window.location.href = `/api/keiri/tax-report/csv?month=${month}`
+  function downloadCsv(section?: string) {
+    const q = section ? `&section=${section}` : ''
+    window.location.href = `/api/keiri/tax-report/csv?month=${month}${q}`
   }
-
-  function downloadPdf() {
-    window.location.href = `/api/keiri/tax-report/pdf?month=${month}`
+  function downloadPdf(section?: string) {
+    const q = section ? `&section=${section}` : ''
+    window.location.href = `/api/keiri/tax-report/pdf?month=${month}${q}`
   }
 
   const salesTotal = preview ? preview.sqTotal + preview.orderTotal + preview.invTotal : 0
@@ -144,7 +178,7 @@ export default function TaxReportPage() {
       <div className="max-w-lg mx-auto space-y-3">
         <div className="flex items-center justify-between">
           <button onClick={() => router.push('/admin/keiri')} className="text-stone-500 text-sm">← 戻る</button>
-          <h1 className="text-lg font-semibold tracking-wider text-stone-800">税理士レポート</h1>
+          <h1 className="text-lg font-semibold tracking-wider text-stone-800">税理士コーナー</h1>
           <div className="w-12" />
         </div>
 
@@ -158,58 +192,53 @@ export default function TaxReportPage() {
           ))}
         </select>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={downloadCsv}
-            className="bg-stone-800 text-white py-3 rounded-2xl font-medium"
-          >
-            📄 CSV ダウンロード
-          </button>
-          <button
-            onClick={downloadPdf}
-            className="bg-rose-700 text-white py-3 rounded-2xl font-medium"
-          >
-            🗎 PDF ダウンロード
-          </button>
+        <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3">
+          <p className="text-[10px] text-stone-500 mb-2">📥 月次全体（全セクション一括）</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => downloadCsv()} className="bg-stone-800 text-white py-2.5 rounded-xl text-sm font-medium">📄 CSV 全体</button>
+            <button onClick={() => downloadPdf()} className="bg-rose-700 text-white py-2.5 rounded-xl text-sm font-medium">🗎 PDF 全体</button>
+          </div>
         </div>
 
         {loading ? (
           <p className="text-center text-stone-400 text-sm py-12">読み込み中…</p>
         ) : preview ? (
           <>
-            <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
-              <p className="text-xs text-stone-500 tracking-wider">月次サマリー（プレビュー）</p>
+            {/* 月次サマリー */}
+            <SectionCard
+              title="① 月次サマリー"
+              onCsv={() => downloadCsv('summary')}
+              onPdf={() => downloadPdf('summary')}
+            >
+              <p className="text-xs text-stone-500 mt-1">店舗 Square</p>
+              <SummaryRow label="🍽 10% イートイン" value={preview.buckets.dine_in_10} />
+              <SummaryRow label="👕 10% 物販（グッズ）" value={preview.buckets.goods_10} />
+              <SummaryRow label="☕ 8% 豆等の物販" value={preview.buckets.beans_8} />
+              <SummaryRow label="🥡 8% テイクアウト" value={preview.buckets.takeout_8} />
+              {preview.buckets.unknown > 0 && (
+                <SummaryRow label="❓ 未分類" value={preview.buckets.unknown} amber />
+              )}
+              <SummaryRow label="Square 合計" value={preview.sqTotal} bold border />
 
-              <div className="space-y-1.5 text-sm">
-                <p className="text-xs text-stone-500 mt-1">店舗 Square</p>
-                <SummaryRow label="🍽 10% イートイン" value={preview.buckets.dine_in_10} />
-                <SummaryRow label="👕 10% 物販（グッズ）" value={preview.buckets.goods_10} />
-                <SummaryRow label="☕ 8% 豆等の物販" value={preview.buckets.beans_8} />
-                <SummaryRow label="🥡 8% テイクアウト" value={preview.buckets.takeout_8} />
-                {preview.buckets.unknown > 0 && (
-                  <SummaryRow label="❓ 未分類" value={preview.buckets.unknown} amber />
-                )}
-                <SummaryRow label="Square 合計" value={preview.sqTotal} bold border />
+              <p className="text-xs text-stone-500 pt-3">EC Stripe</p>
+              <SummaryRow label="💳 10%" value={preview.stripeByRate['10']} />
+              <SummaryRow label="💳 8%" value={preview.stripeByRate['8']} />
+              {preview.stripeByRate.unknown > 0 && (
+                <SummaryRow label="❓ 未分類" value={preview.stripeByRate.unknown} amber />
+              )}
+              <SummaryRow label="Stripe 合計（注文ベース）" value={preview.orderTotal} bold border />
 
-                <p className="text-xs text-stone-500 pt-3">EC Stripe</p>
-                <SummaryRow label="💳 10%" value={preview.stripeByRate['10']} />
-                <SummaryRow label="💳 8%" value={preview.stripeByRate['8']} />
-                {preview.stripeByRate.unknown > 0 && (
-                  <SummaryRow label="❓ 未分類" value={preview.stripeByRate.unknown} amber />
-                )}
-                <SummaryRow label="Stripe 合計（注文ベース）" value={preview.orderTotal} bold border />
+              <p className="text-xs text-stone-500 pt-3">業販請求書</p>
+              <SummaryRow label="📨 入金確認済 合計" value={preview.invTotal} bold border />
 
-                <p className="text-xs text-stone-500 pt-3">業販請求書</p>
-                <SummaryRow label="📨 入金確認済 合計" value={preview.invTotal} bold border />
+              <p className="text-xs text-stone-500 pt-3">経費</p>
+              <SummaryRow label="📒 経費合計" value={preview.expTotal} bold border />
 
-                <p className="text-xs text-stone-500 pt-3">経費</p>
-                <SummaryRow label="📒 経費合計" value={preview.expTotal} bold border />
+              <p className="text-xs text-stone-500 pt-3">月末在庫（{preview.monthEnd}）</p>
+              <SummaryRow label="📦 在庫合計" value={preview.inventoryTotal} bold border />
+            </SectionCard>
 
-                <p className="text-xs text-stone-500 pt-3">月末在庫（{preview.monthEnd}）</p>
-                <SummaryRow label="📦 在庫合計" value={preview.inventoryTotal} bold border />
-              </div>
-            </div>
-
+            {/* Totals */}
             <div className="bg-stone-800 rounded-2xl shadow-sm p-5 space-y-2">
               <div className="flex justify-between items-baseline">
                 <span className="text-xs text-stone-400 tracking-wider">📊 売上合計</span>
@@ -225,23 +254,201 @@ export default function TaxReportPage() {
               </div>
             </div>
 
+            {/* Square 入金 */}
+            <PayoutsSection
+              title="② 店舗 Square 入金（毎週金曜）"
+              payouts={preview.squarePayouts.map(p => ({
+                key: p.payout_id,
+                date: p.completed_at,
+                period_start: p.period_start,
+                period_end: p.period_end,
+                gross_amount: p.gross_amount,
+                fee_amount: p.fee_amount,
+                amount: p.amount,
+              }))}
+              onCsv={() => downloadCsv('square-payouts')}
+              onPdf={() => downloadPdf('square-payouts')}
+            />
+
+            {/* Stripe 入金 */}
+            <PayoutsSection
+              title="③ EC Stripe 入金"
+              payouts={preview.stripePayouts.map(p => ({
+                key: p.payout_id,
+                date: p.arrival_date,
+                period_start: p.period_start,
+                period_end: p.period_end,
+                gross_amount: p.gross_amount,
+                fee_amount: p.fee_amount,
+                amount: p.amount,
+                extra: p.charge_count > 0 || p.refund_count > 0
+                  ? `${p.charge_count > 0 ? `${p.charge_count}件` : ''}${p.refund_count > 0 ? ` 返金${p.refund_count}件` : ''}`
+                  : null,
+              }))}
+              onCsv={() => downloadCsv('stripe-payouts')}
+              onPdf={() => downloadPdf('stripe-payouts')}
+            />
+
+            {/* Square 商品ライン */}
+            <SectionCard
+              title="④ 店舗 Square 売上明細（商品単位）"
+              subtitle="日次・商品名・数量・税抜金額・消費税・税率・区分"
+              onCsv={() => downloadCsv('square-lines')}
+              onPdf={() => downloadPdf('square-lines')}
+            />
+
+            {/* Stripe 商品ライン */}
+            <SectionCard
+              title="⑤ EC Stripe 売上明細"
+              subtitle="日次・商品ID・商品名・数量・金額・税率・分類"
+              onCsv={() => downloadCsv('stripe-lines')}
+              onPdf={() => downloadPdf('stripe-lines')}
+            />
+
+            {/* 業販請求書 */}
+            <SectionCard
+              title="⑥ 業販請求書（入金確認済）"
+              subtitle="請求書番号・発行日・入金日・請求先・税抜・消費税・合計"
+              onCsv={() => downloadCsv('invoices')}
+              onPdf={() => downloadPdf('invoices')}
+            />
+
+            {/* 経費 */}
+            <SectionCard
+              title="⑦ 経費明細"
+              subtitle="日付・勘定科目・取引先・摘要・金額・消費税・税区分・支払方法"
+              onCsv={() => downloadCsv('expenses')}
+              onPdf={() => downloadPdf('expenses')}
+            />
+
+            {/* 銀行 */}
+            <SectionCard
+              title="⑧ 銀行入出金（参考）"
+              subtitle="日付・摘要・出金・入金・残高"
+              onCsv={() => downloadCsv('bank')}
+              onPdf={() => downloadPdf('bank')}
+            />
+
+            {/* 在庫 */}
+            <SectionCard
+              title="⑨ 月末在庫"
+              subtitle={`${preview.monthEnd} 時点 — カテゴリ・品名・単価・残数・単位・小計`}
+              onCsv={() => downloadCsv('inventory')}
+              onPdf={() => downloadPdf('inventory')}
+            />
+
             <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-xs text-stone-600 space-y-1">
-              <p className="font-medium">📥 CSVファイルに含まれる内容</p>
-              <p>1) 月次サマリー（4区分・Stripe・請求書・経費）</p>
-              <p>2) 店舗 Square 売上明細（商品単位）</p>
-              <p>3) EC Stripe 売上明細</p>
-              <p>4) 業販請求書（入金確認済）</p>
-              <p>5) 経費明細</p>
-              <p>6) 銀行入出金（参考・売上合計には未加算）</p>
-              <p>7) Square 入金（実額・対象期間・手数料）</p>
-              <p>8) Stripe 入金（実額・対象期間・手数料）</p>
-              <p>9) 月末在庫（食材・グッズ・資材）</p>
-              <p className="text-[10px] text-stone-400 pt-1">UTF-8 BOM 付きで Excel でも文字化けしません</p>
+              <p className="font-medium">📥 内容</p>
+              <p>CSV：UTF-8 BOM 付き、Excel で文字化けなし</p>
+              <p>PDF：A4・FELICITYロゴ・会社情報付き</p>
+              <p>各セクション個別 or 全体一括 のいずれもOK</p>
             </div>
           </>
         ) : null}
       </div>
     </main>
+  )
+}
+
+function SectionCard({
+  title, subtitle, onCsv, onPdf, children,
+}: {
+  title: string
+  subtitle?: string
+  onCsv: () => void
+  onPdf: () => void
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-stone-800">{title}</p>
+          {subtitle && <p className="text-[10px] text-stone-400 mt-0.5">{subtitle}</p>}
+        </div>
+        <div className="flex gap-1.5 shrink-0">
+          <button onClick={onCsv} className="text-xs px-2.5 py-1.5 bg-stone-800 text-white rounded-lg whitespace-nowrap">📄 CSV</button>
+          <button onClick={onPdf} className="text-xs px-2.5 py-1.5 bg-rose-700 text-white rounded-lg whitespace-nowrap">🗎 PDF</button>
+        </div>
+      </div>
+      {children && <div className="space-y-1.5 text-sm pt-1 border-t border-stone-100">{children}</div>}
+    </div>
+  )
+}
+
+type PayoutDisplay = {
+  key: string
+  date: string | null
+  period_start: string | null
+  period_end: string | null
+  gross_amount: number
+  fee_amount: number
+  amount: number
+  extra?: string | null
+}
+
+function PayoutsSection({
+  title, payouts, onCsv, onPdf,
+}: {
+  title: string
+  payouts: PayoutDisplay[]
+  onCsv: () => void
+  onPdf: () => void
+}) {
+  const grossTotal = payouts.reduce((s, p) => s + p.gross_amount, 0)
+  const feeTotal = payouts.reduce((s, p) => s + p.fee_amount, 0)
+  const netTotal = payouts.reduce((s, p) => s + p.amount, 0)
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-stone-800">{title}</p>
+          <p className="text-[10px] text-stone-400 mt-0.5">売上総額 → 手数料 → 実入金額 を入金ごとに</p>
+        </div>
+        <div className="flex gap-1.5 shrink-0">
+          <button onClick={onCsv} className="text-xs px-2.5 py-1.5 bg-stone-800 text-white rounded-lg whitespace-nowrap">📄 CSV</button>
+          <button onClick={onPdf} className="text-xs px-2.5 py-1.5 bg-rose-700 text-white rounded-lg whitespace-nowrap">🗎 PDF</button>
+        </div>
+      </div>
+      {payouts.length === 0 ? (
+        <p className="text-xs text-stone-400 text-center py-3">この月の入金記録はありません</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {payouts.map(p => (
+            <li key={p.key} className="border-t border-stone-100 pt-2 first:border-0 first:pt-0">
+              <div className="flex justify-between items-baseline">
+                <span className="text-stone-700">
+                  振込 {p.date ? new Date(p.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }) : '—'}
+                </span>
+                <span className="tabular-nums text-stone-900 font-medium">
+                  ¥{p.amount.toLocaleString()}
+                </span>
+              </div>
+              <div className="text-[11px] text-stone-500 flex justify-between mt-0.5">
+                <span>
+                  {p.period_start && p.period_end ? `対象期間 ${p.period_start.slice(5)}〜${p.period_end.slice(5)}` : '対象期間 —'}
+                  {p.extra && <span className="text-stone-400 ml-2">{p.extra}</span>}
+                </span>
+                <span className="tabular-nums">
+                  売上 ¥{p.gross_amount.toLocaleString()} − 手数料 ¥{p.fee_amount.toLocaleString()}
+                </span>
+              </div>
+            </li>
+          ))}
+          <li className="border-t border-stone-200 pt-2 mt-1 space-y-0.5 text-sm">
+            <div className="flex justify-between font-medium">
+              <span className="text-stone-700">月内 入金合計</span>
+              <span className="tabular-nums text-stone-900">¥{netTotal.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-xs text-stone-500">
+              <span>売上総額 ¥{grossTotal.toLocaleString()}</span>
+              <span>手数料合計 ¥{feeTotal.toLocaleString()}</span>
+            </div>
+          </li>
+        </ul>
+      )}
+    </div>
   )
 }
 
