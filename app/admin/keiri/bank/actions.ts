@@ -58,7 +58,7 @@ function findHeaderRow(rows: string[][]): number {
     const text = row.join('')
     if (
       (text.includes('取引日') || text.includes('日付')) &&
-      (text.includes('出金') || text.includes('入金') || text.includes('引出') || text.includes('預入') || text.includes('金額'))
+      (text.includes('出金') || text.includes('入金') || text.includes('引出') || text.includes('預入') || text.includes('預り') || text.includes('支払') || text.includes('金額'))
     ) {
       return i
     }
@@ -82,8 +82,8 @@ function parseBankCsv(text: string): ParsedRow[] {
       h.includes('摘要') || h.includes('内容') || h.includes('取引内容') ||
       lower === 'description' || lower === 'memo'
     ) colMap.description = i
-    else if (h.includes('出金') || h.includes('引出') || lower === 'debit' || lower === 'withdrawal') colMap.debit = i
-    else if (h.includes('入金') || h.includes('預入') || lower === 'credit' || lower === 'deposit') colMap.credit = i
+    else if (h.includes('出金') || h.includes('引出') || h.includes('支払') || lower === 'debit' || lower === 'withdrawal') colMap.debit = i
+    else if (h.includes('入金') || h.includes('預入') || h.includes('預り') || lower === 'credit' || lower === 'deposit') colMap.credit = i
     else if (h.includes('残高') || lower === 'balance') colMap.balance = i
   })
 
