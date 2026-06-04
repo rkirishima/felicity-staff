@@ -59,7 +59,6 @@ export default function AmazonPage() {
   const [items, setItems] = useState<OrderItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
-  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     if (!getAdminSession()) {
@@ -105,7 +104,7 @@ export default function AmazonPage() {
     return () => {
       cancelled = true
     }
-  }, [month, router, supabase, reload])
+  }, [month, router, supabase])
 
   const monthTotal = orders.reduce((s, o) => s + o.total_amount, 0)
   const monthTax = orders.reduce((s, o) => s + (o.tax_amount ?? 0), 0)
@@ -119,11 +118,19 @@ export default function AmazonPage() {
   }
 
   async function changeCategory(itemId: string, categoryId: string) {
+    const prev = items
+    setItems(curr =>
+      curr.map(it =>
+        it.id === itemId
+          ? { ...it, expense_category_id: categoryId || null, classification_source: 'manual' }
+          : it,
+      ),
+    )
     try {
       await updateAmazonItemCategory(itemId, categoryId || null)
       toast.success('分類を更新しました')
-      setReload(n => n + 1)
     } catch (e) {
+      setItems(prev)
       toast.error(e instanceof Error ? e.message : '更新失敗')
     }
   }
@@ -132,8 +139,9 @@ export default function AmazonPage() {
     if (!confirm(`注文 ${orderId} を削除しますか？\n紐づく経費も削除されます。`)) return
     try {
       await deleteAmazonOrder(id)
+      setOrders(curr => curr.filter(o => o.id !== id))
+      setItems(curr => curr.filter(i => i.order_id !== orderId))
       toast.success('削除しました')
-      setReload(n => n + 1)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '削除失敗')
     }
