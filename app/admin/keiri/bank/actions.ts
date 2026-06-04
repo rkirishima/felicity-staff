@@ -77,23 +77,38 @@ function parseBankCsv(text: string): ParsedRow[] {
   const colMap: Record<string, number> = {}
   header.forEach((h, i) => {
     const lower = h.toLowerCase()
-    if (h.includes('日付') || h.includes('取引日') || lower === 'date') colMap.date = i
+    if (h.includes('日付') || h.includes('取引日') || h.includes('取扱日') || h.includes('ご利用日') || lower === 'date') colMap.date = i
     else if (
       h.includes('摘要') || h.includes('内容') || h.includes('取引内容') ||
+      h.includes('お取引内容') || h.includes('ご利用店舗') || h.includes('利用店舗') ||
+      h.includes('店舗名') || h.includes('利用先') ||
       lower === 'description' || lower === 'memo'
     ) colMap.description = i
-    else if (h.includes('出金') || h.includes('引出') || h.includes('支払') || lower === 'debit' || lower === 'withdrawal') colMap.debit = i
-    else if (h.includes('入金') || h.includes('預入') || h.includes('預り') || lower === 'credit' || lower === 'deposit') colMap.credit = i
+    else if (
+      h.includes('出金') || h.includes('引出') || h.includes('支払') ||
+      h.includes('お支払') || h.includes('引落') || h.includes('ご利用金額') ||
+      h.includes('利用金額') || h.includes('お引出') ||
+      lower === 'debit' || lower === 'withdrawal'
+    ) colMap.debit = i
+    else if (
+      h.includes('入金') || h.includes('預入') || h.includes('預り') ||
+      h.includes('お預り') || h.includes('お預入') || h.includes('振込入金') ||
+      lower === 'credit' || lower === 'deposit'
+    ) colMap.credit = i
     else if (h.includes('残高') || lower === 'balance') colMap.balance = i
   })
 
-  if (colMap.date === undefined) throw new Error('日付カラムが見つかりません')
+  if (colMap.date === undefined) {
+    throw new Error(`日付カラムが見つかりません。検出ヘッダ: [${header.join(' | ')}]`)
+  }
   if (colMap.description === undefined) {
     colMap.description = header.findIndex(h => h.includes('メモ'))
-    if (colMap.description < 0) throw new Error('摘要カラムが見つかりません')
+    if (colMap.description < 0) {
+      throw new Error(`摘要カラムが見つかりません。検出ヘッダ: [${header.join(' | ')}]`)
+    }
   }
   if (colMap.debit === undefined && colMap.credit === undefined) {
-    throw new Error('入金/出金カラムが見つかりません')
+    throw new Error(`入金/出金カラムが見つかりません。検出ヘッダ: [${header.join(' | ')}]`)
   }
 
   const parseNum = (s: string | undefined): number => {
