@@ -224,7 +224,11 @@ export default function AmazonPage() {
                             onChange={e => changeCategory(it.id, e.target.value)}
                             className={`text-xs border rounded px-2 py-1 flex-1 ${
                               it.expense_category_id
-                                ? it.classification_source === 'manual' ? 'border-emerald-300 bg-emerald-50' : 'border-stone-200 bg-white'
+                                ? it.classification_source === 'manual'
+                                  ? 'border-emerald-300 bg-emerald-50'
+                                  : it.classification_source === 'learned'
+                                    ? 'border-blue-200 bg-blue-50'
+                                    : 'border-stone-200 bg-white'
                                 : 'border-amber-300 bg-amber-50'
                             }`}
                           >
@@ -235,6 +239,9 @@ export default function AmazonPage() {
                           </select>
                           {it.classification_source === 'manual' && (
                             <span className="text-[10px] text-emerald-600">手動</span>
+                          )}
+                          {it.classification_source === 'learned' && (
+                            <span className="text-[10px] text-blue-600">学習</span>
                           )}
                         </div>
                       </li>

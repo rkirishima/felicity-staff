@@ -1,7 +1,7 @@
 'use server'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { loadExpenseRules, classifyExpenseItem } from '@/lib/keiri/classifyExpense'
+import { loadClassificationContext, classifyExpenseItemWithAmount } from '@/lib/keiri/classifyExpense'
 
 type ParsedItem = {
   order_id: string
@@ -161,7 +161,18 @@ export async function importAmazonCsv(formData: FormData): Promise<{
   if (items.length === 0) throw new Error('取込可能な明細がありません')
 
   const sb = await createClient()
-  const rules = await loadExpenseRules()
+  const ctx = await loadClassificationContext()
+
+  // Load learned overrides (manually-categorized items remembered for future imports)
+  const { data: overrideRows } = await sb
+    .from('keiri_amazon_item_overrides')
+    .select('item_name, asin, category_id, tax_rate')
+  const overrideByName = new Map<string, { category_id: string; tax_rate: number | null }>()
+  const overrideByAsin = new Map<string, { category_id: string; tax_rate: number | null }>()
+  for (const o of (overrideRows ?? []) as Array<{ item_name: string; asin: string | null; category_id: string; tax_rate: number | null }>) {
+    overrideByName.set(o.item_name, { category_id: o.category_id, tax_rate: o.tax_rate })
+    if (o.asin) overrideByAsin.set(o.asin, { category_id: o.category_id, tax_rate: o.tax_rate })
+  }
 
   // Group by order_id
   const orderMap = new Map<string, ParsedItem[]>()
@@ -212,8 +223,23 @@ export async function importAmazonCsv(formData: FormData): Promise<{
     insertedOrders++
 
     const itemRows = lineItems.map(it => {
-      const cls = classifyExpenseItem(it.item_name, rules)
-      if (!cls) unclassified++
+      const learned = (it.asin && overrideByAsin.get(it.asin)) || overrideByName.get(it.item_name)
+      let categoryId: string | null = null
+      let taxRate: number | null = null
+      let source: 'auto' | 'learned' = 'auto'
+      if (learned) {
+        categoryId = learned.category_id
+        taxRate = learned.tax_rate ?? null
+        source = 'learned'
+      } else {
+        const cls = classifyExpenseItemWithAmount(it.item_name, it.total_amount, ctx)
+        if (cls) {
+          categoryId = cls.category_id
+          taxRate = cls.tax_rate
+        } else {
+          unclassified++
+        }
+      }
       return {
         order_id: orderId,
         asin: it.asin,
@@ -222,10 +248,10 @@ export async function importAmazonCsv(formData: FormData): Promise<{
         quantity: it.quantity,
         unit_price: it.unit_price,
         total_amount: it.total_amount,
-        tax_rate: cls?.tax_rate ?? null,
+        tax_rate: taxRate,
         tax_amount: it.tax_amount,
-        expense_category_id: cls?.category_id ?? null,
-        classification_source: 'auto',
+        expense_category_id: categoryId,
+        classification_source: source,
       }
     })
     const { error: itemErr } = await sb.from('keiri_amazon_order_items').insert(itemRows)
@@ -303,11 +329,44 @@ export async function updateAmazonItemCategory(
   categoryId: string | null,
 ): Promise<void> {
   const sb = await createClient()
+  const { data: item, error: selErr } = await sb
+    .from('keiri_amazon_order_items')
+    .select('item_name, asin, tax_rate, order_id')
+    .eq('id', itemId)
+    .single()
+  if (selErr) throw new Error(selErr.message)
+
   const { error } = await sb
     .from('keiri_amazon_order_items')
     .update({ expense_category_id: categoryId, classification_source: 'manual' })
     .eq('id', itemId)
   if (error) throw new Error(error.message)
+
+  // Learn this assignment so future imports of the same item_name (or ASIN) auto-apply.
+  if (categoryId && item) {
+    await sb
+      .from('keiri_amazon_item_overrides')
+      .upsert(
+        {
+          item_name: item.item_name,
+          asin: item.asin ?? null,
+          category_id: categoryId,
+          tax_rate: item.tax_rate ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'item_name' },
+      )
+
+    // Propagate to other order rows for the same item in the same order (consolidated transaction category)
+    if (item.order_id) {
+      await sb
+        .from('keiri_transactions')
+        .update({ category_id: categoryId })
+        .eq('source', 'amazon_business')
+        .eq('source_ref', item.order_id)
+    }
+  }
+
   revalidatePath('/admin/keiri/amazon')
 }
 
