@@ -570,7 +570,13 @@ export default function KeiriDashboard() {
                 href="/admin/keiri/bank"
                 className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
               >
-                🏦 銀行入金
+                🏦 銀行入出金
+              </Link>
+              <Link
+                href="/admin/keiri/amazon"
+                className="bg-orange-50 border border-orange-200 text-orange-800 py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
+              >
+                📦 Amazon Business（経費）
               </Link>
             </div>
           </>

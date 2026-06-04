@@ -266,9 +266,44 @@ export async function importBankCsv(formData: FormData): Promise<{ inserted: num
     }
   }
 
+  // Auto-link debit rows to existing Amazon expense transactions (date+amount).
+  if (fresh.length > 0) {
+    const debits = fresh.filter(r => r.debit > 0)
+    if (debits.length > 0) {
+      const debitMin = debits.reduce((min, r) => r.date < min ? r.date : min, debits[0].date)
+      const debitMax = debits.reduce((max, r) => r.date > max ? r.date : max, debits[0].date)
+      const { data: amazonTxns } = await sb
+        .from('keiri_transactions')
+        .select('id, date, amount, bank_transaction_id')
+        .eq('source', 'amazon_business')
+        .gte('date', isoDate(debitMin, -7))
+        .lte('date', isoDate(debitMax, +2))
+        .is('bank_transaction_id', null)
+      const txnCandidates = (amazonTxns ?? []) as Array<{ id: string; date: string; amount: number; bank_transaction_id: string | null }>
+      for (const d of debits) {
+        const txId = insertedIds.get(fingerprint(d))
+        if (!txId) continue
+        const match = txnCandidates.find(t => t.amount === d.debit && Math.abs(daysBetween(t.date, d.date)) <= 7)
+        if (match) {
+          await sb.from('keiri_bank_transactions').update({ transaction_id: match.id }).eq('id', txId)
+          await sb.from('keiri_transactions').update({ bank_transaction_id: txId }).eq('id', match.id)
+          const idx = txnCandidates.indexOf(match)
+          if (idx >= 0) txnCandidates.splice(idx, 1)
+        }
+      }
+    }
+  }
+
   revalidatePath('/admin/keiri/bank')
   if (payablesMatched > 0) revalidatePath('/admin/keiri/payables')
+  revalidatePath('/admin/keiri/amazon')
   return { inserted: fresh.length, skipped, total: rows.length, payablesMatched }
+}
+
+function daysBetween(a: string, b: string): number {
+  const da = new Date(a + 'T00:00:00Z').getTime()
+  const db = new Date(b + 'T00:00:00Z').getTime()
+  return Math.round((da - db) / 86400000)
 }
 
 function isoDate(base: string, deltaDays: number): string {
