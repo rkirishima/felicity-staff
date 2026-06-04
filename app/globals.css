@@ -143,3 +143,18 @@ main textarea::placeholder {
   color: #a8a29e !important;
   -webkit-text-fill-color: #a8a29e !important;
 }
+
+/* ダーク背景のフォーム(<main className="... dark-forms">: 焙煎/売上/棚卸し 等)は
+   上の「白背景フォーム用・強制ダーク文字」を白へ戻す。
+   .dark-forms を付けた main にのみ作用するので、ライトフォームには無影響(追加のみ)。 */
+main.dark-forms input,
+main.dark-forms textarea,
+main.dark-forms select {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+main.dark-forms input::placeholder,
+main.dark-forms textarea::placeholder {
+  color: #78716c !important;
+  -webkit-text-fill-color: #78716c !important;
+}
