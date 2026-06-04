@@ -123,7 +123,7 @@ export default function InvoiceReviewPage() {
   const ym = invoice.invoice_number.replace(/^FCR-/, '')
 
   return (
-    <main className="min-h-screen pb-24" style={{ backgroundColor: '#1c1917' }}>
+    <main className="min-h-screen pb-24 dark-forms" style={{ backgroundColor: '#1c1917' }}>
       <div className="sticky top-0 z-10 px-4 pt-12 pb-4" style={{ backgroundColor: '#1c1917', borderBottom: '1px solid #292524' }}>
         <div className="flex items-center gap-2">
           <FileText size={20} className="text-amber-400" />

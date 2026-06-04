@@ -117,7 +117,7 @@ export default function ShippingPage() {
   const shown = tab === 'pending' ? pending : tab === 'unshipped' ? unshipped : shipped
 
   return (
-    <main className="min-h-screen pb-24" style={{ backgroundColor: '#1c1917' }}>
+    <main className="min-h-screen pb-24 dark-forms" style={{ backgroundColor: '#1c1917' }}>
       {/* Header */}
       <div className="sticky top-0 z-10 px-4 pt-12 pb-4" style={{ backgroundColor: '#1c1917', borderBottom: '1px solid #292524' }}>
         <div className="flex items-center gap-3 max-w-lg mx-auto">

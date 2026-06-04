@@ -176,7 +176,7 @@ export default function SyncPage() {
   }
 
   return (
-    <main className="min-h-screen pb-24" style={{ backgroundColor: '#1c1917' }}>
+    <main className="min-h-screen pb-24 dark-forms" style={{ backgroundColor: '#1c1917' }}>
       <div className="sticky top-0 z-10 px-4 pt-12 pb-3" style={{ backgroundColor: '#1c1917', borderBottom: '1px solid #292524' }}>
         <div className="flex items-center gap-2">
           <Link href="/admin/inventory" className="text-stone-400 hover:text-white">
