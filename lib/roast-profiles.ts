@@ -52,7 +52,8 @@ export type RoastProfile = {
     | 'very-gentle'
   strategy: string
   pro_tip: string
-  soak: boolean
+  /** 'none'=ソーク無し / 'short'=短ソーク20-30秒 / 'full'=フルソーク約60秒 */
+  soak: 'none' | 'short' | 'full'
 }
 
 export const PROFILES: RoastProfile[] = [
@@ -65,7 +66,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'fast-ramp',
     strategy: 'カフェ・フィルター向けCity+。ドライング短めでMaillardしっかり、FC+60秒で落としてバランス重視。',
     pro_tip: 'DTR 18-20%。City+でナッツ感とライトボディが綺麗にまとまる。',
-    soak: false,
+    soak: 'none',
   },
   {
     bean_id: 'PNG_BAROIDA_WASHED', roast_level: 'dark',
@@ -75,7 +76,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'fast-ramp',
     strategy: '旭興産向けの深煎り。Maillardを伸ばしてからFC、Vienna手前でドロップ。エスプレッソのボディと甘味の核に。',
     pro_tip: 'FC後に必ず2段ガス減でクラッシュ防止。224°C超えると焦げ臭が出るので注意。',
-    soak: false,
+    soak: 'none',
   },
 
   // ═══════════════════ PNG BAROIDA HONEY ═══════════════════
@@ -87,7 +88,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-balanced',
     strategy: 'ハニー製法でwashedより甘く果実寄り。中庸火力でハチミツの甘味とリンゴ酸を両立、FC+60秒で落とす。',
     pro_tip: 'washed版より-4°Cチャージ。糖が多くスコーチしやすいので最初の2分は色ムラ監視。',
-    soak: false,
+    soak: 'none',
   },
   {
     bean_id: 'PNG_BAROIDA_HONEY', roast_level: 'dark',
@@ -97,7 +98,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-balanced',
     strategy: '深煎りでハニーの糖がカラメル化。エスプレッソのボディと甘味に。Vienna手前で止める。',
     pro_tip: '222°C超えると糖の苦味が勝つ。ハニーは深煎りでも甘味が核なので欲張らない。',
-    soak: false,
+    soak: 'none',
   },
 
   // ═══════════════════ PNG PREMIUM (特価バルク/業販ベース) ═══════════════════
@@ -109,7 +110,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'steady-medium',
     strategy: '特価バルク。ブレンドベース/業販向けにクセなく素直に。City+でナッツと甘味。',
     pro_tip: 'グレード不揃いの可能性。色ムラが出たら排気で調整。長時間ベイク回避。',
-    soak: false,
+    soak: 'none',
   },
   {
     bean_id: 'PNG_PREMIUM_BULK', roast_level: 'dark',
@@ -119,7 +120,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'steady-medium',
     strategy: 'ブレンドのボディ要員。Full City+で苦味と甘味をしっかり。業販ブレンドの土台。',
     pro_tip: 'Vienna超えるとスモーキー。222°Cまで。コスト豆なので回転重視で安定運用。',
-    soak: false,
+    soak: 'none',
   },
 
   // ═══════════════════ BRASIL SANTA ALINA ═══════════════════
@@ -131,7 +132,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'steady-medium',
     strategy: 'City+でフルーティ寄り。中庸火力、FC+45-60秒で止めてヘーゼルナッツの甘味を引き出す。',
     pro_tip: 'soft beanなのでベイク注意。10:30以内で落とす。',
-    soak: false,
+    soak: 'none',
   },
   {
     bean_id: 'BRA_SANTA_ALINA', roast_level: 'dark',
@@ -141,7 +142,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'steady-medium',
     strategy: '深煎りでエスプレッソベース。Full City+〜Vienna手前。ナッツ→ダークチョコの遷移を引き出す。',
     pro_tip: 'Vienna超えると油っぽくbitter。222°Cで止めて甘味とビター感のバランスを取る。',
-    soak: false,
+    soak: 'none',
   },
 
   // ═══════════════════ BRAZIL CERRADO ═══════════════════
@@ -153,7 +154,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'steady-medium',
     strategy: 'City+で素直な甘味。ナチュラルチャフを排気で逃しつつ、ピーナッツ→ブラウンシュガーの遷移を引き出す。',
     pro_tip: '排気を1段強めに。チャフによる雑味を防ぐ。',
-    soak: false,
+    soak: 'none',
   },
   {
     bean_id: 'BRA_CERRADO', roast_level: 'dark',
@@ -163,7 +164,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'steady-medium',
     strategy: 'ブレンドベース向け深煎り。Full City+でカカオとキャラメルが融合、ボディしっかり。',
     pro_tip: 'FC後の伸び方を観察。チャフが急に増えたら火を絞る。',
-    soak: false,
+    soak: 'none',
   },
 
   // ═══════════════════ BRAZIL SANTOS ═══════════════════
@@ -175,7 +176,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'steady-medium',
     strategy: 'City+のナッツ寄り。短時間で素直に。コモディティなのでベイク絶対回避。',
     pro_tip: '10:00以内で落とす。長く取ると紙臭くなる。',
-    soak: false,
+    soak: 'none',
   },
   {
     bean_id: 'BRA_SANTOS', roast_level: 'dark',
@@ -185,7 +186,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'steady-medium',
     strategy: 'ブレンドのボディ要員。Full City+でしっかり苦味と甘味を出す。',
     pro_tip: 'Vienna超えるとスモーキーになりすぎ。222°Cまで。',
-    soak: false,
+    soak: 'none',
   },
 
   // ═══════════════════ GUATEMALA LA CUPULA ═══════════════════
@@ -196,8 +197,8 @@ export const PROFILES: RoastProfile[] = [
     total_time_min: '11:30', drum_rpm: 62, drum_note: 'standard',
     heat_method: 'aggressive-steady',
     strategy: 'Antigua SHB。密度高いので本群では最も高めのチャージ可。Full Cityでバランス、set & forgetで火を緩めない。',
-    pro_tip: 'FC後だけ2段ガス減。途中で絞ると逆にストール。',
-    soak: false,
+    pro_tip: 'FC後だけ2段ガス減。途中で絞ると逆にストール。投入直後だけ短ソーク(20-30秒)で芯を均一化。',
+    soak: 'short',
   },
   {
     bean_id: 'GTM_LA_CUPULA', roast_level: 'dark',
@@ -206,8 +207,8 @@ export const PROFILES: RoastProfile[] = [
     total_time_min: '12:30', drum_rpm: 62, drum_note: 'standard',
     heat_method: 'aggressive-steady',
     strategy: 'エスプレッソ向け深煎り。Vienna手前で甘さと深みのピーク。',
-    pro_tip: '密度高いのでVienna越えてもストール無いが、225°Cで止めないと焦げる。',
-    soak: false,
+    pro_tip: '密度高いのでVienna越えてもストール無いが、225°Cで止めないと焦げる。投入直後だけ短ソーク(20-30秒)。',
+    soak: 'short',
   },
 
   // ═══════════════════ GUATEMALA GUALVADOR (Anaerobic) ═══════════════════
@@ -219,7 +220,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gradual-ramp',
     strategy: 'City+で発酵フレーバー最大。緩やかなランプでアナエロビック特有のいちごジャム感を保護。',
     pro_tip: 'FC開始時に体感より1段早めにガス切り。',
-    soak: false,
+    soak: 'none',
   },
   {
     bean_id: 'GTM_GUALVADOR', roast_level: 'dark',
@@ -229,7 +230,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gradual-ramp',
     strategy: 'Vienna手前で深いチョコ＋発酵香の融合。発酵がモラセスに化ける狙い。',
     pro_tip: '⚠ 220°Cを絶対超えない事 — 発酵香がアセトン/medicinalに化ける。FC+120秒以内で必ず判定。',
-    soak: false,
+    soak: 'none',
   },
 
   // ═══════════════════ ETHIOPIA YIRGACHEFFE G-1 NATURAL ═══════════════════
@@ -241,7 +242,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-controlled',
     strategy: '浅煎りで果実香最大化。SOAK 60秒、FC+45-60秒で即ドロップ。フィルター用。',
     pro_tip: 'FC開始から60秒以内必ず。1秒の遅れがフローラルを破壊。',
-    soak: true,
+    soak: 'full',
   },
   {
     bean_id: 'ETH_YIRGACHEFFE_G1', roast_level: 'medium',
@@ -251,7 +252,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-controlled',
     strategy: '中煎りでベリージャムと甘さのバランス。フィルター/エスプレッソ両用。',
     pro_tip: '213°C超えると焙煎香でフローラル消える。FC+120秒以内で判定。',
-    soak: true,
+    soak: 'full',
   },
 
   // ═══════════════════ ETHIOPIA BANKO GOTITI ═══════════════════
@@ -264,7 +265,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-controlled',
     strategy: 'Light で透明感最大。FC直後即ドロップ。レモンと紅茶が立つ。',
     pro_tip: 'DTR 17-19%。長くするとレモン酸が紙臭に。',
-    soak: true,
+    soak: 'full',
   },
   {
     bean_id: 'ETH_BANKO_GOTITI', roast_level: 'medium',
@@ -274,7 +275,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-controlled',
     strategy: '中煎りで桃感と甘味を引き出す。City+でフィルターのスイートスポット。',
     pro_tip: 'FC+90-120秒で判定。211°C超えると鋭さ消える。',
-    soak: true,
+    soak: 'full',
   },
 
   // ═══════════════════ COLOMBIA DECAFE ═══════════════════
@@ -286,7 +287,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'very-gentle',
     strategy: 'EA処理で細胞壁脆い。本群で最も低いチャージ＋SOAK、Maillard伸ばしてボディ補強。',
     pro_tip: 'FCの音/視覚共に弱い。豆色とRORで判断。Full City+で甘味とボディ。',
-    soak: true,
+    soak: 'full',
   },
   {
     bean_id: 'COL_DECAFE', roast_level: 'dark',
@@ -296,7 +297,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'very-gentle',
     strategy: '深煎りでもデカフェなのでgentle継続。220°Cでビター感とボディが整う。',
     pro_tip: 'Vienna超えると豆が崩れる。220°Cで必ず止める。',
-    soak: true,
+    soak: 'full',
   },
 
   // ═══════════════════ TANZANIA AA/AB MWIKA ═══════════════════
@@ -308,7 +309,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-balanced',
     strategy: 'Lightでカシスとレモンの酸を保つ。FC+45秒で即ドロップ。',
     pro_tip: '208°C超えると黒胡椒の刺激が出始める。',
-    soak: true,
+    soak: 'full',
   },
   {
     bean_id: 'TZA_MWIKA', roast_level: 'medium',
@@ -318,7 +319,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-balanced',
     strategy: '中煎りでベリーとカカオが融合。フィルター/エスプレッソ両用。',
     pro_tip: 'Vienna以上にしない。ジューシーさが消える。',
-    soak: true,
+    soak: 'full',
   },
 
   // ═══════════════════ INDIA ATTIKAN (Anaerobic) ═══════════════════
@@ -329,8 +330,8 @@ export const PROFILES: RoastProfile[] = [
     total_time_min: '11:30', drum_rpm: 64, drum_note: 'NATURAL - 高RPMで接触スコーチ回避(空中時間↑)',
     heat_method: 'gradual-ramp',
     strategy: 'インド産アナエロビック。City+で発酵香とスパイス感を両立。',
-    pro_tip: 'チャフ多め、排気管理重要。FC直前1段ガス減。',
-    soak: false,
+    pro_tip: 'チャフ多め、排気管理重要。FC直前1段ガス減。アナエロの発酵香保護に投入直後だけ短ソーク(20-30秒)。',
+    soak: 'short',
   },
   {
     bean_id: 'IND_ATTIKAN', roast_level: 'dark',
@@ -339,8 +340,8 @@ export const PROFILES: RoastProfile[] = [
     total_time_min: '12:30', drum_rpm: 64, drum_note: 'NATURAL - 高RPMで接触スコーチ回避(空中時間↑)',
     heat_method: 'gradual-ramp',
     strategy: '深煎りでスパイス感が前面、発酵が深いカラメル化。',
-    pro_tip: '⚠ 221°Cまで。超えると発酵香がmedicinalに化ける。',
-    soak: false,
+    pro_tip: '⚠ 221°Cまで。超えると発酵香がmedicinalに化ける。投入直後だけ短ソーク(20-30秒)。',
+    soak: 'short',
   },
 
   // ═══════════════════ YEMEN WHITE CAMEL ═══════════════════
@@ -352,7 +353,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-controlled',
     strategy: 'サイズ不揃いで焦げやすい。低チャージ＋SOAKで均一加熱。City+でアプリコットとワイン感。',
     pro_tip: 'チップ/スコーチ警戒最優先。3分間は窓を覗いて色ムラ監視。',
-    soak: true,
+    soak: 'full',
   },
 
   // ═══════════════════ JAMAICA BLUE MOUNTAIN ═══════════════════
@@ -364,7 +365,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-balanced',
     strategy: '高額豆、Mediumのみ。バランス重視のジェントルランプ。',
     pro_tip: '深煎り絶対NG。FC+60-75秒で必ずドロップ。',
-    soak: true,
+    soak: 'full',
   },
 
   // ═══════════════════ EL SALVADOR FANY ═══════════════════
@@ -375,8 +376,8 @@ export const PROFILES: RoastProfile[] = [
     total_time_min: '10:30', drum_rpm: 62, drum_note: 'standard',
     heat_method: 'gentle-balanced',
     strategy: 'Lightでリンゴの酸とフローラル。フィルター用。',
-    pro_tip: 'FC+45-60秒。Red Bourbonの繊細さを保つ。',
-    soak: false,
+    pro_tip: 'FC+45-60秒。Red Bourbonの繊細さを保つ。高密度なので投入直後だけ短ソーク(20-30秒)。',
+    soak: 'short',
   },
   {
     bean_id: 'SLV_FANY', roast_level: 'medium',
@@ -385,8 +386,8 @@ export const PROFILES: RoastProfile[] = [
     total_time_min: '11:00', drum_rpm: 62, drum_note: 'standard',
     heat_method: 'gentle-balanced',
     strategy: 'Red Bourbonの古典的甘さ。中庸火力でリンゴ酸とハチミツのバランス。',
-    pro_tip: 'DTR 20-22%で甘味ピーク。',
-    soak: false,
+    pro_tip: 'DTR 20-22%で甘味ピーク。高密度なので投入直後だけ短ソーク(20-30秒)。',
+    soak: 'short',
   },
 
   // ═══════════════════ PANAMA GEISHA ═══════════════════
@@ -398,7 +399,7 @@ export const PROFILES: RoastProfile[] = [
     heat_method: 'gentle-controlled',
     strategy: '最も繊細。本群で最低チャージ＋SOAKで香り保護、FC+45-60秒即ドロップ。Light厳守。',
     pro_tip: 'FC+60秒超えると花香消える。短いDTR(17-19%)が正解。',
-    soak: true,
+    soak: 'full',
   },
 ]
 

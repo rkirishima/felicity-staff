@@ -217,11 +217,25 @@ export default function RoastPage() {
               value={beanId}
               onChange={(e) => setBeanId(e.target.value)}
               className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-sm border border-stone-700 focus:border-amber-500 focus:outline-none"
-              style={{ colorScheme: 'dark', WebkitTextFillColor: 'white' }}
+              style={{
+                colorScheme: 'dark',
+                color: '#fff',
+                WebkitTextFillColor: '#fff',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none',
+                appearance: 'none',
+                backgroundColor: '#1c1917',
+                backgroundImage:
+                  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.75rem center',
+                backgroundSize: '0.7rem',
+                paddingRight: '2rem',
+              }}
             >
-              <option value="">選択してください</option>
+              <option value="" style={{ color: '#fff', backgroundColor: '#1c1917' }}>選択してください</option>
               {beans.map((b) => (
-                <option key={b.id} value={b.id}>
+                <option key={b.id} value={b.id} style={{ color: '#fff', backgroundColor: '#1c1917' }}>
                   {b.display_name}
                 </option>
               ))}
@@ -293,7 +307,11 @@ export default function RoastPage() {
                 <div className="flex flex-wrap gap-2 text-[10px]">
                   <span className="px-2 py-0.5 rounded bg-blue-900 text-blue-200">熱量: {heatMethodJa(p.heat_method)}</span>
                   <span className="px-2 py-0.5 rounded bg-stone-700 text-stone-300">ドラム: {p.drum_rpm} RPM</span>
-                  {p.soak && <span className="px-2 py-0.5 rounded bg-emerald-900 text-emerald-200">SOAK 60秒(CHARGE後30%)</span>}
+                  {p.soak !== 'none' && (
+                    <span className="px-2 py-0.5 rounded bg-emerald-900 text-emerald-200">
+                      {p.soak === 'short' ? 'SOAK 短め(20-30秒)' : 'SOAK 60秒(CHARGE後30%)'}
+                    </span>
+                  )}
                   {p.drum_note && <span className="px-2 py-0.5 rounded bg-rose-900 text-rose-200">{p.drum_note}</span>}
                 </div>
 
@@ -320,7 +338,7 @@ export default function RoastPage() {
                 value={datetime}
                 onChange={(e) => setDatetime(e.target.value)}
                 className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-sm border border-stone-700 focus:border-amber-500 focus:outline-none"
-                style={{ colorScheme: 'dark', WebkitTextFillColor: 'white' }}
+                style={{ colorScheme: 'dark', color: '#fff', WebkitTextFillColor: '#fff' }}
               />
             </div>
             <div>
@@ -329,10 +347,24 @@ export default function RoastPage() {
                 value={machine}
                 onChange={(e) => setMachine(e.target.value)}
                 className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-sm border border-stone-700 focus:border-amber-500 focus:outline-none"
-                style={{ colorScheme: 'dark', WebkitTextFillColor: 'white' }}
+                style={{
+                  colorScheme: 'dark',
+                  color: '#fff',
+                  WebkitTextFillColor: '#fff',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  appearance: 'none',
+                  backgroundColor: '#1c1917',
+                  backgroundImage:
+                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.75rem center',
+                  backgroundSize: '0.7rem',
+                  paddingRight: '2rem',
+                }}
               >
                 {MACHINES.map((m) => (
-                  <option key={m} value={m}>{m}</option>
+                  <option key={m} value={m} style={{ color: '#fff', backgroundColor: '#1c1917' }}>{m}</option>
                 ))}
               </select>
             </div>
