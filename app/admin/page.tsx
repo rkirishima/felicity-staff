@@ -105,6 +105,7 @@ export default function AdminPage() {
     { label: '🏷 ラベル印刷', sub: 'ドリップ・業販ラベル', path: '/label', color: 'bg-white border border-stone-100' },
     { label: '🎉 イベント管理', sub: '準備タスク・GCal連携', path: '/admin/events', color: 'bg-white border border-stone-100' },
     { label: '📢 告知', sub: '貸切・イベント告知（Web/SNS連携）', path: '/admin/announcements', color: 'bg-white border border-stone-100' },
+    { label: '👤 スタッフ管理', sub: 'ロール・時給・在籍状況', path: '/admin/staff', color: 'bg-white border border-stone-100' },
   ]
 
   return (

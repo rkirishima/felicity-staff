@@ -555,25 +555,30 @@ function SquareSalesInner() {
                     <ul className="divide-y divide-stone-100">
                       {g.payments.map(p => {
                         const lines = linesByPayment.get(p.payment_id) ?? []
+                        const firstName = lines[0]?.item_name ?? null
                         return (
                           <li key={p.id} className="px-4 py-2.5">
-                            <div className="flex justify-between items-center text-sm">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-xs text-stone-400 tabular-nums">
+                            <div className="flex justify-between items-center text-sm gap-3">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="text-xs text-stone-400 tabular-nums whitespace-nowrap">
                                   {new Date(p.created_at_jst).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })}
                                 </span>
-                                {p.card_brand && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded">
-                                    {p.card_brand}
-                                    {p.last_4 ? ` ····${p.last_4}` : ''}
+                                {firstName ? (
+                                  <span className="text-stone-800 truncate">
+                                    {firstName}
+                                    {lines.length > 1 && (
+                                      <span className="text-stone-400 text-xs"> 他{lines.length - 1}点</span>
+                                    )}
                                   </span>
+                                ) : (
+                                  <span className="text-stone-300 text-xs">明細未取得</span>
                                 )}
                               </div>
-                              <span className="text-stone-800 font-medium tabular-nums">
+                              <span className="text-stone-800 font-medium tabular-nums whitespace-nowrap">
                                 ¥{p.amount.toLocaleString()}
                               </span>
                             </div>
-                            {lines.length > 0 ? (
+                            {lines.length > 1 && (
                               <ul className="mt-1.5 pl-12 space-y-0.5">
                                 {lines.map((li, idx) => (
                                   <li key={idx} className="flex justify-between items-baseline text-[11px] text-stone-500">
@@ -591,8 +596,6 @@ function SquareSalesInner() {
                                   </li>
                                 ))}
                               </ul>
-                            ) : (
-                              <p className="mt-1 pl-12 text-[10px] text-stone-300">明細未取得</p>
                             )}
                           </li>
                         )

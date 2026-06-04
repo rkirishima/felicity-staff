@@ -35,10 +35,11 @@ export async function GET(req: Request) {
 
   const { data: shifts } = await sb
     .from('shifts')
-    .select('date, status')
+    .select('date, status, staff_id')
     .gte('date', fmt(nextMonday))
     .lte('date', fmt(nextSunday))
     .eq('status', 'approved')
+    .not('staff_id', 'is', null)
 
   const alerts: string[] = []
   for (let i = 0; i < 7; i++) {
