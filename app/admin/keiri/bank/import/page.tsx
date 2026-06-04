@@ -6,38 +6,52 @@ import { toast } from 'sonner'
 import { getAdminSession } from '@/lib/session'
 import { importBankCsv } from '../actions'
 
+type FileResult = { name: string; ok: boolean; inserted?: number; skipped?: number; total?: number; payablesMatched?: number; error?: string }
+
 export default function BankImportPage() {
   const router = useRouter()
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [importing, setImporting] = useState(false)
+  const [results, setResults] = useState<FileResult[]>([])
 
   useEffect(() => {
     if (!getAdminSession()) router.replace('/admin')
   }, [router])
 
   async function doImport() {
-    if (!file) {
+    if (files.length === 0) {
       toast.error('ファイルを選択してください')
       return
     }
     setImporting(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await importBankCsv(fd)
-      const payableHint = res.payablesMatched > 0 ? `／未払${res.payablesMatched}件を自動支払済` : ''
-      if (res.skipped > 0 && res.inserted === 0) {
-        toast.success(`全${res.total}件すべて取込済み（重複スキップ）${payableHint}`)
-      } else if (res.skipped > 0) {
-        toast.success(`${res.inserted}件取込／${res.skipped}件は重複スキップ${payableHint}`)
-      } else {
-        toast.success(`${res.inserted}件 取り込みました${payableHint}`)
+    setResults([])
+    const acc: FileResult[] = []
+    let totalInserted = 0
+    let totalSkipped = 0
+    let totalPayables = 0
+    let errorCount = 0
+    for (const f of files) {
+      try {
+        const fd = new FormData()
+        fd.append('file', f)
+        const res = await importBankCsv(fd)
+        acc.push({ name: f.name, ok: true, ...res })
+        totalInserted += res.inserted
+        totalSkipped += res.skipped
+        totalPayables += res.payablesMatched
+      } catch (e) {
+        acc.push({ name: f.name, ok: false, error: e instanceof Error ? e.message : '取込失敗' })
+        errorCount++
       }
-      router.push('/admin/keiri/bank')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '取込失敗')
-    } finally {
-      setImporting(false)
+      setResults([...acc])
+    }
+    setImporting(false)
+    const payableHint = totalPayables > 0 ? `／未払${totalPayables}件を自動支払済` : ''
+    if (errorCount === 0) {
+      toast.success(`全${files.length}ファイル取込完了: ${totalInserted}件 新規／${totalSkipped}件 重複スキップ${payableHint}`)
+      setTimeout(() => router.push('/admin/keiri/bank'), 1200)
+    } else {
+      toast.error(`${errorCount}ファイル失敗 / ${files.length - errorCount}ファイル成功`)
     }
   }
 
@@ -63,33 +77,55 @@ export default function BankImportPage() {
           </div>
 
           <label className="block border-2 border-dashed border-stone-300 rounded-xl p-6 text-center cursor-pointer">
-            {file ? (
-              <div>
-                <p className="text-sm text-stone-700">{file.name}</p>
-                <p className="text-xs text-stone-400">{(file.size / 1024).toFixed(1)} KB</p>
-                <p className="text-xs text-stone-400 mt-2">タップして別のファイルを選ぶ</p>
+            {files.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-sm text-stone-700 font-medium">{files.length}ファイル選択中</p>
+                <ul className="text-xs text-stone-500 space-y-0.5 max-h-32 overflow-y-auto">
+                  {files.map((f, i) => (
+                    <li key={i} className="truncate">{f.name} <span className="text-stone-400">({(f.size / 1024).toFixed(1)} KB)</span></li>
+                  ))}
+                </ul>
+                <p className="text-xs text-stone-400 mt-2">タップして選び直す</p>
               </div>
             ) : (
               <>
-                <p className="text-stone-500 text-sm">CSV ファイルを選択</p>
-                <p className="text-stone-300 text-xs mt-1">タップしてファイルを選ぶ</p>
+                <p className="text-stone-500 text-sm">CSV ファイルを選択（複数OK）</p>
+                <p className="text-stone-300 text-xs mt-1">タップして複数選択可</p>
               </>
             )}
             <input
               type="file"
               accept=".csv,text/csv"
+              multiple
               className="hidden"
-              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              onChange={e => setFiles(Array.from(e.target.files ?? []))}
             />
           </label>
 
           <button
             onClick={doImport}
-            disabled={!file || importing}
+            disabled={files.length === 0 || importing}
             className="w-full bg-stone-800 text-white py-3 rounded-xl font-medium disabled:opacity-50"
           >
-            {importing ? '取込中...' : '取り込む'}
+            {importing ? `取込中... (${results.length}/${files.length})` : files.length > 1 ? `${files.length}ファイル取り込む` : '取り込む'}
           </button>
+
+          {results.length > 0 && (
+            <ul className="text-xs space-y-1 pt-2 border-t border-stone-100">
+              {results.map((r, i) => (
+                <li key={i} className={`flex items-start justify-between gap-2 ${r.ok ? 'text-stone-600' : 'text-rose-700'}`}>
+                  <span className="truncate flex-1">
+                    {r.ok ? '✓' : '✕'} {r.name}
+                  </span>
+                  <span className="text-right whitespace-nowrap">
+                    {r.ok
+                      ? `${r.inserted}新規/${r.skipped}重複`
+                      : r.error}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-xs text-stone-600 space-y-1">
