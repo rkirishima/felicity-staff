@@ -49,8 +49,29 @@ export async function GET(req: NextRequest) {
   try {
     const result = await buildAndPersistInvoice(target)
 
-    // Telegramでドラフトレビュー通知
     const ym = `${target.year}年${target.month}月`
+
+    // 既存(手動/確定済み)を保護してスキップした場合は通知だけ送る
+    if (result.skipped) {
+      const skipText = [
+        `⚠️ <b>${ym} 自動請求をスキップ</b>`,
+        ``,
+        `${result.invoiceNumber} は既存のため上書きしませんでした。`,
+        `理由: ${result.skipReason}`,
+        ``,
+        `繰越などの手動ドラフトがある場合は月末に確定してください。`,
+      ].join('\n')
+      const skipTg = await sendTelegramMessage({ text: skipText, parseMode: 'HTML' })
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        target,
+        invoiceNumber: result.invoiceNumber,
+        telegram: skipTg,
+      })
+    }
+
+    // Telegramでドラフトレビュー通知
     const reviewBase = process.env.PUBLIC_APP_URL ?? 'https://felicity-staff.vercel.app'
     const reviewUrl = `${reviewBase}/admin/invoice-review/${result.invoiceId}`
     const text = [

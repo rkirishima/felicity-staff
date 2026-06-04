@@ -42,6 +42,9 @@ export type BuildResult = {
   invoiceNumber: string
   pdfPath: string
   data: MonthlyInvoiceData
+  /** 既存(手動/確定済み)を保護してスキップした場合 true */
+  skipped?: boolean
+  skipReason?: string
 }
 
 export async function buildAndPersistInvoice(opts: {
@@ -54,22 +57,29 @@ export async function buildAndPersistInvoice(opts: {
   }
   const meta = defaultMeta(data)
 
-  // 1) 既存請求書チェック（確定済みは絶対に上書きしない）
-  //    paid/sent などドラフト以外を見つけたら、PDF生成もDB書込もせず中止する。
+  // 1) 既存請求書チェック。cronは「自分が作ったドラフト」だけを上書きする。
+  //    paid/sent や手動作成の請求書（繰越ドラフト等）は絶対に潰さない。
+  //    対象外なら PDF生成もDB書込もせず skipped を返す（route側でTelegram通知）。
   //    2026-05 の二重請求事故（cronがpaid請求書を上書き）の再発防止。
   const supabase = admin()
   const { data: existing } = await supabase
     .from('keiri_invoices')
-    .select('id, status')
+    .select('id, status, created_by')
     .eq('invoice_number', meta.invoiceNumber)
     .maybeSingle()
 
-  if (existing && existing.status !== 'draft') {
-    throw new Error(
-      `${meta.invoiceNumber} は既に status='${existing.status}'。` +
-        `確定済み請求書の自動上書きを中止しました。` +
-        `追加焙煎分は手動で別請求書（例: ${meta.invoiceNumber}B）を作成してください。`,
-    )
+  const cronOwnedDraft =
+    existing?.status === 'draft' && existing?.created_by === 'cron:monthly-roast-invoice'
+
+  if (existing && !cronOwnedDraft) {
+    return {
+      invoiceId: existing.id,
+      invoiceNumber: meta.invoiceNumber,
+      pdfPath: '',
+      data,
+      skipped: true,
+      skipReason: `既存 status=${existing.status} / created_by=${existing.created_by}`,
+    }
   }
 
   // 2) PDF render
