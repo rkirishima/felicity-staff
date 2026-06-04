@@ -13,6 +13,7 @@ type FileResult = {
   skipped_orders?: number
   inserted_items?: number
   unclassified?: number
+  ai_classified?: number
   bank_matched?: number
   error?: string
 }
@@ -38,6 +39,7 @@ export default function AmazonImportPage() {
     let totalOrders = 0
     let totalItems = 0
     let totalUnclassified = 0
+    let totalAi = 0
     let totalBank = 0
     let errors = 0
     for (const f of files) {
@@ -49,6 +51,7 @@ export default function AmazonImportPage() {
         totalOrders += res.inserted_orders
         totalItems += res.inserted_items
         totalUnclassified += res.unclassified
+        totalAi += res.ai_classified
         totalBank += res.bank_matched
       } catch (e) {
         acc.push({ name: f.name, ok: false, error: e instanceof Error ? e.message : '取込失敗' })
@@ -58,9 +61,10 @@ export default function AmazonImportPage() {
     }
     setImporting(false)
     if (errors === 0) {
+      const aiHint = totalAi > 0 ? `／AI ${totalAi}件分類` : ''
       const bankHint = totalBank > 0 ? `／銀行${totalBank}件と自動紐付け` : ''
       const unHint = totalUnclassified > 0 ? `／未分類${totalUnclassified}件` : ''
-      toast.success(`${totalOrders}注文 ${totalItems}明細 取込完了${bankHint}${unHint}`)
+      toast.success(`${totalOrders}注文 ${totalItems}明細 取込完了${aiHint}${bankHint}${unHint}`)
       setTimeout(() => router.push('/admin/keiri/amazon'), 1500)
     } else {
       toast.error(`${errors}ファイル失敗 / ${files.length - errors}ファイル成功`)

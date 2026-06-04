@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { loadClassificationContext, classifyExpenseItemWithAmount } from '@/lib/keiri/classifyExpense'
+import { aiClassifyItems, resolveAiResult } from '@/lib/keiri/aiClassifyExpense'
 
 type ParsedItem = {
   order_id: string
@@ -148,6 +149,7 @@ export async function importAmazonCsv(formData: FormData): Promise<{
   inserted_items: number
   skipped_orders: number
   unclassified: number
+  ai_classified: number
   total_items: number
   bank_matched: number
 }> {
@@ -194,7 +196,10 @@ export async function importAmazonCsv(formData: FormData): Promise<{
   let insertedItems = 0
   let skippedOrders = 0
   let unclassified = 0
+  let aiClassified = 0
   let bankMatched = 0
+  const newlyInsertedItemIds: string[] = []
+  const orderIdToTransactionId = new Map<string, string>()
 
   for (const [orderId, lineItems] of orderMap) {
     if (existingIds.has(orderId)) {
@@ -254,9 +259,15 @@ export async function importAmazonCsv(formData: FormData): Promise<{
         classification_source: source,
       }
     })
-    const { error: itemErr } = await sb.from('keiri_amazon_order_items').insert(itemRows)
+    const { data: insertedRows, error: itemErr } = await sb
+      .from('keiri_amazon_order_items')
+      .insert(itemRows)
+      .select('id, expense_category_id')
     if (itemErr) throw new Error(itemErr.message)
     insertedItems += itemRows.length
+    for (const r of (insertedRows ?? []) as Array<{ id: string; expense_category_id: string | null }>) {
+      if (!r.expense_category_id) newlyInsertedItemIds.push(r.id)
+    }
 
     // Insert one keiri_transactions row per order (consolidated expense)
     const firstCategoryId = itemRows.find(r => r.expense_category_id)?.expense_category_id ?? null
@@ -283,6 +294,7 @@ export async function importAmazonCsv(formData: FormData): Promise<{
       .select('id')
       .single()
     if (txnErr) throw new Error(txnErr.message)
+    if (txn?.id) orderIdToTransactionId.set(orderId, txn.id)
 
     // Try to match against an existing bank debit row (same amount, ±5 days)
     if (txn?.id) {
@@ -306,6 +318,85 @@ export async function importAmazonCsv(formData: FormData): Promise<{
     }
   }
 
+  // AI classification pass: try Claude on the items keyword rules couldn't classify.
+  if (newlyInsertedItemIds.length > 0) {
+    const { data: pendingItems } = await sb
+      .from('keiri_amazon_order_items')
+      .select('id, item_name, total_amount, order_id, asin')
+      .in('id', newlyInsertedItemIds)
+    const pending = (pendingItems ?? []) as Array<{ id: string; item_name: string; total_amount: number; order_id: string; asin: string | null }>
+
+    // Dedupe by item_name so we only spend tokens once per unique product
+    const uniqueByName = new Map<string, { item_name: string; amount: number }>()
+    for (const it of pending) {
+      if (!uniqueByName.has(it.item_name)) {
+        uniqueByName.set(it.item_name, { item_name: it.item_name, amount: it.total_amount })
+      }
+    }
+    const aiInputs = Array.from(uniqueByName.values())
+
+    if (aiInputs.length > 0) {
+      const aiResults = await aiClassifyItems(aiInputs)
+      const resolvedByName = new Map<string, { category_id: string; tax_rate: number; confidence: 'high' | 'medium' | 'low' }>()
+      for (const r of aiResults) {
+        const resolved = resolveAiResult(r, ctx)
+        if (resolved) resolvedByName.set(r.item_name, resolved)
+      }
+
+      // Apply to all pending items
+      for (const it of pending) {
+        const r = resolvedByName.get(it.item_name)
+        if (!r) continue
+        await sb
+          .from('keiri_amazon_order_items')
+          .update({
+            expense_category_id: r.category_id,
+            tax_rate: r.tax_rate,
+            classification_source: 'ai',
+          })
+          .eq('id', it.id)
+        aiClassified++
+        unclassified = Math.max(0, unclassified - 1)
+
+        // Cache high-confidence AI classifications so future imports skip the API call
+        if (r.confidence === 'high') {
+          await sb.from('keiri_amazon_item_overrides').upsert(
+            {
+              item_name: it.item_name,
+              asin: it.asin,
+              category_id: r.category_id,
+              tax_rate: r.tax_rate,
+              note: 'AI 自動分類 (high confidence)',
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'item_name' },
+          )
+        }
+      }
+
+      // Update each order's transaction with the new first-classified item's category
+      for (const [orderId, txnId] of orderIdToTransactionId) {
+        const { data: firstClassified } = await sb
+          .from('keiri_amazon_order_items')
+          .select('expense_category_id, tax_rate')
+          .eq('order_id', orderId)
+          .not('expense_category_id', 'is', null)
+          .limit(1)
+          .maybeSingle()
+        if (firstClassified?.expense_category_id) {
+          await sb
+            .from('keiri_transactions')
+            .update({
+              category_id: firstClassified.expense_category_id,
+              tax_category: Number(firstClassified.tax_rate) === 8 ? '軽減8' : '物販10',
+            })
+            .eq('id', txnId)
+            .is('category_id', null)
+        }
+      }
+    }
+  }
+
   revalidatePath('/admin/keiri/amazon')
   revalidatePath('/admin/keiri/bank')
   return {
@@ -313,6 +404,7 @@ export async function importAmazonCsv(formData: FormData): Promise<{
     inserted_items: insertedItems,
     skipped_orders: skippedOrders,
     unclassified,
+    ai_classified: aiClassified,
     total_items: items.length,
     bank_matched: bankMatched,
   }
@@ -322,6 +414,74 @@ function isoDate(base: string, deltaDays: number): string {
   const d = new Date(base + 'T00:00:00Z')
   d.setUTCDate(d.getUTCDate() + deltaDays)
   return d.toISOString().slice(0, 10)
+}
+
+export async function aiClassifyUnclassified(month: string): Promise<{ classified: number; total: number }> {
+  const sb = await createClient()
+  const ctx = await loadClassificationContext()
+
+  const [y, m] = month.split('-').map(s => parseInt(s, 10))
+  const start = `${month}-01`
+  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+
+  const { data: orderRows } = await sb
+    .from('keiri_amazon_orders')
+    .select('order_id')
+    .gte('order_date', start)
+    .lt('order_date', next)
+  const orderIds = (orderRows ?? []).map(o => o.order_id as string)
+  if (orderIds.length === 0) return { classified: 0, total: 0 }
+
+  const { data: pendingItems } = await sb
+    .from('keiri_amazon_order_items')
+    .select('id, item_name, total_amount, order_id, asin')
+    .in('order_id', orderIds)
+    .is('expense_category_id', null)
+  const pending = (pendingItems ?? []) as Array<{ id: string; item_name: string; total_amount: number; order_id: string; asin: string | null }>
+  if (pending.length === 0) return { classified: 0, total: 0 }
+
+  const uniqueByName = new Map<string, { item_name: string; amount: number }>()
+  for (const it of pending) {
+    if (!uniqueByName.has(it.item_name)) {
+      uniqueByName.set(it.item_name, { item_name: it.item_name, amount: it.total_amount })
+    }
+  }
+  const aiResults = await aiClassifyItems(Array.from(uniqueByName.values()))
+  const resolvedByName = new Map<string, { category_id: string; tax_rate: number; confidence: 'high' | 'medium' | 'low' }>()
+  for (const r of aiResults) {
+    const resolved = resolveAiResult(r, ctx)
+    if (resolved) resolvedByName.set(r.item_name, resolved)
+  }
+
+  let classified = 0
+  for (const it of pending) {
+    const r = resolvedByName.get(it.item_name)
+    if (!r) continue
+    await sb
+      .from('keiri_amazon_order_items')
+      .update({
+        expense_category_id: r.category_id,
+        tax_rate: r.tax_rate,
+        classification_source: 'ai',
+      })
+      .eq('id', it.id)
+    classified++
+    if (r.confidence === 'high') {
+      await sb.from('keiri_amazon_item_overrides').upsert(
+        {
+          item_name: it.item_name,
+          asin: it.asin,
+          category_id: r.category_id,
+          tax_rate: r.tax_rate,
+          note: 'AI 自動分類 (high confidence)',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'item_name' },
+      )
+    }
+  }
+  revalidatePath('/admin/keiri/amazon')
+  return { classified, total: pending.length }
 }
 
 export async function updateAmazonItemCategory(

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
-import { updateAmazonItemCategory, deleteAmazonOrder } from './actions'
+import { updateAmazonItemCategory, deleteAmazonOrder, aiClassifyUnclassified } from './actions'
 import { toast } from 'sonner'
 
 function thisMonthJST() {
@@ -59,6 +59,8 @@ export default function AmazonPage() {
   const [items, setItems] = useState<OrderItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     if (!getAdminSession()) {
@@ -104,7 +106,7 @@ export default function AmazonPage() {
     return () => {
       cancelled = true
     }
-  }, [month, router, supabase])
+  }, [month, router, supabase, reload])
 
   const monthTotal = orders.reduce((s, o) => s + o.total_amount, 0)
   const monthTax = orders.reduce((s, o) => s + (o.tax_amount ?? 0), 0)
@@ -132,6 +134,20 @@ export default function AmazonPage() {
     } catch (e) {
       setItems(prev)
       toast.error(e instanceof Error ? e.message : '更新失敗')
+    }
+  }
+
+  async function runAiClassify() {
+    setAiBusy(true)
+    try {
+      const res = await aiClassifyUnclassified(month)
+      if (res.total === 0) toast.info('未分類の明細はありません')
+      else toast.success(`${res.classified}/${res.total}件をAIで分類しました`)
+      setReload(n => n + 1)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'AI分類失敗')
+    } finally {
+      setAiBusy(false)
     }
   }
 
@@ -184,6 +200,15 @@ export default function AmazonPage() {
               <span className="ml-2 text-amber-700 font-medium">／ 未分類 {unclassifiedCount}件</span>
             )}
           </p>
+          {unclassifiedCount > 0 && (
+            <button
+              onClick={runAiClassify}
+              disabled={aiBusy}
+              className="mt-3 w-full bg-purple-600 text-white py-2 rounded-xl text-xs font-medium disabled:opacity-50"
+            >
+              {aiBusy ? 'AI分類中...' : `🤖 AIで未分類${unclassifiedCount}件を分類`}
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -236,7 +261,9 @@ export default function AmazonPage() {
                                   ? 'border-emerald-300 bg-emerald-50'
                                   : it.classification_source === 'learned'
                                     ? 'border-blue-200 bg-blue-50'
-                                    : 'border-stone-200 bg-white'
+                                    : it.classification_source === 'ai'
+                                      ? 'border-purple-200 bg-purple-50'
+                                      : 'border-stone-200 bg-white'
                                 : 'border-amber-300 bg-amber-50'
                             }`}
                           >
@@ -250,6 +277,9 @@ export default function AmazonPage() {
                           )}
                           {it.classification_source === 'learned' && (
                             <span className="text-[10px] text-blue-600">学習</span>
+                          )}
+                          {it.classification_source === 'ai' && (
+                            <span className="text-[10px] text-purple-600">AI</span>
                           )}
                         </div>
                       </li>
