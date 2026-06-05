@@ -1,6 +1,8 @@
 'use server'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { loadClassificationContext } from '@/lib/keiri/classifyExpense'
+import { aiClassifyBankRows, resolveBankCategory } from '@/lib/keiri/aiClassifyBankRow'
 
 type ParsedRow = {
   date: string
@@ -142,7 +144,7 @@ function fingerprint(r: { date: string; description: string; debit: number; cred
   return `${r.date}|${r.description}|${r.debit}|${r.credit}|${r.balance ?? ''}`
 }
 
-export async function importBankCsv(formData: FormData): Promise<{ inserted: number; skipped: number; total: number; payablesMatched: number }> {
+export async function importBankCsv(formData: FormData): Promise<{ inserted: number; skipped: number; total: number; payablesMatched: number; aiClassified?: number }> {
   const file = formData.get('file') as File | null
   if (!file) throw new Error('ファイルがありません')
 
@@ -294,10 +296,231 @@ export async function importBankCsv(formData: FormData): Promise<{ inserted: num
     }
   }
 
+  // Rule-based pre-classification for new rows (cheap fast pass before AI)
+  let aiClassifiedCount = 0
+  if (fresh.length > 0) {
+    const newIds = Array.from(insertedIds.values())
+    await preClassifyBankRowsByRule(newIds)
+    // Then AI classify whatever's still unclassified (and not already linked)
+    aiClassifiedCount = await aiClassifyUnclassifiedBankIds(newIds)
+  }
+
   revalidatePath('/admin/keiri/bank')
   if (payablesMatched > 0) revalidatePath('/admin/keiri/payables')
   revalidatePath('/admin/keiri/amazon')
-  return { inserted: fresh.length, skipped, total: rows.length, payablesMatched }
+  return { inserted: fresh.length, skipped, total: rows.length, payablesMatched, aiClassified: aiClassifiedCount }
+}
+
+async function preClassifyBankRowsByRule(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  const sb = await createClient()
+  const ctx = await loadClassificationContext()
+
+  const zatuhi = ctx.categoryByName.get('雑費')
+  const tsushin = ctx.categoryByName.get('通信費')
+  const kyuryo = ctx.categoryByName.get('給料手当')
+
+  // Load learned overrides (description pattern → category)
+  const { data: overrides } = await sb
+    .from('keiri_bank_classification_overrides')
+    .select('description_pattern, category_id, vendor_label, match_mode')
+  const overrideRules = ((overrides ?? []) as Array<{ description_pattern: string; category_id: string; vendor_label: string | null; match_mode: string }>)
+
+  const { data: rows } = await sb
+    .from('keiri_bank_transactions')
+    .select('id, description, debit, transaction_id, expense_category_id')
+    .in('id', ids)
+  const targets = ((rows ?? []) as Array<{ id: string; description: string; debit: number; transaction_id: string | null; expense_category_id: string | null }>)
+    .filter(r => r.debit > 0 && r.expense_category_id === null && r.transaction_id === null)
+
+  for (const r of targets) {
+    const desc = r.description || ''
+    let categoryId: string | null = null
+    let vendor: string | null = null
+    let source: 'auto' | 'learned' = 'auto'
+
+    // Learned overrides first
+    for (const o of overrideRules) {
+      const pattern = o.description_pattern
+      const matched =
+        o.match_mode === 'exact' ? desc === pattern :
+        o.match_mode === 'prefix' ? desc.startsWith(pattern) :
+        desc.includes(pattern)
+      if (matched) {
+        categoryId = o.category_id
+        vendor = o.vendor_label
+        source = 'learned'
+        break
+      }
+    }
+
+    if (!categoryId) {
+      if (/^振込手数料/.test(desc) && zatuhi) {
+        categoryId = zatuhi
+        vendor = 'SBI振込手数料'
+      } else if (/ANTHROPIC|OPENAI|GOOGLE\s*WORKSPACE|AWS|VERCEL/i.test(desc) && tsushin) {
+        categoryId = tsushin
+        vendor = desc.trim()
+      } else if (/コウセイロウドウシヨウネンキンキヨク|年金事務所/i.test(desc) && kyuryo) {
+        categoryId = kyuryo
+        vendor = '日本年金機構'
+      }
+    }
+
+    if (categoryId) {
+      await sb
+        .from('keiri_bank_transactions')
+        .update({
+          expense_category_id: categoryId,
+          vendor_guess: vendor,
+          classification_source: source,
+        })
+        .eq('id', r.id)
+    }
+  }
+}
+
+async function aiClassifyUnclassifiedBankIds(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0
+  const sb = await createClient()
+  const ctx = await loadClassificationContext()
+
+  const { data: rows } = await sb
+    .from('keiri_bank_transactions')
+    .select('id, date, description, debit, expense_category_id, transaction_id')
+    .in('id', ids)
+  const targets = ((rows ?? []) as Array<{ id: string; date: string; description: string; debit: number; expense_category_id: string | null; transaction_id: string | null }>)
+    .filter(r => r.debit > 0 && r.expense_category_id === null && r.transaction_id === null)
+  if (targets.length === 0) return 0
+
+  // Skip "デビット 数字" rows — AI can't classify without merchant name
+  const aiTargets = targets.filter(r => !/^デビット\s+\d+/.test(r.description))
+  const debitDetailRows = targets.filter(r => /^デビット\s+\d+/.test(r.description))
+
+  // Mark デビット rows as unclassifiable (needs detail CSV)
+  for (const r of debitDetailRows) {
+    await sb
+      .from('keiri_bank_transactions')
+      .update({
+        classification_source: 'unclassifiable',
+        classification_note: 'デビット明細CSV要 (店舗名なし)',
+      })
+      .eq('id', r.id)
+  }
+
+  if (aiTargets.length === 0) return 0
+
+  // Dedupe by description to save tokens
+  const uniqByDesc = new Map<string, { description: string; debit: number; date: string }>()
+  for (const r of aiTargets) {
+    if (!uniqByDesc.has(r.description)) uniqByDesc.set(r.description, { description: r.description, debit: r.debit, date: r.date })
+  }
+
+  const results = await aiClassifyBankRows(Array.from(uniqByDesc.values()))
+  const resolvedByDesc = new Map<string, { category_id: string; vendor: string; tax_rate: number; confidence: 'high' | 'medium' | 'low'; reason: string }>()
+  for (const r of results) {
+    const id = resolveBankCategory(r, ctx)
+    if (id) resolvedByDesc.set(r.description, { category_id: id, vendor: r.vendor, tax_rate: r.tax_rate, confidence: r.confidence, reason: r.reason })
+  }
+
+  let classified = 0
+  for (const r of aiTargets) {
+    const x = resolvedByDesc.get(r.description)
+    if (!x) continue
+    await sb
+      .from('keiri_bank_transactions')
+      .update({
+        expense_category_id: x.category_id,
+        vendor_guess: x.vendor || null,
+        classification_source: 'ai',
+        ai_confidence: x.confidence,
+        classification_note: x.reason,
+      })
+      .eq('id', r.id)
+    classified++
+
+    // Cache high-confidence as a contains-pattern override for future learning
+    if (x.confidence === 'high') {
+      await sb
+        .from('keiri_bank_classification_overrides')
+        .upsert(
+          {
+            description_pattern: r.description,
+            category_id: x.category_id,
+            vendor_label: x.vendor || null,
+            match_mode: 'exact',
+            note: 'AI 自動 (high confidence)',
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'description_pattern,match_mode' },
+        )
+    }
+  }
+  return classified
+}
+
+export async function aiClassifyAllUnmatchedBank(month: string): Promise<{ classified: number; total: number; debit_detail_needed: number }> {
+  const sb = await createClient()
+  const [y, m] = month.split('-').map(s => parseInt(s, 10))
+  const start = `${month}-01`
+  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+
+  const { data: rows } = await sb
+    .from('keiri_bank_transactions')
+    .select('id')
+    .gte('date', start)
+    .lt('date', next)
+    .gt('debit', 0)
+    .is('expense_category_id', null)
+    .is('transaction_id', null)
+  const ids = (rows ?? []).map(r => r.id as string)
+  if (ids.length === 0) return { classified: 0, total: 0, debit_detail_needed: 0 }
+
+  await preClassifyBankRowsByRule(ids)
+  const classified = await aiClassifyUnclassifiedBankIds(ids)
+  // Count rows we marked unclassifiable
+  const { count: detailNeeded } = await sb
+    .from('keiri_bank_transactions')
+    .select('id', { count: 'exact', head: true })
+    .in('id', ids)
+    .eq('classification_source', 'unclassifiable')
+
+  revalidatePath('/admin/keiri/bank')
+  return { classified, total: ids.length, debit_detail_needed: detailNeeded ?? 0 }
+}
+
+export async function updateBankRowCategory(id: string, categoryId: string | null): Promise<void> {
+  const sb = await createClient()
+  const { data: row } = await sb
+    .from('keiri_bank_transactions')
+    .select('description')
+    .eq('id', id)
+    .single()
+  const { error } = await sb
+    .from('keiri_bank_transactions')
+    .update({
+      expense_category_id: categoryId,
+      classification_source: 'manual',
+    })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+
+  // Learn this assignment for future imports
+  if (categoryId && row?.description) {
+    await sb
+      .from('keiri_bank_classification_overrides')
+      .upsert(
+        {
+          description_pattern: row.description,
+          category_id: categoryId,
+          match_mode: 'exact',
+          note: '手動分類',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'description_pattern,match_mode' },
+      )
+  }
+  revalidatePath('/admin/keiri/bank')
 }
 
 function daysBetween(a: string, b: string): number {
