@@ -94,6 +94,7 @@ function SquareSalesInner() {
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [overrides, setOverrides] = useState<Map<string, RevenueCategory>>(new Map())
   const [payouts, setPayouts] = useState<PayoutRow[]>([])
+  const [payoutPeriodLines, setPayoutPeriodLines] = useState<LineItem[]>([])
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [monthTotalCached, setMonthTotalCached] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -162,6 +163,35 @@ function SquareSalesInner() {
       cancelled = true
     }
   }, [month, supabase, reload])
+
+  // Fetch line items covering all payout periods (may extend outside the selected month)
+  useEffect(() => {
+    if (payouts.length === 0) {
+      setPayoutPeriodLines([])
+      return
+    }
+    const starts = payouts.map(p => p.period_start).filter((d): d is string => !!d)
+    const ends = payouts.map(p => p.period_end).filter((d): d is string => !!d)
+    if (starts.length === 0 || ends.length === 0) {
+      setPayoutPeriodLines([])
+      return
+    }
+    const minStart = starts.reduce((a, b) => (a < b ? a : b))
+    const maxEnd = ends.reduce((a, b) => (a > b ? a : b))
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('keiri_square_line_items')
+        .select('id, tax_rate, category, item_name, variation_name, payment_id, gross_amount, quantity, date, created_at_jst')
+        .gte('date', minStart)
+        .lte('date', maxEnd)
+      if (cancelled) return
+      setPayoutPeriodLines((data ?? []) as LineItem[])
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [payouts, supabase])
 
   useEffect(() => {
     if (loading) return
@@ -291,6 +321,46 @@ function SquareSalesInner() {
   const sub10 = revenueBuckets.dine_in_10.gross + revenueBuckets.goods_10.gross
   const sub8 = revenueBuckets.beans_8.gross + revenueBuckets.takeout_8.gross
   const lineItemSubtotal = sub10 + sub8 + revenueBuckets.unknown.gross
+
+  // Per-payout 4-bucket breakdown (税理士提出用)
+  type PayoutBuckets = {
+    dine_in_10: number
+    goods_10: number
+    beans_8: number
+    takeout_8: number
+    unknown: number
+    lineSubtotal: number
+  }
+  const payoutBucketsMap = useMemo(() => {
+    const map = new Map<string, PayoutBuckets>()
+    for (const p of payouts) {
+      if (!p.period_start || !p.period_end) continue
+      const buckets: PayoutBuckets = {
+        dine_in_10: 0,
+        goods_10: 0,
+        beans_8: 0,
+        takeout_8: 0,
+        unknown: 0,
+        lineSubtotal: 0,
+      }
+      for (const li of payoutPeriodLines) {
+        if (li.date < p.period_start || li.date > p.period_end) continue
+        const rc = effectiveRevenueCategory(
+          { tax_rate: li.tax_rate, item_name: li.item_name, category: li.category },
+          overrides,
+        )
+        const amt = li.gross_amount || 0
+        if (rc === 'dine_in_10') buckets.dine_in_10 += amt
+        else if (rc === 'goods_10') buckets.goods_10 += amt
+        else if (rc === 'beans_8') buckets.beans_8 += amt
+        else if (rc === 'takeout_8') buckets.takeout_8 += amt
+        else buckets.unknown += amt
+        buckets.lineSubtotal += amt
+      }
+      map.set(p.payout_id, buckets)
+    }
+    return map
+  }, [payouts, payoutPeriodLines, overrides])
 
   return (
     <main className="min-h-screen pb-24 px-4 pt-8" style={{ backgroundColor: '#F5F0E8' }}>
@@ -432,30 +502,81 @@ function SquareSalesInner() {
             <p className="text-stone-400 text-xs">この月の入金記録はまだありません。「🔄 入金を同期」を押してください。</p>
           ) : (
             <ul className="space-y-2">
-              {payouts.map(p => (
-                <li key={p.payout_id} className="border-t border-stone-100 pt-2 first:border-0 first:pt-0">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-stone-700">
-                      {p.completed_at ? new Date(p.completed_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }) : '—'}
-                      <span className="text-[10px] text-stone-400 ml-2">入金</span>
-                    </span>
-                    <span className="tabular-nums text-stone-900 font-medium">
-                      ¥{p.amount.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-[11px] text-stone-500 mt-0.5">
-                    <span>
-                      {p.period_start && p.period_end
-                        ? `対象 ${p.period_start.slice(5)}〜${p.period_end.slice(5)}`
-                        : '対象期間: —'}
-                    </span>
-                    <span className="tabular-nums">
-                      手数料 ¥{p.fee_amount.toLocaleString()}
-                      <span className="text-stone-400 ml-2">/ 売上総額 ¥{p.gross_amount.toLocaleString()}</span>
-                    </span>
-                  </div>
-                </li>
-              ))}
+              {payouts.map(p => {
+                const buckets = payoutBucketsMap.get(p.payout_id)
+                const sub10p = buckets ? buckets.dine_in_10 + buckets.goods_10 : 0
+                const sub8p = buckets ? buckets.beans_8 + buckets.takeout_8 : 0
+                return (
+                  <li key={p.payout_id} className="border-t border-stone-100 pt-2 first:border-0 first:pt-0">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-stone-700">
+                        {p.completed_at ? new Date(p.completed_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }) : '—'}
+                        <span className="text-[10px] text-stone-400 ml-2">入金</span>
+                      </span>
+                      <span className="tabular-nums text-stone-900 font-medium">
+                        ¥{p.amount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-stone-500 mt-0.5">
+                      <span>
+                        {p.period_start && p.period_end
+                          ? `対象 ${p.period_start.slice(5)}〜${p.period_end.slice(5)}`
+                          : '対象期間: —'}
+                      </span>
+                      <span className="tabular-nums">
+                        手数料 ¥{p.fee_amount.toLocaleString()}
+                        <span className="text-stone-400 ml-2">/ 売上総額 ¥{p.gross_amount.toLocaleString()}</span>
+                      </span>
+                    </div>
+                    {buckets && buckets.lineSubtotal > 0 && (
+                      <details className="mt-1.5">
+                        <summary className="text-[10px] text-blue-700 cursor-pointer">▶ 対象期間の税区分別売上（4区分）</summary>
+                        <ul className="mt-1.5 ml-2 pl-2 border-l-2 border-blue-100 space-y-0.5 text-[11px]">
+                          <li className="flex justify-between">
+                            <span className="text-stone-600">🍽 10% イートイン</span>
+                            <span className="tabular-nums text-stone-700">¥{buckets.dine_in_10.toLocaleString()}</span>
+                          </li>
+                          <li className="flex justify-between">
+                            <span className="text-stone-600">👕 10% 物販（グッズ）</span>
+                            <span className="tabular-nums text-stone-700">¥{buckets.goods_10.toLocaleString()}</span>
+                          </li>
+                          <li className="flex justify-between text-stone-400">
+                            <span>10% 合計</span>
+                            <span className="tabular-nums">¥{sub10p.toLocaleString()}</span>
+                          </li>
+                          <li className="flex justify-between mt-1">
+                            <span className="text-stone-600">☕ 8% 豆等の物販</span>
+                            <span className="tabular-nums text-stone-700">¥{buckets.beans_8.toLocaleString()}</span>
+                          </li>
+                          <li className="flex justify-between">
+                            <span className="text-stone-600">🥡 8% テイクアウト</span>
+                            <span className="tabular-nums text-stone-700">¥{buckets.takeout_8.toLocaleString()}</span>
+                          </li>
+                          <li className="flex justify-between text-stone-400">
+                            <span>8% 合計</span>
+                            <span className="tabular-nums">¥{sub8p.toLocaleString()}</span>
+                          </li>
+                          {buckets.unknown > 0 && (
+                            <li className="flex justify-between text-amber-700 mt-1">
+                              <span>❓ 未分類</span>
+                              <span className="tabular-nums">¥{buckets.unknown.toLocaleString()}</span>
+                            </li>
+                          )}
+                          <li className="flex justify-between border-t border-stone-100 pt-1 mt-1 text-stone-500">
+                            <span>明細合計</span>
+                            <span className="tabular-nums">¥{buckets.lineSubtotal.toLocaleString()}</span>
+                          </li>
+                          {Math.abs(buckets.lineSubtotal - p.gross_amount) > 1 && (
+                            <li className="text-[10px] text-amber-600">
+                              ※ 売上総額 ¥{p.gross_amount.toLocaleString()} との差 ¥{(p.gross_amount - buckets.lineSubtotal).toLocaleString()}（割引・端数）
+                            </li>
+                          )}
+                        </ul>
+                      </details>
+                    )}
+                  </li>
+                )
+              })}
               <li className="border-t border-stone-200 pt-2 flex justify-between text-sm font-medium">
                 <span className="text-stone-700">入金合計</span>
                 <span className="tabular-nums text-stone-900">
