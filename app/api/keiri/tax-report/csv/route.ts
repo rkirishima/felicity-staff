@@ -127,7 +127,15 @@ export async function GET(req: Request): Promise<Response> {
   const bankCredit = bank.reduce((s, b) => s + (b.credit ?? 0), 0)
   const bankDebit = bank.reduce((s, b) => s + (b.debit ?? 0), 0)
 
-  const sqTotal = buckets.dine_in_10 + buckets.goods_10 + buckets.beans_8 + buckets.takeout_8 + buckets.unknown
+  const sqSub10Excl = buckets.dine_in_10 + buckets.goods_10
+  const sqSub8Excl = buckets.beans_8 + buckets.takeout_8
+  const sqTax10 = Math.round(sqSub10Excl * 0.10)
+  const sqTax8 = Math.round(sqSub8Excl * 0.08)
+  const sqSub10Incl = sqSub10Excl + sqTax10
+  const sqSub8Incl = sqSub8Excl + sqTax8
+  const sqTotalExcl = sqSub10Excl + sqSub8Excl + buckets.unknown
+  const sqTotalIncl = sqSub10Incl + sqSub8Incl + buckets.unknown
+  const sqTotal = sqTotalIncl // 売上合計には税込を採用 (税理士提出基準)
 
   // Build CSV
   const lines: string[] = []
@@ -143,12 +151,19 @@ export async function GET(req: Request): Promise<Response> {
   if (want('summary')) {
   push('1) 月次サマリー')
   push('項目', '金額')
-  push('店舗 Square — 10% イートイン', buckets.dine_in_10)
-  push('店舗 Square — 10% 物販（グッズ）', buckets.goods_10)
-  push('店舗 Square — 8% 豆等の物販', buckets.beans_8)
-  push('店舗 Square — 8% テイクアウト', buckets.takeout_8)
+  push('店舗 Square — 10% イートイン（税抜）', buckets.dine_in_10)
+  push('店舗 Square — 10% 物販グッズ（税抜）', buckets.goods_10)
+  push('店舗 Square — 10% 小計（税抜）', sqSub10Excl)
+  push('店舗 Square — 10% 消費税', sqTax10)
+  push('店舗 Square — 10% 小計（税込）', sqSub10Incl)
+  push('店舗 Square — 8% 豆等の物販（税抜）', buckets.beans_8)
+  push('店舗 Square — 8% テイクアウト（税抜）', buckets.takeout_8)
+  push('店舗 Square — 8% 小計（税抜）', sqSub8Excl)
+  push('店舗 Square — 8% 消費税', sqTax8)
+  push('店舗 Square — 8% 小計（税込）', sqSub8Incl)
   push('店舗 Square — 未分類', buckets.unknown)
-  push('店舗 Square 合計', sqTotal)
+  push('店舗 Square 合計（税抜）', sqTotalExcl)
+  push('店舗 Square 合計（税込）', sqTotalIncl)
   push('EC Stripe — 10%', stripeByRate['10'])
   push('EC Stripe — 8%', stripeByRate['8'])
   push('EC Stripe — 未分類', stripeByRate.unknown)

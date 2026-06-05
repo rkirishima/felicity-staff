@@ -318,9 +318,17 @@ function SquareSalesInner() {
     cur.count += 1
     categoryBuckets.set(cat, cur)
   }
-  const sub10 = revenueBuckets.dine_in_10.gross + revenueBuckets.goods_10.gross
-  const sub8 = revenueBuckets.beans_8.gross + revenueBuckets.takeout_8.gross
-  const lineItemSubtotal = sub10 + sub8 + revenueBuckets.unknown.gross
+  // 税抜小計
+  const sub10Excl = revenueBuckets.dine_in_10.gross + revenueBuckets.goods_10.gross
+  const sub8Excl = revenueBuckets.beans_8.gross + revenueBuckets.takeout_8.gross
+  // 消費税額 (税理士提出: 各税率の小計に対して1回だけ Math.round)
+  const tax10 = Math.round(sub10Excl * 0.10)
+  const tax8 = Math.round(sub8Excl * 0.08)
+  // 税込小計
+  const sub10Incl = sub10Excl + tax10
+  const sub8Incl = sub8Excl + tax8
+  const lineItemSubtotalExcl = sub10Excl + sub8Excl + revenueBuckets.unknown.gross
+  const lineItemSubtotalIncl = sub10Incl + sub8Incl + revenueBuckets.unknown.gross
 
   // Per-payout 4-bucket breakdown (税理士提出用)
   type PayoutBuckets = {
@@ -424,47 +432,64 @@ function SquareSalesInner() {
         {!loading && lineItems.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
             <p className="text-xs text-stone-500 tracking-wider">税区分別売上（税理士提出用 4区分）</p>
-            <ul className="space-y-1.5 text-sm">
-              <li className="flex justify-between">
-                <span className="text-stone-700">{REVENUE_LABEL.dine_in_10}</span>
-                <span className="tabular-nums text-stone-900 font-medium">¥{revenueBuckets.dine_in_10.gross.toLocaleString()}</span>
-              </li>
-              <li className="flex justify-between">
-                <span className="text-stone-700">{REVENUE_LABEL.goods_10}</span>
-                <span className="tabular-nums text-stone-900 font-medium">¥{revenueBuckets.goods_10.gross.toLocaleString()}</span>
-              </li>
-              <li className="flex justify-between text-xs pt-1 border-t border-stone-50">
-                <span className="text-stone-400">10% 合計</span>
-                <span className="tabular-nums text-stone-500">¥{sub10.toLocaleString()}</span>
-              </li>
-              <li className="flex justify-between pt-2">
-                <span className="text-stone-700">{REVENUE_LABEL.beans_8}</span>
-                <span className="tabular-nums text-stone-900 font-medium">¥{revenueBuckets.beans_8.gross.toLocaleString()}</span>
-              </li>
-              <li className="flex justify-between">
-                <span className="text-stone-700">{REVENUE_LABEL.takeout_8}</span>
-                <span className="tabular-nums text-stone-900 font-medium">¥{revenueBuckets.takeout_8.gross.toLocaleString()}</span>
-              </li>
-              <li className="flex justify-between text-xs pt-1 border-t border-stone-50">
-                <span className="text-stone-400">8% 合計</span>
-                <span className="tabular-nums text-stone-500">¥{sub8.toLocaleString()}</span>
-              </li>
+            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 text-xs">
+              <span className="text-stone-400"></span>
+              <span className="text-stone-400 text-right">税抜</span>
+              <span className="text-stone-400 text-right">消費税</span>
+              <span className="text-stone-400 text-right">税込</span>
+
+              <span className="text-stone-700">{REVENUE_LABEL.dine_in_10}</span>
+              <span className="tabular-nums text-right">¥{revenueBuckets.dine_in_10.gross.toLocaleString()}</span>
+              <span className="tabular-nums text-right text-stone-400">—</span>
+              <span className="tabular-nums text-right text-stone-400">—</span>
+
+              <span className="text-stone-700">{REVENUE_LABEL.goods_10}</span>
+              <span className="tabular-nums text-right">¥{revenueBuckets.goods_10.gross.toLocaleString()}</span>
+              <span className="tabular-nums text-right text-stone-400">—</span>
+              <span className="tabular-nums text-right text-stone-400">—</span>
+
+              <span className="text-stone-500 border-t border-stone-100 pt-1">10% 小計</span>
+              <span className="tabular-nums text-right border-t border-stone-100 pt-1 font-medium">¥{sub10Excl.toLocaleString()}</span>
+              <span className="tabular-nums text-right border-t border-stone-100 pt-1 text-stone-600">¥{tax10.toLocaleString()}</span>
+              <span className="tabular-nums text-right border-t border-stone-100 pt-1 font-medium">¥{sub10Incl.toLocaleString()}</span>
+
+              <span className="text-stone-700 pt-2">{REVENUE_LABEL.beans_8}</span>
+              <span className="tabular-nums text-right pt-2">¥{revenueBuckets.beans_8.gross.toLocaleString()}</span>
+              <span className="tabular-nums text-right pt-2 text-stone-400">—</span>
+              <span className="tabular-nums text-right pt-2 text-stone-400">—</span>
+
+              <span className="text-stone-700">{REVENUE_LABEL.takeout_8}</span>
+              <span className="tabular-nums text-right">¥{revenueBuckets.takeout_8.gross.toLocaleString()}</span>
+              <span className="tabular-nums text-right text-stone-400">—</span>
+              <span className="tabular-nums text-right text-stone-400">—</span>
+
+              <span className="text-stone-500 border-t border-stone-100 pt-1">8% 小計</span>
+              <span className="tabular-nums text-right border-t border-stone-100 pt-1 font-medium">¥{sub8Excl.toLocaleString()}</span>
+              <span className="tabular-nums text-right border-t border-stone-100 pt-1 text-stone-600">¥{tax8.toLocaleString()}</span>
+              <span className="tabular-nums text-right border-t border-stone-100 pt-1 font-medium">¥{sub8Incl.toLocaleString()}</span>
+
               {revenueBuckets.unknown.gross > 0 && (
-                <li className="flex justify-between text-amber-700 pt-2">
-                  <span>{REVENUE_LABEL.unknown}（要設定）</span>
-                  <span className="tabular-nums font-medium">¥{revenueBuckets.unknown.gross.toLocaleString()}</span>
-                </li>
+                <>
+                  <span className="text-amber-700 pt-2">{REVENUE_LABEL.unknown}（要設定）</span>
+                  <span className="tabular-nums text-right pt-2 text-amber-700 font-medium">¥{revenueBuckets.unknown.gross.toLocaleString()}</span>
+                  <span className="tabular-nums text-right pt-2 text-stone-400">—</span>
+                  <span className="tabular-nums text-right pt-2 text-stone-400">—</span>
+                </>
               )}
-              <li className="flex justify-between pt-2 border-t border-stone-100">
-                <span className="text-stone-500 text-xs">明細合計</span>
-                <span className="tabular-nums text-stone-700 text-xs">¥{lineItemSubtotal.toLocaleString()}</span>
-              </li>
-              {monthTotal > 0 && Math.abs(monthTotal - lineItemSubtotal) > 1 && (
-                <li className="text-[10px] text-amber-600">
-                  ※ 決済合計 ¥{monthTotal.toLocaleString()} と差分 ¥{(monthTotal - lineItemSubtotal).toLocaleString()}（手数料・割引・端数・分類前明細）
-                </li>
-              )}
-            </ul>
+
+              <span className="text-stone-700 border-t border-stone-200 pt-2 font-medium">合計</span>
+              <span className="tabular-nums text-right border-t border-stone-200 pt-2 font-medium">¥{lineItemSubtotalExcl.toLocaleString()}</span>
+              <span className="tabular-nums text-right border-t border-stone-200 pt-2 text-stone-700">¥{(tax10 + tax8).toLocaleString()}</span>
+              <span className="tabular-nums text-right border-t border-stone-200 pt-2 font-semibold text-blue-900">¥{lineItemSubtotalIncl.toLocaleString()}</span>
+            </div>
+            {monthTotal > 0 && Math.abs(monthTotal - lineItemSubtotalIncl) > 1 && (
+              <p className="text-[10px] text-amber-600">
+                ※ 決済合計 ¥{monthTotal.toLocaleString()} と税込合計 ¥{lineItemSubtotalIncl.toLocaleString()} の差 ¥{(monthTotal - lineItemSubtotalIncl).toLocaleString()}（チップ・割引・端数）
+              </p>
+            )}
+            {monthTotal > 0 && Math.abs(monthTotal - lineItemSubtotalIncl) <= 1 && (
+              <p className="text-[10px] text-emerald-600">✓ 決済合計と税込合計が一致</p>
+            )}
 
             {categoryBuckets.size > 0 && (
               <details className="pt-1">
@@ -504,8 +529,13 @@ function SquareSalesInner() {
             <ul className="space-y-2">
               {payouts.map(p => {
                 const buckets = payoutBucketsMap.get(p.payout_id)
-                const sub10p = buckets ? buckets.dine_in_10 + buckets.goods_10 : 0
-                const sub8p = buckets ? buckets.beans_8 + buckets.takeout_8 : 0
+                const sub10pExcl = buckets ? buckets.dine_in_10 + buckets.goods_10 : 0
+                const sub8pExcl = buckets ? buckets.beans_8 + buckets.takeout_8 : 0
+                const tax10p = Math.round(sub10pExcl * 0.10)
+                const tax8p = Math.round(sub8pExcl * 0.08)
+                const sub10pIncl = sub10pExcl + tax10p
+                const sub8pIncl = sub8pExcl + tax8p
+                const inclTotal = sub10pIncl + sub8pIncl + (buckets?.unknown ?? 0)
                 return (
                   <li key={p.payout_id} className="border-t border-stone-100 pt-2 first:border-0 first:pt-0">
                     <div className="flex justify-between text-sm">
@@ -530,48 +560,64 @@ function SquareSalesInner() {
                     </div>
                     {buckets && buckets.lineSubtotal > 0 && (
                       <details className="mt-1.5">
-                        <summary className="text-[10px] text-blue-700 cursor-pointer">▶ 対象期間の税区分別売上（4区分）</summary>
-                        <ul className="mt-1.5 ml-2 pl-2 border-l-2 border-blue-100 space-y-0.5 text-[11px]">
-                          <li className="flex justify-between">
-                            <span className="text-stone-600">🍽 10% イートイン</span>
-                            <span className="tabular-nums text-stone-700">¥{buckets.dine_in_10.toLocaleString()}</span>
-                          </li>
-                          <li className="flex justify-between">
-                            <span className="text-stone-600">👕 10% 物販（グッズ）</span>
-                            <span className="tabular-nums text-stone-700">¥{buckets.goods_10.toLocaleString()}</span>
-                          </li>
-                          <li className="flex justify-between text-stone-400">
-                            <span>10% 合計</span>
-                            <span className="tabular-nums">¥{sub10p.toLocaleString()}</span>
-                          </li>
-                          <li className="flex justify-between mt-1">
-                            <span className="text-stone-600">☕ 8% 豆等の物販</span>
-                            <span className="tabular-nums text-stone-700">¥{buckets.beans_8.toLocaleString()}</span>
-                          </li>
-                          <li className="flex justify-between">
-                            <span className="text-stone-600">🥡 8% テイクアウト</span>
-                            <span className="tabular-nums text-stone-700">¥{buckets.takeout_8.toLocaleString()}</span>
-                          </li>
-                          <li className="flex justify-between text-stone-400">
-                            <span>8% 合計</span>
-                            <span className="tabular-nums">¥{sub8p.toLocaleString()}</span>
-                          </li>
+                        <summary className="text-[10px] text-blue-700 cursor-pointer">▶ 対象期間の税区分別売上（4区分・税込/税抜）</summary>
+                        <div className="mt-1.5 ml-2 pl-2 border-l-2 border-blue-100 grid grid-cols-[1fr_auto_auto_auto] gap-x-2 gap-y-0.5 text-[11px]">
+                          <span className="text-stone-400"></span>
+                          <span className="text-stone-400 text-right">税抜</span>
+                          <span className="text-stone-400 text-right">消費税</span>
+                          <span className="text-stone-400 text-right">税込</span>
+
+                          <span className="text-stone-600">🍽 10% イートイン</span>
+                          <span className="tabular-nums text-right">¥{buckets.dine_in_10.toLocaleString()}</span>
+                          <span className="tabular-nums text-right text-stone-400">—</span>
+                          <span className="tabular-nums text-right text-stone-400">—</span>
+
+                          <span className="text-stone-600">👕 10% 物販</span>
+                          <span className="tabular-nums text-right">¥{buckets.goods_10.toLocaleString()}</span>
+                          <span className="tabular-nums text-right text-stone-400">—</span>
+                          <span className="tabular-nums text-right text-stone-400">—</span>
+
+                          <span className="text-stone-500 border-t border-stone-100 pt-0.5">10% 小計</span>
+                          <span className="tabular-nums text-right border-t border-stone-100 pt-0.5">¥{sub10pExcl.toLocaleString()}</span>
+                          <span className="tabular-nums text-right border-t border-stone-100 pt-0.5 text-stone-600">¥{tax10p.toLocaleString()}</span>
+                          <span className="tabular-nums text-right border-t border-stone-100 pt-0.5 font-medium">¥{sub10pIncl.toLocaleString()}</span>
+
+                          <span className="text-stone-600 pt-1">☕ 8% 豆</span>
+                          <span className="tabular-nums text-right pt-1">¥{buckets.beans_8.toLocaleString()}</span>
+                          <span className="tabular-nums text-right pt-1 text-stone-400">—</span>
+                          <span className="tabular-nums text-right pt-1 text-stone-400">—</span>
+
+                          <span className="text-stone-600">🥡 8% テイクアウト</span>
+                          <span className="tabular-nums text-right">¥{buckets.takeout_8.toLocaleString()}</span>
+                          <span className="tabular-nums text-right text-stone-400">—</span>
+                          <span className="tabular-nums text-right text-stone-400">—</span>
+
+                          <span className="text-stone-500 border-t border-stone-100 pt-0.5">8% 小計</span>
+                          <span className="tabular-nums text-right border-t border-stone-100 pt-0.5">¥{sub8pExcl.toLocaleString()}</span>
+                          <span className="tabular-nums text-right border-t border-stone-100 pt-0.5 text-stone-600">¥{tax8p.toLocaleString()}</span>
+                          <span className="tabular-nums text-right border-t border-stone-100 pt-0.5 font-medium">¥{sub8pIncl.toLocaleString()}</span>
+
                           {buckets.unknown > 0 && (
-                            <li className="flex justify-between text-amber-700 mt-1">
-                              <span>❓ 未分類</span>
-                              <span className="tabular-nums">¥{buckets.unknown.toLocaleString()}</span>
-                            </li>
+                            <>
+                              <span className="text-amber-700 pt-1">❓ 未分類</span>
+                              <span className="tabular-nums text-right pt-1 text-amber-700">¥{buckets.unknown.toLocaleString()}</span>
+                              <span className="tabular-nums text-right pt-1 text-stone-400">—</span>
+                              <span className="tabular-nums text-right pt-1 text-stone-400">—</span>
+                            </>
                           )}
-                          <li className="flex justify-between border-t border-stone-100 pt-1 mt-1 text-stone-500">
-                            <span>明細合計</span>
-                            <span className="tabular-nums">¥{buckets.lineSubtotal.toLocaleString()}</span>
-                          </li>
-                          {Math.abs(buckets.lineSubtotal - p.gross_amount) > 1 && (
-                            <li className="text-[10px] text-amber-600">
-                              ※ 売上総額 ¥{p.gross_amount.toLocaleString()} との差 ¥{(p.gross_amount - buckets.lineSubtotal).toLocaleString()}（割引・端数）
-                            </li>
-                          )}
-                        </ul>
+
+                          <span className="text-stone-700 border-t border-stone-200 pt-1 font-medium">合計</span>
+                          <span className="tabular-nums text-right border-t border-stone-200 pt-1 font-medium">¥{buckets.lineSubtotal.toLocaleString()}</span>
+                          <span className="tabular-nums text-right border-t border-stone-200 pt-1 text-stone-700">¥{(tax10p + tax8p).toLocaleString()}</span>
+                          <span className="tabular-nums text-right border-t border-stone-200 pt-1 font-semibold text-blue-900">¥{inclTotal.toLocaleString()}</span>
+                        </div>
+                        {Math.abs(inclTotal - p.gross_amount) > 1 ? (
+                          <p className="mt-1 text-[10px] text-amber-600 ml-2">
+                            ※ 売上総額 ¥{p.gross_amount.toLocaleString()} と税込合計 ¥{inclTotal.toLocaleString()} の差 ¥{(p.gross_amount - inclTotal).toLocaleString()}（チップ・割引・端数）
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-[10px] text-emerald-600 ml-2">✓ 売上総額と税込合計が一致</p>
+                        )}
                       </details>
                     )}
                   </li>
