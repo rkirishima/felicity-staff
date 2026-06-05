@@ -92,6 +92,73 @@ export async function markCancelled(id: string): Promise<void> {
   revalidatePath('/admin/keiri/payables')
 }
 
+export async function uploadPayableInvoice(id: string, formData: FormData): Promise<string> {
+  const file = formData.get('file') as File | null
+  if (!file) throw new Error('ファイルがありません')
+  if (file.size > 15 * 1024 * 1024) throw new Error('15MB以内にしてください')
+
+  const sb = await createClient()
+  const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
+  const path = `${id}/${Date.now()}.${ext}`
+  const buffer = Buffer.from(await file.arrayBuffer())
+
+  const { error: upErr } = await sb.storage
+    .from('keiri-payable-invoices')
+    .upload(path, buffer, { contentType: file.type || 'application/pdf', upsert: false })
+  if (upErr) throw new Error(`アップロード失敗: ${upErr.message}`)
+
+  const { error: dbErr } = await sb
+    .from('keiri_payables')
+    .update({
+      invoice_file_path: path,
+      invoice_file_uploaded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+  if (dbErr) throw new Error(dbErr.message)
+
+  revalidatePath('/admin/keiri/payables')
+  revalidatePath(`/admin/keiri/payables/${id}`)
+  return path
+}
+
+export async function removePayableInvoice(id: string): Promise<void> {
+  const sb = await createClient()
+  const { data: cur } = await sb
+    .from('keiri_payables')
+    .select('invoice_file_path')
+    .eq('id', id)
+    .single()
+  if (cur?.invoice_file_path) {
+    await sb.storage.from('keiri-payable-invoices').remove([cur.invoice_file_path as string])
+  }
+  await sb
+    .from('keiri_payables')
+    .update({
+      invoice_file_path: null,
+      invoice_file_uploaded_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+  revalidatePath('/admin/keiri/payables')
+  revalidatePath(`/admin/keiri/payables/${id}`)
+}
+
+export async function getPayableInvoiceUrl(id: string): Promise<string | null> {
+  const sb = await createClient()
+  const { data } = await sb
+    .from('keiri_payables')
+    .select('invoice_file_path')
+    .eq('id', id)
+    .single()
+  const path = (data?.invoice_file_path as string | null) ?? null
+  if (!path) return null
+  const { data: signed } = await sb.storage
+    .from('keiri-payable-invoices')
+    .createSignedUrl(path, 60 * 10)
+  return signed?.signedUrl ?? null
+}
+
 export async function reopenPayable(id: string): Promise<void> {
   const sb = await createClient()
   const { error } = await sb

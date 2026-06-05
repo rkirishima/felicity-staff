@@ -5,13 +5,17 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
-import { updatePayable, type PayableInput } from '../actions'
+import { updatePayable, uploadPayableInvoice, removePayableInvoice, getPayableInvoiceUrl, type PayableInput } from '../actions'
 
 export default function EditPayablePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const [form, setForm] = useState<PayableInput | null>(null)
   const [saving, setSaving] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+  const [invoiceFilePath, setInvoiceFilePath] = useState<string | null>(null)
+  const [invoiceUploadedAt, setInvoiceUploadedAt] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     if (!getAdminSession()) router.replace('/admin')
@@ -41,12 +45,56 @@ export default function EditPayablePage({ params }: { params: Promise<{ id: stri
         due_date: data.due_date,
         notes: data.notes,
       })
+      setStatus(data.status)
+      setInvoiceFilePath(data.invoice_file_path ?? null)
+      setInvoiceUploadedAt(data.invoice_file_uploaded_at ?? null)
     })()
     return () => { cancelled = true }
   }, [id, router])
 
   function set<K extends keyof PayableInput>(k: K, v: PayableInput[K]) {
     setForm(f => f ? { ...f, [k]: v } : f)
+  }
+
+  async function handleUpload(file: File) {
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const path = await uploadPayableInvoice(id, fd)
+      setInvoiceFilePath(path)
+      setInvoiceUploadedAt(new Date().toISOString())
+      toast.success('請求書をアップロードしました')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'アップロード失敗')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleRemoveInvoice() {
+    if (!confirm('請求書ファイルを削除しますか？')) return
+    try {
+      await removePayableInvoice(id)
+      setInvoiceFilePath(null)
+      setInvoiceUploadedAt(null)
+      toast.success('削除しました')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '削除失敗')
+    }
+  }
+
+  async function handleViewInvoice() {
+    try {
+      const url = await getPayableInvoiceUrl(id)
+      if (!url) {
+        toast.error('ファイルがありません')
+        return
+      }
+      window.open(url, '_blank')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '取得失敗')
+    }
   }
 
   async function handleSave() {
@@ -111,6 +159,70 @@ export default function EditPayablePage({ params }: { params: Promise<{ id: stri
         <button onClick={handleSave} disabled={saving} className="w-full bg-stone-800 text-white py-3 rounded-2xl font-medium disabled:opacity-50">
           {saving ? '保存中…' : '保存'}
         </button>
+
+        <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-stone-500 tracking-wider">📄 請求書・領収書PDF</p>
+            {status === 'paid' && !invoiceFilePath && (
+              <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">未アップ</span>
+            )}
+            {invoiceFilePath && (
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">アップ済</span>
+            )}
+          </div>
+
+          {invoiceFilePath ? (
+            <div className="space-y-2">
+              {invoiceUploadedAt && (
+                <p className="text-[11px] text-stone-500">
+                  {new Date(invoiceUploadedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} アップロード
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={handleViewInvoice} className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm font-medium">
+                  📄 ファイルを開く
+                </button>
+                <button onClick={handleRemoveInvoice} className="px-4 bg-rose-50 border border-rose-200 text-rose-700 py-2 rounded-xl text-sm">
+                  削除
+                </button>
+              </div>
+              <label className="block text-center text-xs text-stone-500 underline cursor-pointer">
+                {uploading ? 'アップ中…' : '別のファイルに差し替え'}
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={e => {
+                    const f = e.target.files?.[0]
+                    if (f) handleUpload(f)
+                  }}
+                />
+              </label>
+            </div>
+          ) : (
+            <label className="block border-2 border-dashed border-stone-300 rounded-xl p-6 text-center cursor-pointer">
+              {uploading ? (
+                <p className="text-sm text-stone-500">アップロード中…</p>
+              ) : (
+                <>
+                  <p className="text-sm text-stone-500">PDF・画像ファイルを選択</p>
+                  <p className="text-stone-300 text-xs mt-1">タップしてファイルを選ぶ (最大15MB)</p>
+                </>
+              )}
+              <input
+                type="file"
+                accept=".pdf,image/*"
+                className="hidden"
+                disabled={uploading}
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) handleUpload(f)
+                }}
+              />
+            </label>
+          )}
+        </div>
       </div>
     </main>
   )

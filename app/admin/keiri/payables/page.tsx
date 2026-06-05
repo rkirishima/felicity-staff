@@ -22,6 +22,7 @@ type Row = {
   paid_via: string | null
   notes: string | null
   source: string
+  invoice_file_path: string | null
 }
 
 type Tab = 'pending' | 'overdue' | 'paid' | 'all'
@@ -55,7 +56,7 @@ export default function PayablesPage() {
       setLoading(true)
       const { data } = await supabase
         .from('keiri_payables')
-        .select('id, vendor, description, amount, invoice_number, order_date, due_date, status, paid_at, paid_amount, paid_via, notes, source')
+        .select('id, vendor, description, amount, invoice_number, order_date, due_date, status, paid_at, paid_amount, paid_via, notes, source, invoice_file_path')
         .order('due_date', { ascending: true })
       if (cancelled) return
       setRows((data ?? []) as Row[])
@@ -232,6 +233,12 @@ export default function PayablesPage() {
                         <p className="text-sm font-medium text-stone-800 truncate">{r.vendor}</p>
                         {r.status === 'paid' && (
                           <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">支払済</span>
+                        )}
+                        {r.status === 'paid' && !r.invoice_file_path && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium">📄 請求書未アップ</span>
+                        )}
+                        {r.invoice_file_path && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">📄 添付済</span>
                         )}
                         {r.status === 'cancelled' && (
                           <span className="text-[10px] px-1.5 py-0.5 bg-stone-200 text-stone-500 rounded">キャンセル</span>

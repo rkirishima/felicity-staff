@@ -32,16 +32,18 @@ export async function GET(req: Request): Promise<Response> {
   const eventsResult = await processEvents(sb, targetDate)
   const payables7dayResult = await processPayables7Day(sb, targetDate)
   const payablesTodayResult = await processPayablesToday(sb, todayDate)
+  const invoiceReminderResult = await processMissingInvoiceReminders(sb)
 
   const totalSent =
-    announcementsResult.sent + eventsResult.sent + payables7dayResult.sent + payablesTodayResult.sent
+    announcementsResult.sent + eventsResult.sent + payables7dayResult.sent + payablesTodayResult.sent + invoiceReminderResult.sent
   const totalFound =
-    announcementsResult.found + eventsResult.found + payables7dayResult.found + payablesTodayResult.found
+    announcementsResult.found + eventsResult.found + payables7dayResult.found + payablesTodayResult.found + invoiceReminderResult.found
   const allFailures = [
     ...announcementsResult.failures,
     ...eventsResult.failures,
     ...payables7dayResult.failures,
     ...payablesTodayResult.failures,
+    ...invoiceReminderResult.failures,
   ]
 
   return NextResponse.json({
@@ -54,7 +56,108 @@ export async function GET(req: Request): Promise<Response> {
     events: eventsResult,
     payables7day: payables7dayResult,
     payablesToday: payablesTodayResult,
+    invoiceReminders: invoiceReminderResult,
   })
+}
+
+async function processMissingInvoiceReminders(sb: SbClient) {
+  // Remind to upload invoice PDF for paid payables.
+  // Schedule: 2日後 → 5日後 → 10日後 にエスカレート。最大3回まで。
+  const nowMs = Date.now()
+  const { data, error } = await sb
+    .from('keiri_payables')
+    .select('id, vendor, description, amount, paid_at, paid_via, reminded_invoice_at, reminded_invoice_count')
+    .eq('status', 'paid')
+    .is('invoice_file_path', null)
+    .not('paid_at', 'is', null)
+  if (error) return { found: 0, sent: 0, sentIds: [], failures: [{ id: 'query', error: error.message }] }
+
+  const rows = (data ?? []) as Array<{
+    id: string
+    vendor: string
+    description: string | null
+    amount: number
+    paid_at: string
+    paid_via: string | null
+    reminded_invoice_at: string | null
+    reminded_invoice_count: number
+  }>
+
+  const sentIds: string[] = []
+  const failures: { id: string; error: string }[] = []
+
+  for (const r of rows) {
+    const paidMs = new Date(r.paid_at).getTime()
+    const daysSincePaid = Math.floor((nowMs - paidMs) / 86400000)
+    const count = r.reminded_invoice_count ?? 0
+
+    // Send schedule based on days since paid AND how many times reminded already
+    let shouldSend = false
+    if (count === 0 && daysSincePaid >= 2) shouldSend = true
+    else if (count === 1 && daysSincePaid >= 5) shouldSend = true
+    else if (count === 2 && daysSincePaid >= 10) shouldSend = true
+
+    if (!shouldSend) continue
+
+    const text = formatInvoiceReminderMessage(
+      {
+        id: r.id,
+        vendor: r.vendor,
+        description: r.description,
+        amount: r.amount,
+        paid_at: r.paid_at,
+        paid_via: r.paid_via,
+      },
+      count + 1,
+    )
+    const result = await sendTelegramMessage({ text, parseMode: 'HTML', disablePreview: true })
+    if (result.ok) {
+      const { error: upErr } = await sb
+        .from('keiri_payables')
+        .update({
+          reminded_invoice_at: new Date().toISOString(),
+          reminded_invoice_count: count + 1,
+        })
+        .eq('id', r.id)
+      if (upErr) failures.push({ id: r.id, error: `stamp: ${upErr.message}` })
+      else sentIds.push(r.id)
+    } else {
+      failures.push({ id: r.id, error: result.error })
+    }
+  }
+  return { found: rows.length, sent: sentIds.length, sentIds, failures }
+}
+
+function formatInvoiceReminderMessage(
+  p: {
+    id: string
+    vendor: string
+    description: string | null
+    amount: number
+    paid_at: string
+    paid_via: string | null
+  },
+  attempt: number,
+): string {
+  const heading =
+    attempt === 1 ? '📄 請求書アップ忘れ（1回目）' :
+    attempt === 2 ? '⚠️ 請求書アップ忘れ（2回目）' :
+    '🚨 請求書アップ忘れ（最終）'
+  const paidDate = new Date(p.paid_at).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' })
+  const lines = [
+    `<b>${heading}</b>`,
+    '',
+    `<b>${escapeHtml(p.vendor)}</b>  ¥${p.amount.toLocaleString()}`,
+    `💳 ${paidDate} 支払済 (${escapeHtml(p.paid_via ?? '不明')})`,
+  ]
+  if (p.description) lines.push(escapeHtml(p.description))
+  lines.push(
+    '',
+    '請求書・領収書PDFをアップしてください。税理士提出に必要です。',
+    '',
+    `<a href="https://staff.felicity.cafe/admin/keiri/payables/${p.id}">▶ この未払を開く</a>`,
+  )
+  return lines.join('\n')
 }
 
 // Type loose intentionally — Supabase generated types are narrow but we only need basic table ops here
