@@ -512,6 +512,81 @@ function SquareSalesInner() {
           </div>
         )}
 
+        {!loading && payouts.length > 0 && payoutPeriodLines.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+            <p className="text-xs text-stone-500 tracking-wider">📅 週別税区分別売上（税込）</p>
+            <div className="overflow-x-auto -mx-2">
+              <table className="w-full text-[11px] tabular-nums">
+                <thead>
+                  <tr className="text-stone-400 border-b border-stone-100">
+                    <th className="text-left py-1 px-2 font-normal">期間</th>
+                    <th className="text-right py-1 px-1 font-normal">🍽 10%</th>
+                    <th className="text-right py-1 px-1 font-normal">👕 10%</th>
+                    <th className="text-right py-1 px-1 font-normal">☕ 8%</th>
+                    <th className="text-right py-1 px-1 font-normal">🥡 8%</th>
+                    <th className="text-right py-1 px-2 font-medium text-stone-600">合計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payouts
+                    .slice()
+                    .sort((a, b) =>
+                      (a.period_start ?? '') < (b.period_start ?? '') ? 1 : -1,
+                    )
+                    .map(p => {
+                      const buckets = payoutBucketsMap.get(p.payout_id)
+                      if (!buckets || !p.period_start || !p.period_end) return null
+                      const incl = (excl: number, rate: number) => excl + Math.round(excl * rate)
+                      const dine = incl(buckets.dine_in_10, 0.1)
+                      const goods = incl(buckets.goods_10, 0.1)
+                      const beans = incl(buckets.beans_8, 0.08)
+                      const takeout = incl(buckets.takeout_8, 0.08)
+                      const total = dine + goods + beans + takeout + buckets.unknown
+                      return (
+                        <tr key={p.payout_id} className="border-b border-stone-50">
+                          <td className="py-1.5 px-2 text-stone-700 whitespace-nowrap">
+                            {p.period_start.slice(5)}〜{p.period_end.slice(5)}
+                          </td>
+                          <td className="text-right py-1.5 px-1">¥{dine.toLocaleString()}</td>
+                          <td className="text-right py-1.5 px-1">¥{goods.toLocaleString()}</td>
+                          <td className="text-right py-1.5 px-1">¥{beans.toLocaleString()}</td>
+                          <td className="text-right py-1.5 px-1">¥{takeout.toLocaleString()}</td>
+                          <td className="text-right py-1.5 px-2 font-semibold text-blue-900">¥{total.toLocaleString()}</td>
+                        </tr>
+                      )
+                    })}
+                  {(() => {
+                    let tDine = 0, tGoods = 0, tBeans = 0, tTakeout = 0, tUnknown = 0
+                    for (const p of payouts) {
+                      const b = payoutBucketsMap.get(p.payout_id)
+                      if (!b) continue
+                      tDine += b.dine_in_10 + Math.round(b.dine_in_10 * 0.1)
+                      tGoods += b.goods_10 + Math.round(b.goods_10 * 0.1)
+                      tBeans += b.beans_8 + Math.round(b.beans_8 * 0.08)
+                      tTakeout += b.takeout_8 + Math.round(b.takeout_8 * 0.08)
+                      tUnknown += b.unknown
+                    }
+                    const total = tDine + tGoods + tBeans + tTakeout + tUnknown
+                    return (
+                      <tr className="border-t-2 border-stone-200 font-medium">
+                        <td className="py-1.5 px-2 text-stone-700">合計</td>
+                        <td className="text-right py-1.5 px-1">¥{tDine.toLocaleString()}</td>
+                        <td className="text-right py-1.5 px-1">¥{tGoods.toLocaleString()}</td>
+                        <td className="text-right py-1.5 px-1">¥{tBeans.toLocaleString()}</td>
+                        <td className="text-right py-1.5 px-1">¥{tTakeout.toLocaleString()}</td>
+                        <td className="text-right py-1.5 px-2 font-semibold text-blue-900">¥{total.toLocaleString()}</td>
+                      </tr>
+                    )
+                  })()}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[10px] text-stone-400">
+              ※ 各週の集計は Square 入金（毎週金曜）の対象期間ベース。詳細（税抜・消費税）は下の入金カードをタップ。
+            </p>
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-stone-500 tracking-wider">Square 入金（銀行振込・手数料）</p>
@@ -559,8 +634,8 @@ function SquareSalesInner() {
                       </span>
                     </div>
                     {buckets && buckets.lineSubtotal > 0 && (
-                      <details className="mt-1.5">
-                        <summary className="text-[10px] text-blue-700 cursor-pointer">▶ 対象期間の税区分別売上（4区分・税込/税抜）</summary>
+                      <details open className="mt-1.5">
+                        <summary className="text-[10px] text-blue-700 cursor-pointer">対象期間の税区分別売上（4区分・税込/税抜）</summary>
                         <div className="mt-1.5 ml-2 pl-2 border-l-2 border-blue-100 grid grid-cols-[1fr_auto_auto_auto] gap-x-2 gap-y-0.5 text-[11px]">
                           <span className="text-stone-400"></span>
                           <span className="text-stone-400 text-right">税抜</span>
