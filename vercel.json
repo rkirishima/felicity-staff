@@ -1,18 +1,6 @@
 {
   "crons": [
     {
-      "path": "/api/cron/timeclock-alert",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/attendance-audit",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/prep-alert",
-      "schedule": "0 7 * * *"
-    },
-    {
       "path": "/api/cron/monthly-roast-invoice",
       "schedule": "0 0 1 * *"
     },
