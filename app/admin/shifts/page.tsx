@@ -46,6 +46,11 @@ export default function AdminShiftsPage() {
   const [bulkLoading, setBulkLoading] = useState(false)
   const [showBulk, setShowBulk] = useState(false)
   const [extraDate, setExtraDate] = useState('')
+  // AIシフト提案（フェーズ1：申請プールへの助言）
+  type AiRec = { id: string; action: 'approve' | 'hold'; reason: string }
+  type AiResult = { summary: string; recommendations: AiRec[]; warnings: string[] }
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiResult, setAiResult] = useState<AiResult | null>(null)
   const supabase = createClient()
   const router = useRouter()
 
@@ -225,7 +230,8 @@ export default function AdminShiftsPage() {
     loadShifts()
   }
 
-  async function approveRequest(id: string) {
+  async function approveRequest(id: string, opts: { reload?: boolean } = {}) {
+    const { reload = true } = opts
     // 承認対象のシフト情報を取得
     const target = pending.find(p => p.id === id)
     await supabase.from('shifts').update({ status: 'approved' }).eq('id', id)
@@ -257,14 +263,63 @@ export default function AdminShiftsPage() {
         await supabase.from('shifts').delete().eq('id', openings[0].id)
       }
     }
-    toast.success('承認しました')
-    loadPending(); loadShifts()
+    if (reload) { toast.success('承認しました'); loadPending(); loadShifts() }
   }
 
   async function rejectRequest(id: string) {
     await supabase.from('shifts').update({ status: 'rejected' }).eq('id', id)
     toast.success('却下しました')
     loadPending()
+  }
+
+  // AIにシフト申請プールを見てもらい、承認の助言を受け取る（フェーズ1）
+  async function runAiSuggest() {
+    if (pending.length === 0) { toast.error('承認待ちの申請がありません'); return }
+    setAiLoading(true)
+    setAiResult(null)
+    try {
+      const approved = shifts
+        .filter(s => s.status === 'approved')
+        .map(s => ({
+          staffName: s.isOpen ? '募集中' : s.staffName,
+          date: s.date, start_time: s.start_time, end_time: s.end_time, location: s.location,
+        }))
+      const res = await fetch('/api/shifts/ai-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: `${y}-${String(m + 1).padStart(2, '0')}`,
+          pending: pending.map(p => ({
+            id: p.id, staffName: p.staffName, date: p.date,
+            start_time: p.start_time, end_time: p.end_time, location: p.location,
+          })),
+          approved,
+          staff: staffList.map(s => ({ name: s.name, role: s.role })),
+        }),
+      })
+      const json = await res.json()
+      if (!json.ok) { toast.error(json.error || 'AI提案に失敗しました'); return }
+      setAiResult(json.result as AiResult)
+      toast.success('AIの提案ができました 🤖')
+    } catch (e) {
+      toast.error('通信エラー: ' + (e as Error).message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  // AIが「承認おすすめ」とした申請をまとめて承認
+  async function approveRecommended() {
+    if (!aiResult) return
+    const ids = aiResult.recommendations.filter(r => r.action === 'approve').map(r => r.id)
+    const targets = pending.filter(p => ids.includes(p.id))
+    if (targets.length === 0) { toast.error('おすすめの承認対象がありません'); return }
+    for (const t of targets) {
+      await approveRequest(t.id, { reload: false })
+    }
+    toast.success(`${targets.length}件をまとめて承認しました`)
+    setAiResult(null)
+    loadPending(); loadShifts()
   }
 
   const y = viewMonth.getFullYear()
@@ -512,8 +567,48 @@ export default function AdminShiftsPage() {
       )}
 
       {/* 申請タブ */}
-      {tab === 'requests' && (
+      {tab === 'requests' && (() => {
+        const recMap: Record<string, AiRec> = {}
+        aiResult?.recommendations.forEach(r => { recMap[r.id] = r })
+        const recommendedCount = aiResult?.recommendations.filter(r => r.action === 'approve').length ?? 0
+        return (
         <div className="space-y-3">
+          {/* AIシフト提案 */}
+          {pending.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="font-medium text-stone-800 text-sm">🤖 AIシフト提案</p>
+                  <p className="text-[11px] text-stone-400 mt-0.5">申請プールを見て承認の助言をします（最終判断は桐島さん）</p>
+                </div>
+                <button onClick={runAiSuggest} disabled={aiLoading}
+                  className="px-3 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium disabled:opacity-50 whitespace-nowrap">
+                  {aiLoading ? '考え中…' : 'AIに相談'}
+                </button>
+              </div>
+              {aiResult && (
+                <div className="mt-3 space-y-2">
+                  {aiResult.summary && (
+                    <p className="text-sm text-stone-700 bg-stone-50 rounded-xl px-3 py-2">{aiResult.summary}</p>
+                  )}
+                  {aiResult.warnings.length > 0 && (
+                    <ul className="space-y-1">
+                      {aiResult.warnings.map((w, i) => (
+                        <li key={i} className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">⚠️ {w}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {recommendedCount > 0 && (
+                    <button onClick={approveRecommended}
+                      className="w-full py-2.5 bg-teal-600 text-white rounded-xl text-sm font-medium">
+                      ✓ おすすめの{recommendedCount}件をまとめて承認
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {pending.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center text-stone-400 shadow-sm">
               <p className="text-2xl mb-2">📋</p>
@@ -522,18 +617,27 @@ export default function AdminShiftsPage() {
           ) : pending.map(s => {
             const loc = locationOf(s)
             const meta = LOCATION_META[loc]
+            const rec = recMap[s.id]
             return (
-            <div key={s.id} className="bg-white rounded-2xl shadow-sm p-4">
+            <div key={s.id} className={'bg-white rounded-2xl shadow-sm p-4 ' + (rec?.action === 'approve' ? 'ring-2 ring-teal-300' : '')}>
               <div className="flex items-center gap-2">
                 <p className="font-medium text-stone-800">{s.staffName}</p>
                 {loc !== 'cafe' && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${meta.badge}`}>{meta.emoji} {meta.label}</span>
+                )}
+                {rec && (
+                  <span className={'text-[10px] px-1.5 py-0.5 rounded-full font-medium ' + (
+                    rec.action === 'approve' ? 'bg-teal-100 text-teal-700' : 'bg-stone-100 text-stone-500'
+                  )}>
+                    {rec.action === 'approve' ? '🤖 承認おすすめ' : '🤖 保留'}
+                  </span>
                 )}
               </div>
               <p className="text-sm text-stone-500 mt-0.5">
                 {new Date(s.date+'T12:00:00').toLocaleDateString('ja-JP',{month:'long',day:'numeric',weekday:'short'})}
                 　{s.start_time?.slice(0,5)}〜{s.end_time?.slice(0,5)}
               </p>
+              {rec?.reason && <p className="text-xs text-stone-400 mt-1">💬 {rec.reason}</p>}
               <div className="flex gap-2 mt-3">
                 <button onClick={() => approveRequest(s.id)}
                   className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-medium">✓ 承認</button>
@@ -544,7 +648,8 @@ export default function AdminShiftsPage() {
             )
           })}
         </div>
-      )}
+        )
+      })()}
     </main>
   )
 }

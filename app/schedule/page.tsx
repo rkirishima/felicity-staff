@@ -134,9 +134,16 @@ export default function SchedulePage() {
 
   async function deleteShift(shiftId: string) {
     const shift = shifts.find(s => s.id === shiftId)
-    if (!isAdmin && shift?.staff_id !== authStaff?.id) {
-      toast.error('自分のシフトのみ削除できます')
-      return
+    if (!isAdmin) {
+      // スタッフは自分の「申請中」シフトのみ取消可能。承認済み・既存シフトは削除不可
+      if (shift?.staff_id !== authStaff?.id) {
+        toast.error('自分のシフトのみ取消できます')
+        return
+      }
+      if (shift?.status !== 'pending') {
+        toast.error('承認済みのシフトは取消できません。変更は桐島に連絡してください 🙏')
+        return
+      }
     }
     const { error } = await supabase.from('shifts').delete().eq('id', shiftId)
     if (error) { toast.error('削除失敗'); return }
@@ -188,6 +195,8 @@ export default function SchedulePage() {
     ...Array.from({ length: firstDay }, () => null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1)
   ]
+  const _today = new Date()
+  const todayStr = _today.getFullYear() + '-' + String(_today.getMonth()+1).padStart(2,'0') + '-' + String(_today.getDate()).padStart(2,'0')
 
   // PIN認証画面
   if (authStep === 'select') return (
@@ -263,6 +272,7 @@ export default function SchedulePage() {
       </div>
 
       <div className="flex gap-3 mb-3 text-xs text-stone-400 flex-wrap">
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-white border-2 border-stone-800 inline-block" />今日</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white border border-teal-400 inline-block" />土日</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-200 inline-block" />祝日</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-200 inline-block" />キッチンカー</span>
@@ -285,16 +295,22 @@ export default function SchedulePage() {
           const approvedShifts = dayShifts.filter(s => s.status === 'approved')
           const pendingShifts = dayShifts.filter(s => s.status === 'pending')
           const isSelected = selectedDate === dateStr
+          const isToday = dateStr === todayStr
           return (
             <button key={i} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
               className={'relative rounded-xl p-1 text-center transition-all min-h-[52px] ' + (
                 isSelected ? 'ring-2 ring-teal-500 bg-teal-100' :
+                isToday ? 'ring-2 ring-stone-800 ring-offset-1 bg-white' :
                 holiday ? 'bg-rose-100' :
                 foodtruck ? 'bg-amber-100' :
                 weekend ? 'bg-white border border-stone-200' :
                 'bg-white/60'
               )}>
-              <div className={'text-xs font-medium ' + (holiday?'text-rose-500':weekend?'text-teal-600':foodtruck?'text-amber-500':'text-stone-600')}>{day}</div>
+              {isToday ? (
+                <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-stone-800 text-white text-xs font-bold">{day}</div>
+              ) : (
+                <div className={'text-xs font-medium ' + (holiday?'text-rose-500':weekend?'text-teal-600':foodtruck?'text-amber-500':'text-stone-600')}>{day}</div>
+              )}
               {holiday && <div className="text-[7px] text-rose-400 leading-tight truncate">{holiday}</div>}
               <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                 {approvedShifts.slice(0,3).map((s, j) => {
@@ -358,8 +374,9 @@ export default function SchedulePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-stone-400">{s.start_time.slice(0,5)}〜{s.end_time.slice(0,5)}</span>
-                    {(isAdmin || s.staff_id === authStaff?.id) && (
+                    {(isAdmin || (s.staff_id === authStaff?.id && s.status === 'pending')) && (
                       <button onClick={() => deleteShift(s.id)}
+                        title={isAdmin ? '削除' : '申請を取消'}
                         className="w-6 h-6 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center font-bold transition-all">×</button>
                     )}
                   </div>
