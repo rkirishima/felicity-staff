@@ -63,6 +63,22 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [sendTo, setSendTo] = useState('')
   const [sendSubject, setSendSubject] = useState('')
   const [sendBody, setSendBody] = useState('')
+  const [drafting, setDrafting] = useState(false)
+
+  async function generateDraft() {
+    setDrafting(true)
+    try {
+      const res = await fetch(`/api/keiri/invoices/${id}/draft-email`)
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; body?: string; error?: string }
+      if (!res.ok || !data.ok || !data.body) throw new Error(data.error || `status ${res.status}`)
+      setSendBody(data.body)
+      toast.success('AI下書きを生成しました。確認して送信してください')
+    } catch (e) {
+      toast.error(`AI下書き生成に失敗: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setDrafting(false)
+    }
+  }
 
   useEffect(() => {
     if (!getAdminSession()) {
@@ -320,13 +336,15 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </button>
         )}
 
-        {inv.status === 'sent' && (inv.sent_at || inv.pdf_path) && (
+        {inv.status === 'sent' && (
           <button
             onClick={() => setShowSend(true)}
             disabled={busy}
-            className="w-full bg-stone-800 text-white py-4 rounded-2xl font-medium shadow-sm disabled:opacity-40"
+            className={`w-full text-white py-4 rounded-2xl font-medium shadow-sm disabled:opacity-40 ${
+              inv.sent_at ? 'bg-stone-800' : 'bg-amber-600'
+            }`}
           >
-            メール再送信
+            {inv.sent_at ? 'メール再送信' : '⚠ 未送信 — メールを送信する'}
           </button>
         )}
 
@@ -367,12 +385,19 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               <FieldM label="件名（空欄で既定）">
                 <input value={sendSubject} onChange={e => setSendSubject(e.target.value)} className={inputClsM} />
               </FieldM>
-              <FieldM label="本文（空欄で既定）">
-                <textarea value={sendBody} onChange={e => setSendBody(e.target.value)} className={inputClsM} rows={6} />
+              <FieldM label="本文（空欄でAI自動生成 / 定型文）">
+                <textarea value={sendBody} onChange={e => setSendBody(e.target.value)} className={inputClsM} rows={8} />
               </FieldM>
               <button
+                onClick={generateDraft}
+                disabled={drafting || busy}
+                className="w-full bg-white border border-emerald-600 text-emerald-700 py-2.5 rounded-2xl text-sm font-medium disabled:opacity-40"
+              >
+                {drafting ? 'AI下書き生成中…' : '✦ AIで本文を下書き'}
+              </button>
+              <button
                 onClick={send}
-                disabled={busy}
+                disabled={busy || drafting}
                 className="w-full bg-stone-800 text-white py-3 rounded-2xl font-medium shadow-sm disabled:opacity-40"
               >
                 {busy ? '送信中...' : '送信'}

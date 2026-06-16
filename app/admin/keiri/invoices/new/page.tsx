@@ -198,10 +198,15 @@ export default function NewInvoicePage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
           })
-          if (!res.ok) throw new Error(`status ${res.status}`)
-          toast.success('メール送信しました')
-        } catch {
-          toast.error('メール送信失敗')
+          const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+          if (!res.ok || !j.ok) throw new Error(j.error || `status ${res.status}`)
+          toast.success('発行＆メール送信しました')
+        } catch (e) {
+          // 発行は済んでいるが送信に失敗。sent_at は未設定のまま＝未送信として残り、
+          // 詳細画面の「メール送信」ボタンとリマインダーcronで再送できる。
+          toast.error(
+            `発行しましたがメール送信に失敗: ${e instanceof Error ? e.message : String(e)}。未送信として保存、後で再送信できます`,
+          )
         }
       } else {
         toast.success(publish ? `発行しました ${out.invoice_number ?? ''}` : '下書き保存しました')

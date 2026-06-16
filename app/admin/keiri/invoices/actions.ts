@@ -46,7 +46,9 @@ export async function issueInvoice(
   const summary = groupByTaxRate(input.lines)
   const invoice_number = opts.publish ? await nextInvoiceNumber() : null
   const status = opts.publish ? 'sent' : 'draft'
-  const sent_at = opts.publish ? new Date().toISOString() : null
+  // sent_at は「メールが実際に送信成功した時刻」のみを表す authoritative なフィールド。
+  // 発行(publish)しただけでは設定しない。実送信は renderAndSendInvoice が成功時に記録する。
+  // → status='sent' かつ sent_at IS NULL = 発行済みだが未送信。リマインダーcronが拾える。
 
   const { data: inv, error: invErr } = await supabase
     .from('keiri_invoices')
@@ -62,7 +64,6 @@ export async function issueInvoice(
       tax_8: summary.tax_8,
       total: summary.total,
       notes: input.notes,
-      sent_at,
     })
     .select('id, invoice_number')
     .single()
@@ -102,12 +103,12 @@ export async function publishDraftInvoice(
   if (row.status !== 'draft') throw new Error('下書きのみ発行できます')
 
   const invoice_number = await nextInvoiceNumber()
+  // sent_at はここでは設定しない。実メール送信が成功したときに renderAndSendInvoice が記録する。
   const { error: updErr } = await supabase
     .from('keiri_invoices')
     .update({
       invoice_number,
       status: 'sent',
-      sent_at: new Date().toISOString(),
       pdf_path: null,
     })
     .eq('id', id)

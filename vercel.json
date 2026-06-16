@@ -5,6 +5,10 @@
       "schedule": "0 0 1 * *"
     },
     {
+      "path": "/api/cron/invoice-send-reminder",
+      "schedule": "0 1 * * *"
+    },
+    {
       "path": "/api/cron/tax-anomaly-check",
       "schedule": "0 0 * * 1"
     },

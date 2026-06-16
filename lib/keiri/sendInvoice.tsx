@@ -110,8 +110,10 @@ export async function renderAndSendInvoice(
     client: {
       name: client?.name ?? '',
       email: client?.email ?? null,
+      contact_person: client?.contact_person ?? null,
     },
     pdfBuffer,
+    lines: lines.map(l => ({ name: l.name, quantity: l.quantity, amount: l.amount })),
     to: override.to,
     subject: override.subject,
     body: override.body,
