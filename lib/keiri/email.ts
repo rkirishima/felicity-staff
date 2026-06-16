@@ -79,9 +79,15 @@ ${company.name}でございます。
   const fromName = company.name || 'FELICITY'
   const from = `${fromName} <${fromAddress}>`
 
+  // 送信控えを社内アドレスへBCC(Gmailに記録が残るように)。
+  // 宛先と同一なら二重送信になるのでスキップ。
+  const bccAddress = process.env.INVOICE_BCC || fromAddress
+  const bcc = bccAddress.toLowerCase() !== to.toLowerCase() ? bccAddress : undefined
+
   const result = await resend.emails.send({
     from,
     to,
+    bcc,
     subject,
     text: body,
     attachments: [
