@@ -7,6 +7,7 @@ import { getHolidaysOf } from 'japanese-holidays'
 import { getSession, getAdminSession } from '@/lib/session'
 import { verifyStaffPin } from '@/app/admin/actions'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
+import { loadShiftDeadlineSettings, deadlineStatusOf, monthKeyOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
 type Shift = { id: string; staff_id: string | null; date: string; start_time: string; end_time: string; status: string; location: string | null; note: string | null; staff: { name: string } }
@@ -45,6 +46,7 @@ export default function SchedulePage() {
   const [viewMonth, setViewMonth] = useState(new Date())
   const [holidays, setHolidays] = useState<Record<string, string>>({})
   const [specialDays, setSpecialDays] = useState<string[]>([])
+  const [deadlineSettings, setDeadlineSettings] = useState<ShiftDeadlineSettings>({ deadlines: {}, lateAllow: {} })
   // PIN認証
   const [authStaff, setAuthStaff] = useState<Staff | null>(null)
   const [authStep, setAuthStep] = useState<'select' | 'pin' | 'done'>('select')
@@ -93,6 +95,7 @@ export default function SchedulePage() {
     supabase.from('staff').select('id, name, role').eq('active', true)
       .not('role', 'eq', 'accountant').order('name')
       .then(({ data }) => setStaffList((data ?? []) as Staff[]))
+    loadShiftDeadlineSettings(supabase).then(setDeadlineSettings)
     loadShifts()
   }, [viewMonth])
 
@@ -157,6 +160,16 @@ export default function SchedulePage() {
     const startTime = customStart || tmpl?.start_time || ''
     const endTime = customEnd || tmpl?.end_time || ''
     if (!startTime || !endTime) { toast.error('シフトを選んでください'); return }
+    // 受付締切ゲート（スタッフのみ。店長は締切後も登録可）
+    if (!isAdmin) {
+      const now = new Date()
+      const today = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0')
+      const st = deadlineStatusOf(selectedDate.slice(0, 7), deadlineSettings, today)
+      if (st.locked) {
+        toast.error('この月の申請受付は締切ました。変更は桐島に連絡してください 🙏')
+        return
+      }
+    }
     setLoading(true)
     const status = isAdmin ? 'approved' : 'pending'
     const { error } = await supabase.from('shifts').insert({
@@ -270,6 +283,32 @@ export default function SchedulePage() {
           )}
         </div>
       </div>
+
+      {(() => {
+        const st = deadlineStatusOf(monthKeyOf(viewMonth), deadlineSettings, todayStr)
+        if (!st.deadline) return null
+        const dl = new Date(st.deadline + 'T12:00:00').toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })
+        if (st.locked) {
+          return (
+            <div className="mb-3 rounded-xl px-3 py-2 text-sm bg-stone-100 border border-stone-300 text-stone-500">
+              🔒 {month + 1}月の申請受付は締切ました（{dl}）。変更は桐島に連絡してください 🙏
+            </div>
+          )
+        }
+        const d = st.daysLeft ?? 0
+        const urgent = d <= 2
+        return (
+          <div className={'mb-3 rounded-xl px-3 py-2 text-sm border ' + (
+            st.lateAllowed ? 'bg-amber-50 border-amber-200 text-amber-700'
+            : urgent ? 'bg-rose-50 border-rose-200 text-rose-600'
+            : 'bg-teal-50 border-teal-200 text-teal-700'
+          )}>
+            {st.lateAllowed
+              ? <>🔓 {month + 1}月は遅れ申請の受付中（締切 {dl} を延長中）</>
+              : <>📅 {month + 1}月シフト受付中 ・ 締切 {dl}{d > 0 ? `（あと${d}日）` : d === 0 ? '（本日まで）' : ''}</>}
+          </div>
+        )
+      })()}
 
       <div className="flex gap-3 mb-3 text-xs text-stone-400 flex-wrap">
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-white border-2 border-stone-800 inline-block" />今日</span>

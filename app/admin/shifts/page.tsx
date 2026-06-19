@@ -6,6 +6,8 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { getAdminSession } from '@/lib/session'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
+import { loadShiftDeadlineSettings, saveShiftDeadline, saveLateAllow, deadlineStatusOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
+import { getHolidaysOf } from 'japanese-holidays'
 
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 const DAYS = ['日','月','火','水','木','金','土']
@@ -19,6 +21,14 @@ for (let i = 0; i <= 28; i++) {
   const h = String(Math.floor(total / 60)).padStart(2,'0')
   const m = String(total % 60).padStart(2,'0')
   TIME_OPTIONS.push(`${h}:${m}`)
+}
+
+// shift_templates の day_type 判定（土日祝・特別営業日は 'weekend'、平日は曜日コード）
+// dateStr はローカル 'YYYY-MM-DD'（toISOString のUTCずれを避けるため呼び出し側で生成）
+function classifyDayType(d: Date, dateStr: string, specialDays: string[], holidays: Record<string, string>): string {
+  const dow = d.getDay()
+  if (dow === 0 || dow === 6 || holidays[dateStr] || specialDays.includes(dateStr)) return 'weekend'
+  return ['sun','mon','tue','wed','thu','fri','sat'][dow]
 }
 
 export default function AdminShiftsPage() {
@@ -51,6 +61,15 @@ export default function AdminShiftsPage() {
   type AiResult = { summary: string; recommendations: AiRec[]; warnings: string[] }
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<AiResult | null>(null)
+  // 申請受付の締切
+  const [deadlineSettings, setDeadlineSettings] = useState<ShiftDeadlineSettings>({ deadlines: {}, lateAllow: {} })
+  const [deadlineDraft, setDeadlineDraft] = useState('')
+  const [deadlineSaving, setDeadlineSaving] = useState(false)
+  // @1募集枠の生成
+  const [templates, setTemplates] = useState<any[]>([])
+  const [holidays, setHolidays] = useState<Record<string, string>>({})
+  const [specialDays, setSpecialDays] = useState<string[]>([])
+  const [openingsGenerating, setOpeningsGenerating] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
@@ -61,7 +80,85 @@ export default function AdminShiftsPage() {
       .order('name').then(({ data }) => setStaffList(data ?? []))
   }, [])
 
-  useEffect(() => { loadShifts(); loadPending() }, [viewMonth])
+  useEffect(() => { loadShifts(); loadPending(); loadDeadlines(); loadTemplateData() }, [viewMonth])
+
+  async function loadTemplateData() {
+    const yy = viewMonth.getFullYear()
+    const map: Record<string, string> = {}
+    ;(getHolidaysOf(yy) ?? []).forEach((h: any) => {
+      map[yy + '-' + String(h.month).padStart(2,'0') + '-' + String(h.date).padStart(2,'0')] = h.name
+    })
+    setHolidays(map)
+    const { data: tpl } = await supabase.from('shift_templates').select('id, day_type, name, start_time, end_time')
+    setTemplates(tpl ?? [])
+    const { data: sp } = await supabase.from('special_business_days').select('date, day_type')
+    setSpecialDays((sp ?? []).filter((d: any) => d.day_type === 'weekend').map((d: any) => d.date))
+  }
+
+  // 対象月の @1 募集枠（staff_id=null / status=approved / template_id付き）を冪等に一括生成
+  async function generateOpenings() {
+    const yy = viewMonth.getFullYear()
+    const mo = viewMonth.getMonth()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const daysInMonth = new Date(yy, mo + 1, 0).getDate()
+    if (templates.length === 0) { toast.error('シフトテンプレートが読み込めていません'); return }
+    // 既存の募集枠（重複生成を避ける）
+    const { data: existing } = await supabase.from('shifts')
+      .select('date, template_id')
+      .gte('date', `${yy}-${pad(mo + 1)}-01`)
+      .lte('date', `${yy}-${pad(mo + 1)}-${pad(daysInMonth)}`)
+      .is('staff_id', null)
+    const existingSet = new Set((existing ?? []).map((r: any) => `${r.date}|${r.template_id}`))
+    const rows: any[] = []
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(yy, mo, day)
+      const dateStr = `${yy}-${pad(mo + 1)}-${pad(day)}`
+      const dt = classifyDayType(date, dateStr, specialDays, holidays)
+      for (const t of templates.filter(t => t.day_type === dt)) {
+        if (existingSet.has(`${dateStr}|${t.id}`)) continue
+        rows.push({
+          staff_id: null, date: dateStr,
+          start_time: t.start_time, end_time: t.end_time,
+          status: 'approved', location: 'cafe', template_id: t.id,
+        })
+      }
+    }
+    if (rows.length === 0) { toast('生成する枠はありません（既に生成済みです）'); return }
+    if (!confirm(`${mo + 1}月の@1募集枠を ${rows.length}件 生成します。よろしいですか？`)) return
+    setOpeningsGenerating(true)
+    const { error } = await supabase.from('shifts').insert(rows)
+    setOpeningsGenerating(false)
+    if (error) { toast.error('生成失敗: ' + error.message); return }
+    toast.success(`${rows.length}件の募集枠を生成しました 📋`)
+    loadShifts()
+  }
+
+  function monthKey() {
+    return viewMonth.getFullYear() + '-' + String(viewMonth.getMonth() + 1).padStart(2, '0')
+  }
+
+  async function loadDeadlines() {
+    const s = await loadShiftDeadlineSettings(supabase)
+    setDeadlineSettings(s)
+    setDeadlineDraft(s.deadlines[monthKey()] ?? '')
+  }
+
+  async function saveDeadline() {
+    setDeadlineSaving(true)
+    const { error } = await saveShiftDeadline(supabase, monthKey(), deadlineDraft || null)
+    setDeadlineSaving(false)
+    if (error) { toast.error('保存失敗: ' + error.message); return }
+    toast.success(deadlineDraft ? '締切を設定しました' : '締切を解除しました')
+    loadDeadlines()
+  }
+
+  async function toggleLateAllow() {
+    const cur = !!deadlineSettings.lateAllow[monthKey()]
+    const { error } = await saveLateAllow(supabase, monthKey(), !cur)
+    if (error) { toast.error('保存失敗: ' + error.message); return }
+    toast.success(!cur ? '遅れ申請を開放しました' : '遅れ申請を締めました')
+    loadDeadlines()
+  }
 
   async function loadShifts() {
     const y = viewMonth.getFullYear()
@@ -278,12 +375,26 @@ export default function AdminShiftsPage() {
     setAiLoading(true)
     setAiResult(null)
     try {
-      const approved = shifts
-        .filter(s => s.status === 'approved')
-        .map(s => ({
-          staffName: s.isOpen ? '募集中' : s.staffName,
-          date: s.date, start_time: s.start_time, end_time: s.end_time, location: s.location,
-        }))
+      const approvedShifts = shifts.filter(s => s.status === 'approved')
+      const approved = approvedShifts.map(s => ({
+        staffName: s.isOpen ? '募集中' : s.staffName,
+        date: s.date, start_time: s.start_time, end_time: s.end_time, location: s.location,
+      }))
+      // 公平性＝労働時間の均等：各スタッフの当月承認済み累計時間を集計してAIに渡す
+      const toMin = (t: string) => {
+        const [h, mm] = (t || '').slice(0, 5).split(':').map(Number)
+        return (h || 0) * 60 + (mm || 0)
+      }
+      const hoursByStaff: Record<string, { hours: number; count: number }> = {}
+      approvedShifts.forEach(s => {
+        if (!s.staff_id) return
+        const mins = toMin(s.end_time) - toMin(s.start_time)
+        if (mins <= 0) return
+        const cur = hoursByStaff[s.staff_id] ?? { hours: 0, count: 0 }
+        cur.hours += mins / 60
+        cur.count += 1
+        hoursByStaff[s.staff_id] = cur
+      })
       const res = await fetch('/api/shifts/ai-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -294,7 +405,14 @@ export default function AdminShiftsPage() {
             start_time: p.start_time, end_time: p.end_time, location: p.location,
           })),
           approved,
-          staff: staffList.map(s => ({ name: s.name, role: s.role })),
+          staff: staffList.map(s => {
+            const h = hoursByStaff[s.id]
+            return {
+              name: s.name, role: s.role,
+              hours: h ? Math.round(h.hours * 10) / 10 : 0,
+              shiftCount: h?.count ?? 0,
+            }
+          }),
         }),
       })
       const json = await res.json()
@@ -571,8 +689,57 @@ export default function AdminShiftsPage() {
         const recMap: Record<string, AiRec> = {}
         aiResult?.recommendations.forEach(r => { recMap[r.id] = r })
         const recommendedCount = aiResult?.recommendations.filter(r => r.action === 'approve').length ?? 0
+        const mk = `${y}-${String(m + 1).padStart(2, '0')}`
+        const _t = new Date()
+        const today = _t.getFullYear() + '-' + String(_t.getMonth() + 1).padStart(2, '0') + '-' + String(_t.getDate()).padStart(2, '0')
+        const dStatus = deadlineStatusOf(mk, deadlineSettings, today)
         return (
         <div className="space-y-3">
+          {/* 申請受付の締切 */}
+          <div className="bg-white rounded-2xl shadow-sm p-4">
+            <p className="font-medium text-stone-800 text-sm">📅 {m + 1}月の申請受付締切</p>
+            <p className="text-[11px] text-stone-400 mt-0.5">締切までスタッフの希望をプール → 締切後にまとめて承認</p>
+            <div className="flex items-center gap-2 mt-3">
+              <input type="date" value={deadlineDraft} onChange={e => setDeadlineDraft(e.target.value)}
+                className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm" />
+              <button onClick={saveDeadline} disabled={deadlineSaving}
+                className="px-3 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium disabled:opacity-50 whitespace-nowrap">
+                {deadlineSaving ? '保存中…' : '設定'}
+              </button>
+            </div>
+            {!dStatus.deadline ? (
+              <p className="text-[11px] text-stone-400 mt-2">未設定（スタッフはいつでも申請できます）</p>
+            ) : dStatus.locked ? (
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-xs text-stone-500">🔒 締切済み（新規申請をロック中）</span>
+                <button onClick={toggleLateAllow} className="text-xs px-2.5 py-1.5 bg-amber-100 text-amber-700 rounded-lg font-medium whitespace-nowrap">遅れ申請を開放</button>
+              </div>
+            ) : dStatus.lateAllowed ? (
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-xs text-amber-600">🔓 遅れ申請を開放中</span>
+                <button onClick={toggleLateAllow} className="text-xs px-2.5 py-1.5 bg-stone-100 text-stone-600 rounded-lg font-medium whitespace-nowrap">締める</button>
+              </div>
+            ) : (
+              <p className="text-[11px] text-teal-600 mt-2">📥 受付中{(dStatus.daysLeft ?? 0) > 0 ? `（あと${dStatus.daysLeft}日）` : (dStatus.daysLeft === 0 ? '（本日締切）' : '')}</p>
+            )}
+          </div>
+
+          {/* @1募集枠の生成 */}
+          <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="font-medium text-stone-800 text-sm">📋 {m + 1}月の@1募集枠</p>
+                <p className="text-[11px] text-stone-400 mt-0.5">
+                  現在 {shifts.filter((s: any) => s.isOpen).length} 枠が募集中。テンプレートから自動生成します。
+                </p>
+              </div>
+              <button onClick={generateOpenings} disabled={openingsGenerating}
+                className="px-3 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium disabled:opacity-50 whitespace-nowrap">
+                {openingsGenerating ? '生成中…' : '枠を生成'}
+              </button>
+            </div>
+          </div>
+
           {/* AIシフト提案 */}
           {pending.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm p-4">

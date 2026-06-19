@@ -9,16 +9,22 @@ const SYSTEM_PROMPT = `あなたは日本のカフェ・コーヒー焙煎店「
 - 土日・祝日は来客が多く、人手を厚めに。
 - 水曜・木曜はキッチンカー営業日になることがある（locationが cafe 以外＝外部出店）。キッチンカーとカフェは別の人員が必要。
 - 1営業日あたりカフェは最低1〜2名いると安心。少なすぎる日・多すぎる日を指摘する。
-- 公平性：特定の人にシフトが偏りすぎないよう配慮する。あまり入れていない人の希望は優先的に承認候補に。
+
+【公平性＝労働時間の均等（最重要の判断軸）】
+- シフトは「各スタッフの労働時間がなるべく均等になる」ことを最優先で調整する。
+- 入力の「現在の労働時間ランキング（少ない順）」を必ず見ること。累計時間が少ない人ほど approve を優先する。
+- 同じ日・同じ時間帯に複数人の申請が重なって人手が余る場合は、累計時間が最も少ない人を approve、多い人は hold にする。
+- 理由には可能なら数値の根拠を入れる（例:「今月8hで最少のため優先」「今月22hで多めのため保留」）。
+- ただし人手ゼロになる営業日を埋める申請は、累計時間が多い人でも approve を優先してよい（穴埋め＞均等）。
 
 【あなたの仕事】
-入力された「承認待ちの申請(pending)」それぞれについて、承認をおすすめするか(approve)、一旦保留がよいか(hold)を判定し、短い理由を日本語で添える。
+入力された「承認待ちの申請(pending)」それぞれについて、承認をおすすめするか(approve)、一旦保留がよいか(hold)を判定し、短い理由を日本語で添える。判断は上記「労働時間の均等」を軸にする。
 さらに全体の所見(summary)と、注意点(warnings)を返す。
 
 【warningsに入れる例】
 - 同じ人が同じ日の同じ時間帯に二重で入っている（ダブルブッキング）
 - 営業日なのに承認済み・申請ともに誰もいない日（人手ゼロ）
-- 一人にシフトが集中しすぎている
+- 一人にシフトが集中しすぎている（労働時間が突出している）
 - キッチンカー日にカフェ側の人員がいない 等
 
 【出力形式】
@@ -50,11 +56,20 @@ export type AiShiftApproved = {
   location: string | null
 }
 
+export type AiShiftStaff = {
+  name: string
+  role: string
+  /** 対象月の承認済みシフトの累計労働時間（時間） */
+  hours?: number
+  /** 対象月の承認済みシフトの本数 */
+  shiftCount?: number
+}
+
 export type AiShiftInput = {
   month: string
   pending: AiShiftPending[]
   approved: AiShiftApproved[]
-  staff: Array<{ name: string; role: string }>
+  staff: AiShiftStaff[]
 }
 
 export type AiShiftRecommendation = { id: string; action: 'approve' | 'hold'; reason: string }
@@ -82,10 +97,21 @@ export async function aiSuggestShifts(input: AiShiftInput): Promise<AiShiftResul
 
   const client = new Anthropic({ apiKey })
 
+  // 労働時間の少ない順にランキング化（公平性＝均等の判断材料）
+  const ranking = [...input.staff]
+    .map(s => ({ name: s.name, hours: s.hours ?? 0, shiftCount: s.shiftCount ?? 0 }))
+    .sort((a, b) => a.hours - b.hours)
+
   const userPrompt = [
     `対象月: ${input.month}`,
     '',
     `スタッフ一覧: ${input.staff.map(s => s.name).join('、') || '（なし）'}`,
+    '',
+    '【現在の労働時間ランキング（対象月の承認済み合計・少ない順＝シフトが少ない人ほど上）】',
+    '※ 上にいる人ほど approve を優先する。',
+    ...(ranking.length
+      ? ranking.map((s, i) => `${i + 1}. ${s.name}：${s.hours}h（${s.shiftCount}回）`)
+      : ['（データなし）']),
     '',
     '【承認待ちの申請（=スタッフの希望。これを承認するか判定して）】',
     ...input.pending.map(p => `- id=${p.id} ｜ ${fmt(p)}`),
