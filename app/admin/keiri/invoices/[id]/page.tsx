@@ -321,8 +321,20 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               setPublishing(true)
               try {
                 const res = await publishDraftInvoice(inv.id, { sendEmail: !!email })
+                // 発行は完了している。画面状態を即更新して、古い下書き表示のまま
+                // 再度「発行」を押して「下書きのみ発行できます」エラーになるのを防ぐ。
+                setInv(prev =>
+                  prev
+                    ? {
+                        ...prev,
+                        status: 'sent',
+                        invoice_number: res.invoice_number,
+                        sent_at: res.emailSent ? new Date().toISOString() : null,
+                      }
+                    : prev,
+                )
                 if (res.emailError) {
-                  toast.error(`発行しましたがメール送信に失敗: ${res.emailError}`)
+                  toast.error(`発行しましたがメール送信に失敗: ${res.emailError}（未送信として保存、再送信できます）`)
                 } else if (res.emailSent) {
                   toast.success(`発行＆送信しました (${res.invoice_number})`)
                 } else {

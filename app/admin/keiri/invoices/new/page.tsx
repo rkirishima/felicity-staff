@@ -163,6 +163,12 @@ export default function NewInvoicePage() {
       toast.error('取引先名は必須です')
       return
     }
+    const email = newClientEmail.trim()
+    // メール欄に担当者名などが混入すると送信が失敗するため形式を検証
+    if (email && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email)) {
+      toast.error('メールアドレスの形式が正しくありません（半角の正しいアドレスを入力）')
+      return
+    }
     setSavingClient(true)
     try {
       const out = await createClientRecord({
@@ -172,12 +178,12 @@ export default function NewInvoicePage() {
         postal_code: null,
         address: null,
         contact_person: newClientContact.trim() || null,
-        email: newClientEmail.trim() || null,
+        email: email || null,
         phone: null,
         payment_terms: null,
         notes: null,
       })
-      setClients(prev => [{ id: out.id, name, email: newClientEmail.trim() || null }, ...prev])
+      setClients(prev => [{ id: out.id, name, email: email || null }, ...prev])
       setClientId(out.id)
       setShowNewClientModal(false)
       resetNewClient()
