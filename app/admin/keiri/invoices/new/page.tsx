@@ -137,13 +137,16 @@ export default function NewInvoicePage() {
       issue_date: issueDate,
       due_date: dueDate || null,
       notes: notes.trim() || null,
-      lines: lines.map(l => ({
-        item_id: l.item_id || null,
-        description: l.description.trim(),
-        quantity: parseInt(l.quantity || '0', 10) || 0,
-        unit_price: parseInt(l.unit_price || '0', 10) || 0,
-        tax_rate: l.tax_rate,
-      })),
+      lines: lines
+        .map(l => ({
+          item_id: l.item_id || null,
+          description: l.description.trim(),
+          quantity: parseInt(l.quantity || '0', 10) || 0,
+          unit_price: parseInt(l.unit_price || '0', 10) || 0,
+          tax_rate: l.tax_rate,
+        }))
+        // 完全に空の行（品名なし・数量0・単価0）は送信前に除外する
+        .filter(l => l.description !== '' || l.quantity > 0 || l.unit_price > 0),
     }
   }
 
@@ -187,9 +190,36 @@ export default function NewInvoicePage() {
   }
 
   async function save(publish: boolean) {
+    const input = buildInput()
+    // クライアント側で先に検証（本番はサーバーアクションのエラー文が伏せられ、
+    // 「Server Components render error」という分かりにくい表示になるため）。
+    if (!input.client_id) {
+      toast.error('取引先を選択してください')
+      return
+    }
+    if (input.lines.length === 0) {
+      toast.error('明細を1行以上入力してください')
+      return
+    }
+    for (let i = 0; i < input.lines.length; i++) {
+      const l = input.lines[i]
+      if (!l.description) {
+        toast.error(`明細${i + 1}行目: 品名を入力してください`)
+        return
+      }
+      if (!Number.isFinite(l.quantity) || l.quantity <= 0) {
+        toast.error(`明細${i + 1}行目「${l.description}」: 数量を1以上で入力してください`)
+        return
+      }
+      if (!Number.isFinite(l.unit_price) || l.unit_price < 0) {
+        toast.error(`明細${i + 1}行目「${l.description}」: 単価を0以上で入力してください`)
+        return
+      }
+    }
+
     setSaving(publish ? 'publish' : 'draft')
     try {
-      const out = await issueInvoice(buildInput(), { publish })
+      const out = await issueInvoice(input, { publish })
       const email = selectedClient?.email
       if (publish && autoSend && email) {
         try {
