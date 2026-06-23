@@ -22,7 +22,7 @@ export type InvoicePDFLine = {
   name: string
   quantity: number
   unit_price: number
-  tax_rate: 10 | 8
+  tax_rate: 10 | 8 | 0
   amount: number
 }
 
@@ -309,8 +309,10 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
   const c = data.company
   const isQuote = data.documentType === 'quote'
   const isDraft = !isQuote && !data.invoice_number
-  const subtotal = data.summary.subtotal_10 + data.summary.subtotal_8
   const taxTotal = data.summary.tax_10 + data.summary.tax_8
+  // 税抜小計は0%対象も含める。total に0%額が含まれるので total - 税額 で全税抜小計が出る。
+  const subtotal = data.summary.total - taxTotal
+  const subtotal_0 = subtotal - data.summary.subtotal_10 - data.summary.subtotal_8
   const fullCompanyAddress = c.postal ? `〒${c.postal}  ${c.address}` : c.address
 
   const titleText = isQuote ? '見 積 書' : '請 求 書'
@@ -427,6 +429,12 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
               <View style={styles.sumRowSub}>
                 <Text>　内 8% 対象（税抜 {fmt(data.summary.subtotal_8)}）</Text>
                 <Text>{fmt(data.summary.tax_8)}</Text>
+              </View>
+            )}
+            {subtotal_0 > 0 && (
+              <View style={styles.sumRowSub}>
+                <Text>　内 0% 対象（非課税・経費）</Text>
+                <Text>{fmt(subtotal_0)}</Text>
               </View>
             )}
             <View style={styles.totalRow}>

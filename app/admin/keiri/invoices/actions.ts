@@ -32,7 +32,8 @@ function validate(input: InvoiceInput) {
     if (!l.description.trim()) throw new Error('明細の品名は必須です')
     if (!Number.isFinite(l.quantity) || l.quantity <= 0) throw new Error('数量は正の整数です')
     if (!Number.isFinite(l.unit_price) || l.unit_price < 0) throw new Error('単価は0以上の整数です')
-    if (l.tax_rate !== 10 && l.tax_rate !== 8) throw new Error('税率は 10 か 8 のみです')
+    if (l.tax_rate !== 10 && l.tax_rate !== 8 && l.tax_rate !== 0)
+      throw new Error('税率は 10 / 8 / 0 のみです')
   }
 }
 

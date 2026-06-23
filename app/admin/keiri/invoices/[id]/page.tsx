@@ -262,6 +262,12 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 <SumRow label="8% 消費税" value={inv.tax_8} />
               </>
             )}
+            {inv.total - inv.subtotal_10 - inv.tax_10 - inv.subtotal_8 - inv.tax_8 > 0 && (
+              <SumRow
+                label="0% 対象（非課税・経費）"
+                value={inv.total - inv.subtotal_10 - inv.tax_10 - inv.subtotal_8 - inv.tax_8}
+              />
+            )}
             <div className="flex items-center justify-between pt-2 border-t border-stone-200">
               <span className="text-stone-700">合計（税込）</span>
               <span className="text-stone-900 font-medium">¥{inv.total.toLocaleString()}</span>

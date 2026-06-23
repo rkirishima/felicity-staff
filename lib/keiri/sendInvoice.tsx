@@ -46,7 +46,7 @@ export async function renderAndSendInvoice(
     name: l.description as string,
     quantity: l.quantity as number,
     unit_price: l.unit_price as number,
-    tax_rate: ((l.tax_rate as number) === 8 ? 8 : 10) as 10 | 8,
+    tax_rate: ((l.tax_rate as number) === 8 ? 8 : (l.tax_rate as number) === 0 ? 0 : 10) as 10 | 8 | 0,
     amount: l.amount as number,
   }))
 

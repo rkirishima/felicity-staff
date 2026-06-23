@@ -108,7 +108,7 @@ export default function NewInvoicePage() {
               item_id: item.id,
               description: item.description ? `${item.name}\n${item.description}` : item.name,
               unit_price: String(item.unit_price),
-              tax_rate: (item.tax_rate === 8 ? 8 : 10) as TaxRate,
+              tax_rate: (item.tax_rate === 8 ? 8 : item.tax_rate === 0 ? 0 : 10) as TaxRate,
             }
           : l,
       ),
@@ -312,11 +312,15 @@ export default function NewInvoicePage() {
                   <Field label="税率">
                     <select
                       value={l.tax_rate}
-                      onChange={e => updateLine(idx, 'tax_rate', parseInt(e.target.value, 10) === 8 ? 8 : 10)}
+                      onChange={e => {
+                        const v = parseInt(e.target.value, 10)
+                        updateLine(idx, 'tax_rate', (v === 8 ? 8 : v === 0 ? 0 : 10) as TaxRate)
+                      }}
                       className={inputCls}
                     >
                       <option value={10}>10%</option>
                       <option value={8}>8%</option>
+                      <option value={0}>0%（非課税・経費立替）</option>
                     </select>
                   </Field>
                 </div>
@@ -341,6 +345,12 @@ export default function NewInvoicePage() {
               <Row label="8% 対象 税抜小計" value={summary.subtotal_8} />
               <Row label="8% 消費税" value={summary.tax_8} />
             </>
+          )}
+          {summary.total - summary.subtotal_10 - summary.tax_10 - summary.subtotal_8 - summary.tax_8 > 0 && (
+            <Row
+              label="0% 対象（非課税・経費）"
+              value={summary.total - summary.subtotal_10 - summary.tax_10 - summary.subtotal_8 - summary.tax_8}
+            />
           )}
           <div className="flex items-center justify-between border-t border-stone-200 pt-2 mt-2">
             <span className="text-sm text-stone-700">合計（税込）</span>
