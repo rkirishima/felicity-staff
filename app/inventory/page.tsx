@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useIsAdmin } from '@/lib/admin-context'
 import { getSession } from '@/lib/session'
 import { toast } from 'sonner'
-import { Boxes, ClipboardCheck, ShoppingCart, Settings, Snowflake, TrendingUp } from 'lucide-react'
+import { Boxes, ClipboardCheck, ShoppingCart, Settings, Snowflake, TrendingUp, Coffee } from 'lucide-react'
 import {
   STATUS_LABEL,
   STATUS_STYLE,
@@ -128,10 +128,15 @@ export default function InventoryHomePage() {
           )}
         </div>
 
-        {/* 需要予想への導線 */}
-        <Link href="/inventory/forecast" className="flex items-center justify-center gap-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 text-xs font-bold py-2 rounded-xl border border-stone-700 mt-2">
-          <TrendingUp size={14} /> 需要予想 (今後7日)
-        </Link>
+        {/* 需要予想・焙煎在庫への導線 */}
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <Link href="/inventory/forecast" className="flex items-center justify-center gap-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 text-xs font-bold py-2 rounded-xl border border-stone-700">
+            <TrendingUp size={14} /> 需要予想
+          </Link>
+          <Link href="/inventory/beans" className="flex items-center justify-center gap-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 text-xs font-bold py-2 rounded-xl border border-stone-700">
+            <Coffee size={14} /> 焙煎在庫
+          </Link>
+        </div>
 
         {/* 状態サマリー */}
         <div className="flex gap-1.5 mt-3">
