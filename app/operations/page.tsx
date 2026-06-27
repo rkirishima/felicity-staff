@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { haptic } from '@/lib/utils'
 
 const OPENING = [
   'エスプレッソマシン電源をつける（右下と正面の2つ、温度確認）',
@@ -62,6 +63,7 @@ function OperationsContent() {
   const progress = Math.round((doneCount / items.length) * 100)
 
   function toggle(key: string) {
+    haptic(10)
     setChecked(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
@@ -154,7 +156,7 @@ function OperationsContent() {
           const done = checked[key]
           return (
             <button key={key} onClick={() => toggle(key)}
-              className={`w-full flex items-start gap-3 px-4 py-3 rounded-2xl text-sm text-left transition-all ${done ? 'bg-teal-50 border border-teal-200' : 'bg-white shadow-sm'}`}>
+              className={`w-full flex items-start gap-3 px-4 py-3 rounded-2xl text-sm text-left transition-all active:scale-[0.98] ${done ? 'bg-teal-50 border border-teal-200' : 'bg-white shadow-sm active:bg-stone-100'}`}>
               <span className="text-lg flex-shrink-0 mt-0.5">{done ? '✅' : '⬜'}</span>
               <span className={`flex-1 leading-snug ${done ? 'text-teal-700 line-through opacity-60' : 'text-stone-700'}`}>
                 {item}

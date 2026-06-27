@@ -8,6 +8,7 @@ import { getSession, getAdminSession } from '@/lib/session'
 import { verifyStaffPin } from '@/app/admin/actions'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 import { loadShiftDeadlineSettings, deadlineStatusOf, monthKeyOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
+import { haptic } from '@/lib/utils'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
 type Shift = { id: string; staff_id: string | null; date: string; start_time: string; end_time: string; status: string; location: string | null; note: string | null; staff: { name: string } }
@@ -250,9 +251,11 @@ export default function SchedulePage() {
       <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
         {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((n, i) => (
           <button key={i} onClick={() => {
+            if (n === '') return
+            haptic(8)
             if (n === '⌫') setPinInput(p => p.slice(0,-1))
-            else if (n !== '') handlePinInput(n)
-          }} className={'py-4 rounded-2xl text-xl font-medium ' + (n === '' ? '' : 'bg-white text-stone-700 shadow-sm active:scale-95')}>
+            else handlePinInput(n)
+          }} className={'py-4 rounded-2xl text-xl font-medium transition-all ' + (n === '' ? '' : 'bg-white text-stone-700 shadow-sm active:scale-95')}>
             {n}
           </button>
         ))}

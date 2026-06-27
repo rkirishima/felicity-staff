@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useIsAdmin } from '@/lib/admin-context'
 import { getSession, getAdminSession } from '@/lib/session'
 import { toast } from 'sonner'
+import { haptic } from '@/lib/utils'
 import { ClipboardCheck, ChevronLeft, Send } from 'lucide-react'
 import {
   STATUS_CHOICES,
@@ -147,8 +148,8 @@ export default function InventoryCheckPage() {
                           return (
                             <button
                               key={s}
-                              onClick={() => setPicked((p) => ({ ...p, [it.item_id]: s }))}
-                              className={`py-2 rounded-lg text-xs font-medium border transition-colors ${active ? st.activeBtn : st.idleBtn}`}
+                              onClick={() => { haptic(8); setPicked((p) => ({ ...p, [it.item_id]: s })) }}
+                              className={`py-2 rounded-lg text-xs font-medium border transition-all active:scale-95 ${active ? st.activeBtn : st.idleBtn}`}
                             >
                               {STATUS_LABEL[s]}
                             </button>
