@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/store-sales-sync",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/inventory-order-list",
+      "schedule": "0 13 * * *"
     }
   ],
   "headers": [
