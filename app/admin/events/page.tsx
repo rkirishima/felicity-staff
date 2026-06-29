@@ -39,6 +39,7 @@ interface Event {
   event_type: string; recurrence_rule: string | null;
   floor_block: string | null; seats_blocked: number; time_relation: string;
   prep_tasks: PrepTask[] | null;
+  organizer_token: string | null;
   event_dates: EventDate[]; event_votes: Vote[];
 }
 
@@ -462,6 +463,31 @@ export default function AdminEventsPage() {
                     {event.floor_block && (
                       <div className="text-xs mb-3 px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#EBE5F5', color: '#5B21B6' }}>
                         フロアブロック: {event.floor_block} — {event.seats_blocked === 0 ? '全席' : `${event.seats_blocked}席`}確保
+                      </div>
+                    )}
+
+                    {/* Organizer share URL */}
+                    {event.organizer_token && (
+                      <div className="mb-3 px-3 py-2 rounded-lg" style={{ backgroundColor: '#F5F0E8', border: '1px solid #E8E0D4' }}>
+                        <div className="text-[10px] font-mono uppercase tracking-wider mb-1.5" style={{ color: '#78716c' }}>
+                          主催者URL
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <code className="text-[11px] font-mono break-all flex-1" style={{ color: '#292524' }}>
+                            https://felicity.cafe/events/organizer/{event.organizer_token}
+                          </code>
+                          <button
+                            onClick={() => {
+                              const url = `https://felicity.cafe/events/organizer/${event.organizer_token}`
+                              navigator.clipboard.writeText(url)
+                              toast.success('URLをコピーしました')
+                            }}
+                            className="shrink-0 px-3 py-1.5 rounded-lg text-xs"
+                            style={{ backgroundColor: '#14b8a6', color: 'white' }}
+                          >
+                            コピー
+                          </button>
+                        </div>
                       </div>
                     )}
 
