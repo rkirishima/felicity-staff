@@ -149,6 +149,12 @@ export default function InventoryPage() {
           >
             <Link2 size={14} /> POS紐付け
           </Link>
+          <Link
+            href="/admin/inventory/channel-map"
+            className="bg-stone-700 hover:bg-stone-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            <Link2 size={14} /> 在庫マッピング
+          </Link>
           <button
             onClick={() => setShowAdd(true)}
             className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"

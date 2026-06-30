@@ -8,6 +8,7 @@ import { getSession, saveSession } from '@/lib/session'
 import Image from 'next/image'
 import { verifyStaffPin, reportAbsence } from '@/app/admin/actions'
 import { LOCATION_META, locationOf } from '@/lib/shift-locations'
+import { haptic } from '@/lib/utils'
 
 type Staff = { id: string; name: string; role: string; hourly_rate?: number }
 type ClockStatus = 'not_clocked' | 'clocked_in' | 'clocked_out'
@@ -22,6 +23,16 @@ function getSb() {
 // JST今日の日付を返す
 function todayJST() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+// ボタン内インラインスピナー（処理中の手応え用）
+function Spinner({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={'inline-block align-[-2px] w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin ' + className}
+      aria-hidden
+    />
+  )
 }
 
 export default function HomePage() {
@@ -40,6 +51,7 @@ export default function HomePage() {
   const [clockHistory, setClockHistory] = useState<any[]>([])
   const [upcomingShifts, setUpcomingShifts] = useState<any[]>([])
   const [absenceConfirm, setAbsenceConfirm] = useState<string | null>(null)
+  const [absenceLoading, setAbsenceLoading] = useState(false)
   const [showCheckPrompt, setShowCheckPrompt] = useState<string | null>(null)
   const [prepAlerts, setPrepAlerts] = useState<{ eventTitle: string; date: string; startTime?: string; tasks: { task: string }[] }[]>([])
   const [todayEvents, setTodayEvents] = useState<{ title: string; startTime?: string; endTime?: string; floor?: string }[]>([])
@@ -180,11 +192,18 @@ export default function HomePage() {
   }
 
   async function handleAbsence(shift: any) {
-    if (!selected) return
-    setAbsenceConfirm(null)
-    await reportAbsence(shift.id, selected.name, shift.date, shift.start_time, shift.end_time)
-    toast.success('LINEグループに通知しました')
-    if (selected) loadUpcomingShifts(selected.id)
+    if (!selected || absenceLoading) return
+    setAbsenceLoading(true)
+    try {
+      await reportAbsence(shift.id, selected.name, shift.date, shift.start_time, shift.end_time)
+      toast.success('LINEグループに通知しました')
+      setAbsenceConfirm(null)
+      loadUpcomingShifts(selected.id)
+    } catch {
+      toast.error('通知に失敗しました。もう一度お試しください')
+    } finally {
+      setAbsenceLoading(false)
+    }
   }
 
   async function loadStats(staff: Staff, period: 'week' | 'month') {
@@ -441,16 +460,16 @@ export default function HomePage() {
 
         {/* 打刻ボタン */}
         {clockStatus === 'not_clocked' && (
-          <button onClick={clockIn} disabled={loading}
-            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest text-white mb-4 disabled:opacity-50"
+          <button onClick={() => { haptic(); clockIn() }} disabled={loading}
+            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest text-white mb-4 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none inline-flex items-center justify-center gap-2"
             style={{ backgroundColor: '#1c1917' }}>
-            {loading ? '確認中...' : '出 勤'}
+            {loading ? <><Spinner /> 確認中…</> : '出 勤'}
           </button>
         )}
         {clockStatus === 'clocked_in' && (
-          <button onClick={clockOut} disabled={loading}
-            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest border-2 border-stone-300 text-stone-600 mb-4 disabled:opacity-50 hover:border-stone-500">
-            {loading ? '処理中...' : '退 勤'}
+          <button onClick={() => { haptic(); clockOut() }} disabled={loading}
+            className="w-full py-5 rounded-2xl text-lg font-medium tracking-widest border-2 border-stone-300 text-stone-600 mb-4 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none hover:border-stone-500 inline-flex items-center justify-center gap-2">
+            {loading ? <><Spinner /> 処理中…</> : '退 勤'}
           </button>
         )}
         {clockStatus === 'clocked_out' && clockInTime && clockOutTime && (
@@ -558,10 +577,11 @@ export default function HomePage() {
                     </span>
                     {absenceConfirm === s.id ? (
                       <div className="flex gap-2">
-                        <button onClick={() => handleAbsence(s)}
-                          className="px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-bold">送信</button>
-                        <button onClick={() => setAbsenceConfirm(null)}
-                          className="px-3 py-1 bg-stone-100 text-stone-500 rounded-lg text-xs">戻る</button>
+                        <button onClick={() => { haptic(); handleAbsence(s) }} disabled={absenceLoading}
+                          className="px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50 disabled:pointer-events-none">
+                          {absenceLoading ? '送信中…' : '送信'}</button>
+                        <button onClick={() => setAbsenceConfirm(null)} disabled={absenceLoading}
+                          className="px-3 py-1 bg-stone-100 text-stone-500 rounded-lg text-xs disabled:opacity-50">戻る</button>
                       </div>
                     ) : (
                       <button onClick={() => setAbsenceConfirm(s.id)}
@@ -613,8 +633,10 @@ export default function HomePage() {
       <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
         {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((n, i) => (
           <button key={i} onClick={() => {
+            if (n === '') return
+            haptic(8)
             if (n === '⌫') setPin(p => p.slice(0,-1))
-            else if (n !== '') handlePinInput(n)
+            else handlePinInput(n)
           }} className={'py-4 rounded-2xl text-xl font-medium transition-all ' + (n === '' ? '' : 'bg-white text-stone-700 shadow-sm active:scale-95')}>
             {n}
           </button>

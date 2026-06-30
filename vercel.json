@@ -27,6 +27,18 @@
     {
       "path": "/api/cron/kitchen-car-weather",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/inventory-nightly-refresh",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/store-sales-sync",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/inventory-order-list",
+      "schedule": "0 13 * * *"
     }
   ],
   "headers": [

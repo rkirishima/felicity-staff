@@ -1,13 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Clock, CalendarDays, ClipboardList, BookOpen, Archive } from 'lucide-react'
+import { Clock, CalendarDays, ClipboardList, BookOpen, Archive, Boxes } from 'lucide-react'
 import { useIsAdmin } from '@/lib/admin-context'
 
 const items = [
   { href: '/', label: '打刻', icon: Clock },
   { href: '/schedule', label: 'シフト', icon: CalendarDays },
   { href: '/operations', label: '作業', icon: ClipboardList },
+  { href: '/inventory', label: '在庫', icon: Boxes },
   { href: '/recipes', label: 'レシピ', icon: BookOpen },
   { href: '/records', label: '記録', icon: Archive },
 ]
