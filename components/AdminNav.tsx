@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, CalendarDays, Clock, Tag, Users, CalendarCheck, Sparkles } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Clock, Tag, Users, CalendarCheck, Sparkles, Boxes } from 'lucide-react'
 import { useIsAdmin } from '@/lib/admin-context'
 
 const items = [
@@ -10,6 +10,7 @@ const items = [
   { href: '/admin/events', label: 'イベント', icon: Sparkles },
   { href: '/admin/shifts', label: 'シフト', icon: CalendarDays },
   { href: '/admin/timeclock', label: 'タイムカード', icon: Clock },
+  { href: '/inventory', label: '在庫', icon: Boxes },
   { href: '/label', label: 'ラベル', icon: Tag },
   { href: '/admin/payroll', label: 'スタッフ', icon: Users },
 ]
