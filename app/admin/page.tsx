@@ -96,6 +96,7 @@ export default function AdminPage() {
     { label: '👥 在籍状況', sub: 'リアルタイム', path: '/admin/live', color: 'bg-white border border-stone-100' },
     { label: '⏱ タイムカード', sub: '打刻修正・記録', path: '/admin/timeclock', color: 'bg-white border border-stone-100' },
     { label: '📅 シフト管理', sub: 'カレンダー', path: '/schedule', color: 'bg-white border border-stone-100' },
+    { label: '📖 レシピ・マニュアル', sub: 'ドリンク・フード・清掃手順', path: '/recipes', color: 'bg-white border border-stone-100' },
     { label: '💰 EC売上', sub: '売上集計・注文一覧', path: '/admin/sales', color: 'bg-white border border-stone-100' },
     { label: '📊 経理', sub: 'レシートOCR・請求書・月次', path: '/admin/keiri', color: 'bg-white border border-stone-100' },
     { label: '🔥 焙煎ログ', sub: 'Probat記録・FCR在庫', path: '/admin/roast', color: 'bg-white border border-stone-100' },
