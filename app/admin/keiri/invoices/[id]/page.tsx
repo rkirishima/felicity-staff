@@ -19,6 +19,7 @@ type Invoice = {
   id: string
   invoice_number: string | null
   status: Status
+  issuer: 'felicity' | 'rook' | null
   issue_date: string
   due_date: string | null
   subtotal_10: number
@@ -91,7 +92,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         supabase
           .from('keiri_invoices')
           .select(
-            'id, invoice_number, status, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, sent_at, paid_at, pdf_path, client:keiri_clients(id, name, email)',
+            'id, invoice_number, status, issuer, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, sent_at, paid_at, pdf_path, client:keiri_clients(id, name, email)',
           )
           .eq('id', id)
           .single(),
@@ -223,7 +224,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-sm text-stone-600">{inv.client?.name ?? '—'} 御中</p>
-            <Badge status={displayStatus!} />
+            <span className="flex items-center gap-1.5">
+              {inv.issuer === 'rook' && (
+                <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  ROOK名義
+                </span>
+              )}
+              <Badge status={displayStatus!} />
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs text-stone-500">
             <p>発行日: {inv.issue_date}</p>

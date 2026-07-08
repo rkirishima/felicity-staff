@@ -17,6 +17,7 @@ type Row = {
   id: string
   invoice_number: string | null
   status: Status
+  issuer: 'felicity' | 'rook' | null
   issue_date: string
   due_date: string | null
   total: number
@@ -83,7 +84,7 @@ function InvoicesListInner() {
     const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
     const { data } = await supabase
       .from('keiri_invoices')
-      .select('id, invoice_number, status, issue_date, due_date, total, client:keiri_clients(name)')
+      .select('id, invoice_number, status, issuer, issue_date, due_date, total, client:keiri_clients(name)')
       .gte('issue_date', start)
       .lt('issue_date', next)
       .order('issue_date', { ascending: false })
@@ -216,8 +217,13 @@ function InvoicesListInner() {
                           {r.issue_date} / 期限: {r.due_date ?? '—'}
                         </p>
                       </div>
-                      <div className="mt-1">
+                      <div className="mt-1 flex items-center gap-1.5">
                         <StatusBadge status={r.displayStatus} />
+                        {r.issuer === 'rook' && (
+                          <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            ROOK
+                          </span>
+                        )}
                       </div>
                     </Link>
                     {isOverdue && (

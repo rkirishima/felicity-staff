@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import type { Issuer } from './company'
 
 async function nextNumber(prefix: string): Promise<string> {
   const supabase = await createClient()
@@ -8,8 +9,12 @@ async function nextNumber(prefix: string): Promise<string> {
   return data
 }
 
-export function nextInvoiceNumber(): Promise<string> {
-  const prefix = process.env.INVOICE_PREFIX ?? 'INV'
+export function nextInvoiceNumber(issuer: Issuer = 'felicity'): Promise<string> {
+  // 発行元ごとに独立した連番系列(counter は prefix 単位)
+  const prefix =
+    issuer === 'rook'
+      ? process.env.ROOK_INVOICE_PREFIX ?? 'RK'
+      : process.env.INVOICE_PREFIX ?? 'INV'
   return nextNumber(prefix)
 }
 

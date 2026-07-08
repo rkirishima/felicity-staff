@@ -42,6 +42,8 @@ export type InvoicePDFInput = {
   company: CompanyInfo
   stamp_url?: string | null
   showBank?: boolean
+  /** false で末尾のFELICITYロゴを非表示(ROOK名義など別発行元用) */
+  showBrandFooter?: boolean
 }
 
 const COLOR = {
@@ -360,6 +362,9 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
           <View style={styles.partyRight}>
             <Text style={styles.partyLabel}>{isQuote ? '見　積　元' : '請　求　元'}</Text>
             <Text style={styles.companyName}>{c.name}</Text>
+            {c.representative ? (
+              <Text style={styles.addrLine}>{c.representative}</Text>
+            ) : null}
             {(c.postal || c.address) && (
               <Text style={styles.addrLine}>{fullCompanyAddress}</Text>
             )}
@@ -466,10 +471,12 @@ export function InvoicePDF({ data }: { data: InvoicePDFInput }) {
         )}
 
         {/* BRAND FOOTER (anchored bottom) */}
-        <View style={styles.brandBlock} fixed>
-          {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image */}
-          <Image src={logoPath} style={styles.brandLogo} />
-        </View>
+        {data.showBrandFooter !== false && (
+          <View style={styles.brandBlock} fixed>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image */}
+            <Image src={logoPath} style={styles.brandLogo} />
+          </View>
+        )}
       </Page>
     </Document>
   )

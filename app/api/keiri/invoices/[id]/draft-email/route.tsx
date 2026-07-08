@@ -5,7 +5,7 @@
  */
 
 import { createServiceClient } from '@/lib/keiri/serviceClient'
-import { getCompanyInfo } from '@/lib/keiri/company'
+import { getIssuerInfo, normalizeIssuer } from '@/lib/keiri/company'
 import { generateInvoiceEmailBody } from '@/lib/keiri/generateEmailBody'
 
 export const runtime = 'nodejs'
@@ -26,7 +26,7 @@ export async function GET(
   const { data: inv, error } = await supabase
     .from('keiri_invoices')
     .select(
-      'invoice_number, issue_date, due_date, total, client:keiri_clients(name, contact_person)',
+      'invoice_number, issuer, issue_date, due_date, total, client:keiri_clients(name, contact_person)',
     )
     .eq('id', id)
     .single()
@@ -44,8 +44,11 @@ export async function GET(
   const client =
     (inv.client as unknown as { name: string; contact_person: string | null } | null) ?? null
 
+  const issuer = normalizeIssuer(inv.issuer)
+
   try {
     const message = await generateInvoiceEmailBody({
+      issuer,
       invoice: {
         invoice_number: inv.invoice_number as string,
         issue_date: inv.issue_date as string,
@@ -60,7 +63,7 @@ export async function GET(
       })),
     })
 
-    const company = getCompanyInfo()
+    const company = getIssuerInfo(issuer)
     const signature = `──────────
 ${company.name}
 ${company.postal} ${company.address}

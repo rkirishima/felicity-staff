@@ -1,7 +1,7 @@
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createServiceClient } from './serviceClient'
-import { getCompanyInfo } from './company'
-import { getCompanySealDataUri } from './stamps'
+import { getIssuerInfo, normalizeIssuer } from './company'
+import { getSealDataUri } from './stamps'
 import { sendInvoiceEmail } from './email'
 import { InvoicePDF, type InvoicePDFLine } from '@/components/keiri/InvoicePDF'
 
@@ -26,7 +26,7 @@ export async function renderAndSendInvoice(
   const { data: inv, error } = await supabase
     .from('keiri_invoices')
     .select(
-      'id, invoice_number, status, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, pdf_path, client:keiri_clients(name, contact_person, postal_code, address, email)',
+      'id, invoice_number, status, issuer, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, pdf_path, client:keiri_clients(name, contact_person, postal_code, address, email)',
     )
     .eq('id', invoiceId)
     .single()
@@ -40,8 +40,9 @@ export async function renderAndSendInvoice(
     .order('sort_order')
   if (linesErr) throw new Error(linesErr.message)
 
-  const company = getCompanyInfo()
-  const stamp_url = await getCompanySealDataUri()
+  const issuer = normalizeIssuer(inv.issuer)
+  const company = getIssuerInfo(issuer)
+  const stamp_url = await getSealDataUri(issuer)
   const lines: InvoicePDFLine[] = (lineRows ?? []).map(l => ({
     name: l.description as string,
     quantity: l.quantity as number,
@@ -86,6 +87,7 @@ export async function renderAndSendInvoice(
           },
           company,
           stamp_url,
+          showBrandFooter: issuer === 'felicity',
         }}
       />,
     )
@@ -101,6 +103,7 @@ export async function renderAndSendInvoice(
   }
 
   await sendInvoiceEmail({
+    issuer,
     invoice: {
       invoice_number: inv.invoice_number as string,
       issue_date: inv.issue_date as string,

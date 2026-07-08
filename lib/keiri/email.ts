@@ -1,5 +1,5 @@
 import { Resend } from 'resend'
-import { getCompanyInfo } from './company'
+import { getCompanyInfo, getIssuerInfo, type Issuer } from './company'
 import { generateInvoiceEmailBody } from './generateEmailBody'
 
 export type InvoiceForEmail = {
@@ -16,6 +16,7 @@ export type ClientForEmail = {
 }
 
 export type SendInvoiceEmailInput = {
+  issuer?: Issuer
   invoice: InvoiceForEmail
   client: ClientForEmail
   pdfBuffer: Buffer
@@ -30,7 +31,8 @@ export async function sendInvoiceEmail(input: SendInvoiceEmailInput): Promise<{ 
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) throw new Error('RESEND_API_KEY not set')
 
-  const company = getCompanyInfo()
+  const issuer: Issuer = input.issuer ?? 'felicity'
+  const company = getIssuerInfo(issuer)
   const to = input.to ?? input.client.email
   if (!to) throw new Error('送信先メールアドレスが指定されていません')
 
@@ -64,6 +66,7 @@ ${company.name}でございます。
     let message = fallbackMessage
     try {
       message = await generateInvoiceEmailBody({
+        issuer,
         invoice: input.invoice,
         client: { name: input.client.name, contact_person: input.client.contact_person },
         lines: input.lines,
@@ -75,9 +78,15 @@ ${company.name}でございます。
   }
 
   const resend = new Resend(apiKey)
-  const fromAddress = company.email || 'info@felicity.cafe'
+  // Resend の送信ドメインは felicity.cafe のみ認証済み。
+  // ROOK 名義でも From アドレスは felicity.cafe を使い、表示名とReply-Toで発行元を出す。
+  const fromAddress =
+    issuer === 'rook'
+      ? getCompanyInfo().email || 'info@felicity.cafe'
+      : company.email || 'info@felicity.cafe'
   const fromName = company.name || 'FELICITY'
   const from = `${fromName} <${fromAddress}>`
+  const replyTo = issuer === 'rook' && company.email ? company.email : undefined
 
   // 送信控えを社内アドレスへBCC(Gmailに記録が残るように)。
   // 宛先と同一なら二重送信になるのでスキップ。
@@ -88,6 +97,7 @@ ${company.name}でございます。
     from,
     to,
     bcc,
+    replyTo,
     subject,
     text: body,
     attachments: [

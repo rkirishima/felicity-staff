@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { nextInvoiceNumber } from '@/lib/keiri/numbering'
+import { normalizeIssuer, type Issuer } from '@/lib/keiri/company'
 import { groupByTaxRate, type TaxRate } from '@/lib/keiri/tax'
 import { renderAndSendInvoice } from '@/lib/keiri/sendInvoice'
 
@@ -18,6 +19,7 @@ export type InvoiceLineInput = {
 
 export type InvoiceInput = {
   client_id: string
+  issuer: Issuer
   issue_date: string
   due_date: string | null
   notes: string | null
@@ -44,8 +46,9 @@ export async function issueInvoice(
   validate(input)
   const supabase = await createClient()
 
+  const issuer = normalizeIssuer(input.issuer)
   const summary = groupByTaxRate(input.lines)
-  const invoice_number = opts.publish ? await nextInvoiceNumber() : null
+  const invoice_number = opts.publish ? await nextInvoiceNumber(issuer) : null
   const status = opts.publish ? 'sent' : 'draft'
   // sent_at は「メールが実際に送信成功した時刻」のみを表す authoritative なフィールド。
   // 発行(publish)しただけでは設定しない。実送信は renderAndSendInvoice が成功時に記録する。
@@ -55,6 +58,7 @@ export async function issueInvoice(
     .from('keiri_invoices')
     .insert({
       client_id: input.client_id,
+      issuer,
       invoice_number,
       status,
       issue_date: input.issue_date,
@@ -97,13 +101,13 @@ export async function publishDraftInvoice(
 
   const { data: row, error: getErr } = await supabase
     .from('keiri_invoices')
-    .select('status')
+    .select('status, issuer')
     .eq('id', id)
     .single()
   if (getErr) throw new Error(getErr.message)
   if (row.status !== 'draft') throw new Error('下書きのみ発行できます')
 
-  const invoice_number = await nextInvoiceNumber()
+  const invoice_number = await nextInvoiceNumber(normalizeIssuer(row.issuer))
   // sent_at はここでは設定しない。実メール送信が成功したときに renderAndSendInvoice が記録する。
   const { error: updErr } = await supabase
     .from('keiri_invoices')

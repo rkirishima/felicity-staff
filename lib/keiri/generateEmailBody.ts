@@ -10,9 +10,10 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 
-import { getCompanyInfo } from './company'
+import { getIssuerInfo, type Issuer } from './company'
 
 export type GenerateEmailBodyInput = {
+  issuer?: Issuer
   invoice: {
     invoice_number: string
     issue_date: string
@@ -30,7 +31,7 @@ export async function generateInvoiceEmailBody(input: GenerateEmailBodyInput): P
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set')
 
-  const company = getCompanyInfo()
+  const company = getIssuerInfo(input.issuer ?? 'felicity')
   const client = new Anthropic({ apiKey })
 
   const lineSummary =

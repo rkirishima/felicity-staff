@@ -9,6 +9,12 @@ import { getAdminSession } from '@/lib/session'
 import { issueInvoice, type InvoiceLineInput } from '@/app/admin/keiri/invoices/actions'
 import { createClientRecord } from '../../clients/actions'
 import { groupByTaxRate, type TaxRate } from '@/lib/keiri/tax'
+import type { Issuer } from '@/lib/keiri/company'
+
+const ISSUER_OPTIONS: { value: Issuer; label: string; sub: string }[] = [
+  { value: 'felicity', label: '株式会社FELICITY', sub: 'INV-' },
+  { value: 'rook', label: '株式会社ROOK', sub: 'RK-' },
+]
 
 type ClientRow = { id: string; name: string; email: string | null }
 type ItemRow = { id: string; name: string; description: string | null; unit_price: number; tax_rate: number; unit: string | null }
@@ -56,6 +62,7 @@ export default function NewInvoicePage() {
   const [clients, setClients] = useState<ClientRow[]>([])
   const [items, setItems] = useState<ItemRow[]>([])
   const [clientId, setClientId] = useState('')
+  const [issuer, setIssuer] = useState<Issuer>('felicity')
   const [issueDate, setIssueDate] = useState(todayJST())
   const [dueDate, setDueDate] = useState(endOfNextMonthJST())
   const [notes, setNotes] = useState('')
@@ -131,9 +138,10 @@ export default function NewInvoicePage() {
   }))
   const summary = groupByTaxRate(taxLines)
 
-  function buildInput(): { client_id: string; issue_date: string; due_date: string | null; notes: string | null; lines: InvoiceLineInput[] } {
+  function buildInput(): { client_id: string; issuer: Issuer; issue_date: string; due_date: string | null; notes: string | null; lines: InvoiceLineInput[] } {
     return {
       client_id: clientId,
+      issuer,
       issue_date: issueDate,
       due_date: dueDate || null,
       notes: notes.trim() || null,
@@ -265,6 +273,28 @@ export default function NewInvoicePage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+          <div>
+            <span className="block text-xs text-stone-500 tracking-wider mb-1">発行元</span>
+            <div className="grid grid-cols-2 gap-2">
+              {ISSUER_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setIssuer(opt.value)}
+                  className={`rounded-xl px-3 py-2.5 text-sm border text-left ${
+                    issuer === opt.value
+                      ? 'border-stone-800 bg-stone-800 text-white'
+                      : 'border-stone-200 bg-white text-stone-600'
+                  }`}
+                >
+                  <span className="block font-medium">{opt.label}</span>
+                  <span className={`block text-[10px] ${issuer === opt.value ? 'text-stone-300' : 'text-stone-400'}`}>
+                    番号 {opt.sub}…
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
           <Field label="取引先 *">
             <div className="flex items-center gap-2">
               <select value={clientId} onChange={e => setClientId(e.target.value)} className={inputCls}>

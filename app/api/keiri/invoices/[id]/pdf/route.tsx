@@ -1,7 +1,7 @@
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
-import { getCompanyInfo } from '@/lib/keiri/company'
-import { getCompanySealDataUri } from '@/lib/keiri/stamps'
+import { getIssuerInfo, normalizeIssuer } from '@/lib/keiri/company'
+import { getSealDataUri } from '@/lib/keiri/stamps'
 import { InvoicePDF, type InvoicePDFLine } from '@/components/keiri/InvoicePDF'
 
 export const runtime = 'nodejs'
@@ -22,7 +22,7 @@ export async function GET(
   const { data: inv, error } = await supabase
     .from('keiri_invoices')
     .select(
-      'id, invoice_number, status, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, pdf_path, client:keiri_clients(name, contact_person, postal_code, address)',
+      'id, invoice_number, status, issuer, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, pdf_path, client:keiri_clients(name, contact_person, postal_code, address)',
     )
     .eq('id', id)
     .single()
@@ -49,8 +49,9 @@ export async function GET(
     .order('sort_order')
   if (linesErr) return new Response(linesErr.message, { status: 500 })
 
-  const company = getCompanyInfo()
-  const stamp_url = await getCompanySealDataUri()
+  const issuer = normalizeIssuer(inv.issuer)
+  const company = getIssuerInfo(issuer)
+  const stamp_url = await getSealDataUri(issuer)
   const lines: InvoicePDFLine[] = (lineRows ?? []).map(l => ({
     name: l.description as string,
     quantity: l.quantity as number,
@@ -81,6 +82,7 @@ export async function GET(
         },
         company,
         stamp_url,
+        showBrandFooter: issuer === 'felicity',
       }}
     />,
   )
