@@ -7,8 +7,14 @@ export const maxDuration = 60
 // /api/keiri/stripe-payouts-sync?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
 // Stripe /v1/payouts を取得し、各 payout に紐づく balance_transactions を
-// /v1/balance_transactions?payout=po_... で取得して手数料・売上総額を集計。
-// keiri_stripe_payouts テーブルに upsert。
+// /v1/balance_transactions?payout=po_...&expand[]=data.source で取得して
+// 手数料・売上総額を集計。さらに charge → payment_intent → keiri_stripe_line_items
+// の税率構成で、売上・手数料・入金額を消費税率別 (8% / 10%) に按分して
+// tax_breakdown (jsonb) に保存する。
+//
+// 按分ルール: 1つの決済に 8% と 10% の商品が混在する場合、その決済の
+// 明細金額の比率で売上と手数料を配分。明細が未同期の決済は unknown に計上
+// (→ 先に「この月を同期」で明細を生成してから入金同期する)。
 //
 // env: STRIPE_SECRET_KEY 必須（felicity-staff Vercel に sk_live_... を設定）
 
@@ -34,13 +40,21 @@ type StripeBalanceTransaction = {
   type: string // 'charge' | 'refund' | 'payout' | etc.
   created: number
   payout?: string
-  source?: string
+  source?: string | { object?: string; payment_intent?: string | null }
 }
+
+type RateKey = '8' | '10' | 'unknown'
+type RateBucket = { gross: number; fee: number; net: number }
+type TaxBreakdown = Record<RateKey, RateBucket> & { unmatched_charges: number }
 
 const STRIPE_BASE = 'https://api.stripe.com/v1'
 
 function basicAuth(key: string): string {
   return 'Basic ' + Buffer.from(`${key}:`).toString('base64')
+}
+
+function jstDate(unixSec: number): string {
+  return new Date((unixSec + 9 * 60 * 60) * 1000).toISOString().slice(0, 10)
 }
 
 async function stripeListPayouts(
@@ -81,6 +95,7 @@ async function stripeListBalanceTxs(
     const u = new URL(`${STRIPE_BASE}/balance_transactions`)
     u.searchParams.set('limit', '100')
     u.searchParams.set('payout', payoutId)
+    u.searchParams.append('expand[]', 'data.source')
     if (starting_after) u.searchParams.set('starting_after', starting_after)
     const res = await fetch(u.toString(), {
       headers: { Authorization: basicAuth(key) },
@@ -93,6 +108,33 @@ async function stripeListBalanceTxs(
     if (pages > 30) break
   } while (starting_after)
   return out
+}
+
+function paymentIntentOf(tx: StripeBalanceTransaction): string | null {
+  if (tx.source && typeof tx.source === 'object' && tx.source.payment_intent) {
+    return tx.source.payment_intent
+  }
+  return null
+}
+
+// 決済(payment_intent)ごとの税率別ウェイト。明細金額から算出。
+type PiWeights = { w8: number; w10: number; wUnknown: number }
+
+function emptyBreakdown(): TaxBreakdown {
+  return {
+    '8': { gross: 0, fee: 0, net: 0 },
+    '10': { gross: 0, fee: 0, net: 0 },
+    unknown: { gross: 0, fee: 0, net: 0 },
+    unmatched_charges: 0,
+  }
+}
+
+// amount を w8/w10 の比率で按分。端数は unknown ではなく大きい方に寄せず、
+// 8% → round、10% → round、残差を unknown に入れて合計を必ず一致させる。
+function allocate(amount: number, w: PiWeights): Record<RateKey, number> {
+  const a8 = Math.round(amount * w.w8)
+  const a10 = Math.round(amount * w.w10)
+  return { '8': a8, '10': a10, unknown: amount - a8 - a10 }
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -133,6 +175,51 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const sb = createClient(supabaseUrl, serviceKey)
+
+  // payout ごとの balance transactions を先に全部取り、含まれる payment_intent を集める
+  const txsByPayout = new Map<string, StripeBalanceTransaction[]>()
+  const allPiIds = new Set<string>()
+  for (const p of payouts) {
+    try {
+      const txs = await stripeListBalanceTxs(key, p.id)
+      txsByPayout.set(p.id, txs)
+      for (const t of txs) {
+        const pi = paymentIntentOf(t)
+        if (pi) allPiIds.add(pi)
+      }
+    } catch {
+      // ignore individual payout balance fetch failure
+    }
+    await new Promise(r => setTimeout(r, 50))
+  }
+
+  // 明細から決済ごとの税率ウェイトを構築 (order_id = payment_intent id)
+  const piWeights = new Map<string, PiWeights>()
+  if (allPiIds.size > 0) {
+    const ids = Array.from(allPiIds)
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200)
+      const { data: lis } = await sb
+        .from('keiri_stripe_line_items')
+        .select('order_id, amount, tax_rate')
+        .in('order_id', chunk)
+      for (const li of (lis ?? []) as { order_id: string; amount: number; tax_rate: number | null }[]) {
+        const cur = piWeights.get(li.order_id) ?? { w8: 0, w10: 0, wUnknown: 0 }
+        if (li.tax_rate === 8) cur.w8 += li.amount
+        else if (li.tax_rate === 10) cur.w10 += li.amount
+        else cur.wUnknown += li.amount
+        piWeights.set(li.order_id, cur)
+      }
+    }
+    // 金額 → 比率に正規化
+    for (const [pi, w] of piWeights) {
+      const total = w.w8 + w.w10 + w.wUnknown
+      if (total > 0) {
+        piWeights.set(pi, { w8: w.w8 / total, w10: w.w10 / total, wUnknown: w.wUnknown / total })
+      }
+    }
+  }
+
   const rows: Record<string, unknown>[] = []
 
   for (const p of payouts) {
@@ -142,9 +229,10 @@ export async function GET(req: Request): Promise<Response> {
     let refundCount = 0
     let periodStart: string | null = null
     let periodEnd: string | null = null
+    const breakdown = emptyBreakdown()
 
-    try {
-      const txs = await stripeListBalanceTxs(key, p.id)
+    const txs = txsByPayout.get(p.id)
+    if (txs) {
       let chargeSum = 0
       let refundSum = 0
       let feeSum = 0
@@ -162,19 +250,42 @@ export async function GET(req: Request): Promise<Response> {
         feeSum += t.fee
         if (minAt === null || t.created < minAt) minAt = t.created
         if (maxAt === null || t.created > maxAt) maxAt = t.created
+
+        // 税率別按分 (charge/refund とも同じロジック; refund は負額で減算される)
+        if (t.type === 'charge' || t.type === 'refund') {
+          const pi = paymentIntentOf(t)
+          const w = pi ? piWeights.get(pi) : undefined
+          if (w) {
+            const g = allocate(t.amount, w)
+            const f = allocate(t.fee, w)
+            for (const k of ['8', '10', 'unknown'] as RateKey[]) {
+              breakdown[k].gross += g[k]
+              breakdown[k].fee += f[k]
+            }
+          } else {
+            breakdown.unknown.gross += t.amount
+            breakdown.unknown.fee += t.fee
+            breakdown.unmatched_charges++
+          }
+        } else {
+          // adjustment / fee 等は unknown の手数料側に計上
+          breakdown.unknown.gross += t.amount
+          breakdown.unknown.fee += t.fee
+        }
       }
       fee = feeSum
       grossAmount = chargeSum + refundSum // refund is negative; net of refunds
-      if (minAt !== null) periodStart = new Date(minAt * 1000).toISOString().slice(0, 10)
-      if (maxAt !== null) periodEnd = new Date(maxAt * 1000).toISOString().slice(0, 10)
-    } catch {
-      // ignore individual payout balance fetch failure
+      if (minAt !== null) periodStart = jstDate(minAt)
+      if (maxAt !== null) periodEnd = jstDate(maxAt)
+    }
+    for (const k of ['8', '10', 'unknown'] as RateKey[]) {
+      breakdown[k].net = breakdown[k].gross - breakdown[k].fee
     }
 
     rows.push({
       payout_id: p.id,
       status: p.status,
-      arrival_date: new Date(p.arrival_date * 1000).toISOString().slice(0, 10),
+      arrival_date: jstDate(p.arrival_date),
       initiated_at: new Date(p.created * 1000).toISOString(),
       amount: p.amount,
       fee_amount: fee,
@@ -184,10 +295,10 @@ export async function GET(req: Request): Promise<Response> {
       period_start: periodStart,
       period_end: periodEnd,
       destination_bank_last4: null,
+      tax_breakdown: breakdown,
       raw: p,
       synced_at: new Date().toISOString(),
     })
-    await new Promise(r => setTimeout(r, 50))
   }
 
   if (rows.length > 0) {
@@ -208,5 +319,9 @@ export async function GET(req: Request): Promise<Response> {
     to,
     fetched: payouts.length,
     upserted: rows.length,
+    unmatchedCharges: rows.reduce(
+      (s, r) => s + ((r.tax_breakdown as TaxBreakdown | null)?.unmatched_charges ?? 0),
+      0,
+    ),
   })
 }

@@ -36,6 +36,14 @@ type LineItem = {
 
 type DayGroup = { date: string; total: number; count: number; items: LineItem[] }
 
+type RateBucket = { gross: number; fee: number; net: number }
+type TaxBreakdown = {
+  '8'?: RateBucket
+  '10'?: RateBucket
+  unknown?: RateBucket
+  unmatched_charges?: number
+}
+
 type PayoutRow = {
   payout_id: string
   status: string | null
@@ -47,13 +55,16 @@ type PayoutRow = {
   refund_count: number
   period_start: string | null
   period_end: string | null
+  tax_breakdown: TaxBreakdown | null
 }
 
 const CLASSIFICATION_LABEL: Record<string, string> = {
   coffee_beans: '☕ 豆',
   drip_pack: '💧 ドリップパック',
-  goods: '👕 グッズ',
+  goods: '🎁 グッズ',
+  apparel: '👕 アパレル',
   food_other: '🍞 その他食品',
+  pet_food: '🐕 ペットフード',
   other: '❓ その他',
 }
 
@@ -112,7 +123,7 @@ function StripeInner() {
           .lt('created_at', new Date(`${next}T00:00:00+09:00`).toISOString()),
         supabase
           .from('keiri_stripe_payouts')
-          .select('payout_id, status, arrival_date, amount, fee_amount, gross_amount, charge_count, refund_count, period_start, period_end')
+          .select('payout_id, status, arrival_date, amount, fee_amount, gross_amount, charge_count, refund_count, period_start, period_end, tax_breakdown')
           .gte('arrival_date', start)
           .lt('arrival_date', next)
           .order('arrival_date', { ascending: false }),
@@ -330,6 +341,41 @@ function StripeInner() {
                       <span className="text-stone-400 ml-2">/ 売上 ¥{p.gross_amount.toLocaleString()}</span>
                     </span>
                   </div>
+                  {p.tax_breakdown && (
+                    <div className="mt-1.5 rounded-lg bg-stone-50 px-2.5 py-1.5">
+                      <div className="grid grid-cols-4 gap-x-2 text-[10px] text-stone-400">
+                        <span></span>
+                        <span className="text-right">売上</span>
+                        <span className="text-right">手数料</span>
+                        <span className="text-right">入金額</span>
+                      </div>
+                      {(['8', '10'] as const).map(rate => {
+                        const b = p.tax_breakdown?.[rate]
+                        if (!b || (b.gross === 0 && b.fee === 0)) return null
+                        return (
+                          <div key={rate} className="grid grid-cols-4 gap-x-2 text-[11px] tabular-nums">
+                            <span className="text-stone-600">{rate === '8' ? '8% 食品等' : '10% 標準'}</span>
+                            <span className="text-right text-stone-800">¥{b.gross.toLocaleString()}</span>
+                            <span className="text-right text-stone-500">−¥{b.fee.toLocaleString()}</span>
+                            <span className="text-right text-stone-800 font-medium">¥{b.net.toLocaleString()}</span>
+                          </div>
+                        )
+                      })}
+                      {p.tax_breakdown.unknown && (p.tax_breakdown.unknown.gross !== 0 || p.tax_breakdown.unknown.fee !== 0) && (
+                        <div className="grid grid-cols-4 gap-x-2 text-[11px] tabular-nums text-amber-700">
+                          <span>未分類</span>
+                          <span className="text-right">¥{p.tax_breakdown.unknown.gross.toLocaleString()}</span>
+                          <span className="text-right">−¥{p.tax_breakdown.unknown.fee.toLocaleString()}</span>
+                          <span className="text-right font-medium">¥{p.tax_breakdown.unknown.net.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {(p.tax_breakdown.unmatched_charges ?? 0) > 0 && (
+                        <p className="text-[10px] text-amber-600 mt-1">
+                          ※ 明細未同期の決済 {p.tax_breakdown.unmatched_charges}件 → 「🔄 この月を同期」後にもう一度入金を同期
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </li>
               ))}
               <li className="border-t border-stone-200 pt-2 flex justify-between text-sm font-medium">
@@ -341,6 +387,50 @@ function StripeInner() {
                   </span>
                 </span>
               </li>
+              {payouts.some(p => p.tax_breakdown) && (() => {
+                const tot: Record<'8' | '10' | 'unknown', RateBucket> = {
+                  '8': { gross: 0, fee: 0, net: 0 },
+                  '10': { gross: 0, fee: 0, net: 0 },
+                  unknown: { gross: 0, fee: 0, net: 0 },
+                }
+                for (const p of payouts) {
+                  for (const k of ['8', '10', 'unknown'] as const) {
+                    const b = p.tax_breakdown?.[k]
+                    if (!b) continue
+                    tot[k].gross += b.gross
+                    tot[k].fee += b.fee
+                    tot[k].net += b.net
+                  }
+                }
+                return (
+                  <li className="text-[11px] tabular-nums">
+                    <div className="grid grid-cols-4 gap-x-2 text-[10px] text-stone-400">
+                      <span>税率別合計</span>
+                      <span className="text-right">売上</span>
+                      <span className="text-right">手数料</span>
+                      <span className="text-right">入金額</span>
+                    </div>
+                    {(['8', '10'] as const).map(rate =>
+                      tot[rate].gross !== 0 || tot[rate].fee !== 0 ? (
+                        <div key={rate} className="grid grid-cols-4 gap-x-2">
+                          <span className="text-stone-600">{rate === '8' ? '8% 食品等' : '10% 標準'}</span>
+                          <span className="text-right text-stone-800">¥{tot[rate].gross.toLocaleString()}</span>
+                          <span className="text-right text-stone-500">−¥{tot[rate].fee.toLocaleString()}</span>
+                          <span className="text-right text-stone-800 font-medium">¥{tot[rate].net.toLocaleString()}</span>
+                        </div>
+                      ) : null,
+                    )}
+                    {(tot.unknown.gross !== 0 || tot.unknown.fee !== 0) && (
+                      <div className="grid grid-cols-4 gap-x-2 text-amber-700">
+                        <span>未分類</span>
+                        <span className="text-right">¥{tot.unknown.gross.toLocaleString()}</span>
+                        <span className="text-right">−¥{tot.unknown.fee.toLocaleString()}</span>
+                        <span className="text-right font-medium">¥{tot.unknown.net.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </li>
+                )
+              })()}
             </ul>
           )}
         </div>
