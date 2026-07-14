@@ -8,6 +8,8 @@ import {
   getMessage,
   buildSearchQuery,
   matchRule,
+  autoAddSupplierRule,
+  extractEmailAddress,
   type GmailAccount,
   type SupplierRule,
 } from '@/lib/keiri/gmail'
@@ -218,6 +220,21 @@ export async function GET(req: Request): Promise<Response> {
         `<a href="https://staff.felicity.cafe/admin/keiri/payables/${insRow.id}">▶ 内容を確認・編集</a>`,
       ].filter(Boolean).join('\n')
       await sendTelegramMessage({ text: tgText, parseMode: 'HTML', disablePreview: true })
+
+      // 未知の仕入先なら仕入先ルールに自動追加 (次回から確実に検索対象になる)
+      const added = await autoAddSupplierRule(
+        rules,
+        result.vendor,
+        extractEmailAddress(msg.from),
+        `gmail-poll ${acct.email}`,
+      )
+      if (added) {
+        await sendTelegramMessage({
+          text: `🆕 仕入先ルールに自動追加: ${escapeHtml(result.vendor)} (${escapeHtml(msg.from)})`,
+          parseMode: 'HTML',
+          disablePreview: true,
+        })
+      }
     }
 
     // update poll cursor

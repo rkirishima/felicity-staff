@@ -2,10 +2,13 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import {
   listActiveAccounts,
+  loadSupplierRules,
   getAccessToken,
   listDriveFolderFiles,
   downloadDriveFile,
+  autoAddSupplierRule,
   type GmailAccount,
+  type SupplierRule,
 } from '@/lib/keiri/gmail'
 import { extractPayableFromDocument } from '@/lib/keiri/extractPayableFromDocument'
 import { sendTelegramMessage } from '@/lib/telegram'
@@ -83,6 +86,13 @@ export async function GET(req: Request): Promise<Response> {
       },
       { status: 503 },
     )
+  }
+
+  let rules: SupplierRule[] = []
+  try {
+    rules = await loadSupplierRules()
+  } catch {
+    // ルール取得失敗は自動追加をスキップするだけで処理は続行
   }
 
   // 処理済みを除外
@@ -200,6 +210,12 @@ export async function GET(req: Request): Promise<Response> {
     notifications.push(
       `📥 請求書取込: ${result.vendor} ¥${result.amount.toLocaleString()} 期日${dueDate} (${f.name})`,
     )
+
+    // 未知の仕入先なら仕入先ルールに自動追加 (Gmail巡回の検索対象にもなる)
+    if (rules.length > 0) {
+      const added = await autoAddSupplierRule(rules, result.vendor, null, 'drive-invoice-poll')
+      if (added) notifications.push(`🆕 仕入先ルールに自動追加: ${result.vendor}`)
+    }
   }
 
   if (notifications.length > 0) {

@@ -313,11 +313,61 @@ export function buildSearchQuery(rules: SupplierRule[], sinceUnixSec: number): s
     if (r.subject_pattern) subjectClauses.push(`subject:(${r.subject_pattern})`)
     else if (!r.email_pattern && r.vendor) subjectClauses.push(`subject:(${r.vendor})`)
   }
+  // 未知の仕入先も拾う汎用クローズ (取込後に仕入先ルールへ自動追加される)
+  subjectClauses.push('subject:(請求書 OR 御請求書 OR ご請求 OR 請求明細 OR invoice)')
   const orParts: string[] = []
   if (fromClauses.length > 0) orParts.push(`(${fromClauses.join(' OR ')})`)
   if (subjectClauses.length > 0) orParts.push(`(${subjectClauses.join(' OR ')})`)
   const matcher = orParts.length === 0 ? '' : orParts.join(' OR ')
   return `${matcher ? `(${matcher}) ` : ''}after:${sinceUnixSec}`
+}
+
+// 取込済み payable の vendor が既存ルールに無ければ自動追加する (自己学習)。
+// email_pattern には送信元アドレスを設定 (Drive経由など不明な場合は null)。
+export async function autoAddSupplierRule(
+  rules: SupplierRule[],
+  vendor: string,
+  senderEmail: string | null,
+  sourceLabel: string,
+): Promise<boolean> {
+  const vLower = vendor.toLowerCase()
+  const known = rules.some(
+    r =>
+      (r.vendor && (vLower.includes(r.vendor.toLowerCase()) || r.vendor.toLowerCase().includes(vLower))) ||
+      (r.email_pattern && senderEmail && senderEmail.toLowerCase().includes(r.email_pattern.toLowerCase())),
+  )
+  if (known) return false
+  const sb = createServiceClient()
+  const { data, error } = await sb
+    .from('keiri_supplier_email_rules')
+    .insert({
+      vendor,
+      email_pattern: senderEmail,
+      subject_pattern: null,
+      default_due_days: 30,
+      active: true,
+      notes: `自動追加 (${sourceLabel})`,
+    })
+    .select('id')
+    .single()
+  if (error) return false
+  // 同一実行内での重複追加を防ぐため、呼び出し側の rules 配列にも反映
+  rules.push({
+    id: (data?.id as string) ?? '',
+    vendor,
+    email_pattern: senderEmail,
+    subject_pattern: null,
+    default_due_days: 30,
+    default_category_id: null,
+  })
+  return true
+}
+
+export function extractEmailAddress(fromHeader: string): string | null {
+  const m = fromHeader.match(/<([^>]+)>/)
+  if (m) return m[1].trim().toLowerCase()
+  const bare = fromHeader.trim()
+  return /^[^\s@]+@[^\s@]+$/.test(bare) ? bare.toLowerCase() : null
 }
 
 export function matchRule(rules: SupplierRule[], from: string, subject: string): SupplierRule | null {
