@@ -37,7 +37,7 @@ type StripeBalanceTransaction = {
   amount: StripeMoney
   fee: StripeMoney
   net: StripeMoney
-  type: string // 'charge' | 'refund' | 'payout' | etc.
+  type: string // 'charge' | 'payment'(銀行振込等) | 'refund' | 'payment_refund' | 'stripe_fee' | 'adjustment' | 'payout_failure' | 'payout' | etc.
   created: number
   payout?: string
   source?: string | { object?: string; payment_intent?: string | null }
@@ -240,19 +240,24 @@ export async function GET(req: Request): Promise<Response> {
       let maxAt: number | null = null
       for (const t of txs) {
         if (t.type === 'payout') continue // ignore the payout itself
-        if (t.type === 'charge') {
-          chargeSum += t.amount
-          chargeCount++
-        } else if (t.type === 'refund') {
-          refundSum += t.amount
-          refundCount++
-        }
-        feeSum += t.fee
         if (minAt === null || t.created < minAt) minAt = t.created
         if (maxAt === null || t.created > maxAt) maxAt = t.created
 
-        // 税率別按分 (charge/refund とも同じロジック; refund は負額で減算される)
-        if (t.type === 'charge' || t.type === 'refund') {
+        // 売上系: card は 'charge'、銀行振込/Link 等は 'payment' (source py_...)
+        const isSale = t.type === 'charge' || t.type === 'payment'
+        const isRefund = t.type === 'refund' || t.type === 'payment_refund'
+
+        if (isSale) {
+          chargeSum += t.amount
+          chargeCount++
+        } else if (isRefund) {
+          refundSum += t.amount
+          refundCount++
+        }
+
+        if (isSale || isRefund) {
+          feeSum += t.fee
+          // 税率別按分 (refund は負額で減算される)
           const pi = paymentIntentOf(t)
           const w = pi ? piWeights.get(pi) : undefined
           if (w) {
@@ -267,8 +272,13 @@ export async function GET(req: Request): Promise<Response> {
             breakdown.unknown.fee += t.fee
             breakdown.unmatched_charges++
           }
+        } else if (t.amount < 0) {
+          // Radar 等の stripe_fee / JCT adjustment: 控除額として手数料側に計上
+          feeSum += -t.amount + t.fee
+          breakdown.unknown.fee += -t.amount + t.fee
         } else {
-          // adjustment / fee 等は unknown の手数料側に計上
+          // payout_failure (入金失敗の戻り) 等の入出金調整: 売上ではないので unknown に計上
+          feeSum += t.fee
           breakdown.unknown.gross += t.amount
           breakdown.unknown.fee += t.fee
         }

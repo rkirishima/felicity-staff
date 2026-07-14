@@ -363,7 +363,7 @@ function StripeInner() {
                       })}
                       {p.tax_breakdown.unknown && (p.tax_breakdown.unknown.gross !== 0 || p.tax_breakdown.unknown.fee !== 0) && (
                         <div className="grid grid-cols-4 gap-x-2 text-[11px] tabular-nums text-amber-700">
-                          <span>未分類</span>
+                          <span>未分類・調整</span>
                           <span className="text-right">¥{p.tax_breakdown.unknown.gross.toLocaleString()}</span>
                           <span className="text-right">−¥{p.tax_breakdown.unknown.fee.toLocaleString()}</span>
                           <span className="text-right font-medium">¥{p.tax_breakdown.unknown.net.toLocaleString()}</span>
@@ -422,7 +422,7 @@ function StripeInner() {
                     )}
                     {(tot.unknown.gross !== 0 || tot.unknown.fee !== 0) && (
                       <div className="grid grid-cols-4 gap-x-2 text-amber-700">
-                        <span>未分類</span>
+                        <span>未分類・調整</span>
                         <span className="text-right">¥{tot.unknown.gross.toLocaleString()}</span>
                         <span className="text-right">−¥{tot.unknown.fee.toLocaleString()}</span>
                         <span className="text-right font-medium">¥{tot.unknown.net.toLocaleString()}</span>
