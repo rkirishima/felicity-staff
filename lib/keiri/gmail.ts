@@ -6,7 +6,11 @@ import { createServiceClient } from './serviceClient'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GMAIL_BASE = 'https://gmail.googleapis.com/gmail/v1'
 
-export const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'].join(' ')
+export const GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  // 請求書_受け箱 フォルダの自動取込 (drive-invoice-poll) 用
+  'https://www.googleapis.com/auth/drive.readonly',
+].join(' ')
 
 export type GmailAccount = {
   id: string
@@ -135,6 +139,47 @@ export async function getAccessToken(account: GmailAccount): Promise<string> {
     })
     .eq('id', account.id)
   return refreshed.access_token
+}
+
+// ---- Google Drive helpers (請求書_受け箱 自動取込用。同じOAuthトークンを流用) ----
+
+const DRIVE_BASE = 'https://www.googleapis.com/drive/v3'
+
+export type DriveFileMeta = {
+  id: string
+  name: string
+  mimeType: string
+  size?: string
+  createdTime?: string
+}
+
+export async function listDriveFolderFiles(
+  accessToken: string,
+  folderId: string,
+  maxResults = 50,
+): Promise<DriveFileMeta[]> {
+  const u = new URL(`${DRIVE_BASE}/files`)
+  u.searchParams.set('q', `'${folderId}' in parents and trashed = false`)
+  u.searchParams.set('fields', 'files(id,name,mimeType,size,createdTime)')
+  u.searchParams.set('pageSize', String(maxResults))
+  u.searchParams.set('orderBy', 'createdTime')
+  const res = await fetch(u.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) throw new Error(`drive files.list ${res.status}: ${await res.text()}`)
+  const data = (await res.json()) as { files?: DriveFileMeta[] }
+  return data.files ?? []
+}
+
+export async function downloadDriveFile(
+  accessToken: string,
+  fileId: string,
+): Promise<ArrayBuffer> {
+  const res = await fetch(`${DRIVE_BASE}/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) throw new Error(`drive files.get ${res.status}: ${await res.text()}`)
+  return res.arrayBuffer()
 }
 
 export async function fetchUserProfileEmail(accessToken: string): Promise<string> {
