@@ -37,15 +37,27 @@ function classifyByName(id: string | null | undefined, name: string | null | und
   const idLower = (id ?? '').toLowerCase()
   const nameLower = (name ?? '').toLowerCase()
   const blob = `${idLower} ${nameLower}`
-  if (idLower.startsWith('coffee-') || /\b\d+g\b/.test(nameLower) || nameLower.includes('coffee')) {
-    return { tax_rate: 8, classification: 'coffee_beans' }
-  }
   if (idLower.startsWith('drip-') || blob.includes('drip pack') || blob.includes('ドリップパック')) {
     return { tax_rate: 8, classification: 'drip_pack' }
   }
+  // ペットフードは人の食用でないため軽減税率対象外 (10%) — 食品判定より先に見る
+  if (blob.includes('jerky') || blob.includes('ジャーキー')) {
+    return { tax_rate: 10, classification: 'pet_food' }
+  }
+  if (idLower.startsWith('coffee-') || /\b\d+g\b/.test(nameLower) || nameLower.includes('coffee')) {
+    return { tax_rate: 8, classification: 'coffee_beans' }
+  }
+  if (blob.includes('maple') || blob.includes('syrup') || blob.includes('メープル') ||
+      blob.includes('honey') || blob.includes('はちみつ')) {
+    return { tax_rate: 8, classification: 'food_other' }
+  }
   if (idLower.startsWith('tshirt-') || idLower.startsWith('sweatshirt-') ||
-      blob.includes('tumbler') || blob.includes('cap') || blob.includes('mug') ||
-      blob.includes('hoodie')) {
+      blob.includes('shirt') || blob.includes('hoodie') || blob.includes('パーカー') ||
+      blob.includes('beanie') || blob.includes('ビーニー') || blob.includes('スウェット')) {
+    return { tax_rate: 10, classification: 'apparel' }
+  }
+  if (blob.includes('tumbler') || blob.includes('cap') || blob.includes('mug') ||
+      blob.includes('タンブラー') || blob.includes('キャップ') || blob.includes('マグ')) {
     return { tax_rate: 10, classification: 'goods' }
   }
   return { tax_rate: null, classification: 'other' }
