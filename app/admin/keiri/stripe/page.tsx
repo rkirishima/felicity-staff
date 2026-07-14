@@ -305,13 +305,27 @@ function StripeInner() {
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-stone-500 tracking-wider">Stripe 入金（銀行振込・手数料）</p>
-            <button
-              onClick={syncPayouts}
-              disabled={syncingPayouts}
-              className="text-xs text-emerald-700 underline disabled:opacity-50"
-            >
-              {syncingPayouts ? '同期中…' : '🔄 入金を同期'}
-            </button>
+            <div className="flex items-center gap-3">
+              <a
+                href={`/api/keiri/stripe-payouts/csv?month=${month}`}
+                className="text-xs text-stone-600 underline"
+              >
+                ⬇ CSV
+              </a>
+              <a
+                href={`/api/keiri/stripe-payouts/pdf?month=${month}`}
+                className="text-xs text-stone-600 underline"
+              >
+                ⬇ PDF
+              </a>
+              <button
+                onClick={syncPayouts}
+                disabled={syncingPayouts}
+                className="text-xs text-emerald-700 underline disabled:opacity-50"
+              >
+                {syncingPayouts ? '同期中…' : '🔄 入金を同期'}
+              </button>
+            </div>
           </div>
           {payouts.length === 0 ? (
             <p className="text-stone-400 text-xs">この月の入金記録はまだありません。「🔄 入金を同期」を押してください。<br/><span className="text-[10px]">※ Vercel env に STRIPE_SECRET_KEY が必要</span></p>

@@ -68,7 +68,7 @@ export async function GET(req: Request): Promise<Response> {
       .gte('completed_at', beginIso).lt('completed_at', endIso)
       .order('completed_at'),
     sb.from('keiri_stripe_payouts')
-      .select('payout_id, arrival_date, amount, fee_amount, gross_amount, charge_count, refund_count, period_start, period_end, status')
+      .select('payout_id, arrival_date, amount, fee_amount, gross_amount, charge_count, refund_count, period_start, period_end, status, tax_breakdown')
       .gte('arrival_date', start).lt('arrival_date', end)
       .order('arrival_date'),
     sb.from('keiri_inventory_snapshots')
@@ -91,7 +91,8 @@ export async function GET(req: Request): Promise<Response> {
   const bank = (bankRes.data ?? []) as BankRow[]
   const orderTotal = (ordersRes.data ?? []).reduce((s: number, o: { amount?: number }) => s + (o.amount ?? 0), 0)
   type PayoutRow = { payout_id: string; completed_at: string | null; amount: number; fee_amount: number; gross_amount: number; period_start: string | null; period_end: string | null; status: string | null }
-  type StripePayoutRow = { payout_id: string; arrival_date: string | null; amount: number; fee_amount: number; gross_amount: number; charge_count: number; refund_count: number; period_start: string | null; period_end: string | null; status: string | null }
+  type RateBucket = { gross: number; fee: number; net: number }
+  type StripePayoutRow = { payout_id: string; arrival_date: string | null; amount: number; fee_amount: number; gross_amount: number; charge_count: number; refund_count: number; period_start: string | null; period_end: string | null; status: string | null; tax_breakdown: { '8'?: RateBucket; '10'?: RateBucket; unknown?: RateBucket } | null }
   type InvRow2 = { item_name: string; category: string; unit_price: number; quantity: number; unit: string | null; note: string | null }
   const payouts = (payoutsRes?.data ?? []) as PayoutRow[]
   const stripePayouts = (stripePayoutsRes?.data ?? []) as StripePayoutRow[]
@@ -297,9 +298,18 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   if (want('stripe-payouts')) {
-  push('8) Stripe 入金（銀行振込・手数料）')
-  push('Payout ID', '入金日', '対象期間 開始', '対象期間 終了', '売上総額', '手数料', '入金額（実額）', '決済件数', '返金件数', 'ステータス')
+  push('8) Stripe 入金（銀行振込・手数料・税率別内訳）')
+  push(
+    'Payout ID', '入金日', '対象期間 開始', '対象期間 終了', '売上総額', '手数料', '入金額（実額）',
+    '8% 売上', '8% 手数料', '8% 入金額',
+    '10% 売上', '10% 手数料', '10% 入金額',
+    '未分類・調整 売上', '未分類・調整 手数料', '未分類・調整 入金額',
+    '決済件数', '返金件数', 'ステータス',
+  )
   for (const p of stripePayouts) {
+    const r8 = p.tax_breakdown?.['8'] ?? { gross: 0, fee: 0, net: 0 }
+    const r10 = p.tax_breakdown?.['10'] ?? { gross: 0, fee: 0, net: 0 }
+    const ru = p.tax_breakdown?.unknown ?? { gross: 0, fee: 0, net: 0 }
     push(
       p.payout_id,
       p.arrival_date,
@@ -308,6 +318,9 @@ export async function GET(req: Request): Promise<Response> {
       p.gross_amount,
       p.fee_amount,
       p.amount,
+      r8.gross, r8.fee, r8.net,
+      r10.gross, r10.fee, r10.net,
+      ru.gross, ru.fee, ru.net,
       p.charge_count,
       p.refund_count,
       p.status,
