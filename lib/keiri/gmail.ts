@@ -37,8 +37,9 @@ export type GmailMessage = {
 }
 
 export function gmailClientCreds(): { clientId: string; clientSecret: string } {
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+  // Vercel env に改行が混入していた事故があるため必ず trim する
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
   if (!clientId || !clientSecret) {
     throw new Error('GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set in env')
   }
