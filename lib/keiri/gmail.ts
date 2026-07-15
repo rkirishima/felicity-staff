@@ -141,6 +141,59 @@ export async function getAccessToken(account: GmailAccount): Promise<string> {
   return refreshed.access_token
 }
 
+// ---- Gmail 添付ファイル helpers (請求書一括ダウンロード用) ----
+
+export type GmailAttachmentMeta = {
+  filename: string
+  mimeType: string
+  attachmentId: string
+  size: number
+}
+
+function walkPartsForAttachments(parts: GmailPart[] | undefined, out: GmailAttachmentMeta[]): void {
+  for (const p of parts ?? []) {
+    const pp = p as GmailPart & { filename?: string; body?: { attachmentId?: string; size?: number } }
+    if (pp.filename && pp.body?.attachmentId) {
+      out.push({
+        filename: pp.filename,
+        mimeType: pp.mimeType ?? 'application/octet-stream',
+        attachmentId: pp.body.attachmentId,
+        size: pp.body.size ?? 0,
+      })
+    }
+    if (pp.parts) walkPartsForAttachments(pp.parts, out)
+  }
+}
+
+export async function listMessageAttachments(
+  accessToken: string,
+  messageId: string,
+): Promise<GmailAttachmentMeta[]> {
+  const res = await fetch(`${GMAIL_BASE}/users/me/messages/${messageId}?format=full`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) throw new Error(`gmail messages.get ${res.status}: ${await res.text()}`)
+  const data = (await res.json()) as { payload?: { parts?: GmailPart[] } }
+  const out: GmailAttachmentMeta[] = []
+  walkPartsForAttachments(data.payload?.parts, out)
+  return out
+}
+
+export async function getAttachmentData(
+  accessToken: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<Buffer> {
+  const res = await fetch(
+    `${GMAIL_BASE}/users/me/messages/${messageId}/attachments/${attachmentId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!res.ok) throw new Error(`gmail attachments.get ${res.status}: ${await res.text()}`)
+  const data = (await res.json()) as { data: string }
+  // base64url → base64
+  return Buffer.from(data.data.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
+}
+
 // ---- Google Drive helpers (請求書_受け箱 自動取込用。同じOAuthトークンを流用) ----
 
 const DRIVE_BASE = 'https://www.googleapis.com/drive/v3'

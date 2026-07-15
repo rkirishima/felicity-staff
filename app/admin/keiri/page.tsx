@@ -543,6 +543,12 @@ export default function KeiriDashboard() {
                 🧾 税理士レポート（月次 CSV / PDF）
               </Link>
               <Link
+                href="/admin/keiri/documents"
+                className="bg-stone-800 text-white py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
+              >
+                📦 書類ダウンロード（請求書ZIP・税理士向け）
+              </Link>
+              <Link
                 href="/admin/keiri/sku-overrides"
                 className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
               >
