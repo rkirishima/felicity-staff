@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isAuthorizedCron } from '@/lib/cronAuth'
 import { createClient } from '@supabase/supabase-js'
 import { sendTelegramMessage } from '@/lib/telegram'
 
@@ -9,8 +10,7 @@ export const runtime = 'nodejs'
 // (date == today + 7, status='scheduled'), sends Telegram alert per row,
 // stamps reminded_at_7day so the same item is never alerted twice.
 export async function GET(req: Request): Promise<Response> {
-  const authHeader = req.headers.get('authorization')
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

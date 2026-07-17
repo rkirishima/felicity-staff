@@ -9,15 +9,17 @@ export function kcDateLabel(date: string): string {
 }
 
 // Telegramのリンクボタン用に、日付+操作をCRON_SECRETで署名する。
+// CRON_SECRET 未設定だと空鍵で誰でも署名を偽造できるため、未設定は明確にエラーにする。
 export function signDecision(date: string, action: string): string {
-  const secret = process.env.CRON_SECRET ?? ''
+  const secret = process.env.CRON_SECRET
+  if (!secret) throw new Error('CRON_SECRET not set — cannot sign kitchen-car decision link')
   return crypto.createHmac('sha256', secret).update(`${date}:${action}`).digest('hex')
 }
 
 export function verifyDecision(date: string, action: string, sig: string): boolean {
   if (!sig) return false
-  const expected = signDecision(date, action)
   try {
+    const expected = signDecision(date, action) // 未設定なら throw → 検証失敗扱い
     return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
   } catch {
     return false

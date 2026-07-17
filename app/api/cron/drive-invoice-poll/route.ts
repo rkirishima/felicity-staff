@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isAuthorizedCron } from '@/lib/cronAuth'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import {
   listActiveAccounts,
@@ -38,8 +39,7 @@ const SUPPORTED_MIME = new Set([
 ])
 
 export async function GET(req: Request): Promise<Response> {
-  const authHeader = req.headers.get('authorization')
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

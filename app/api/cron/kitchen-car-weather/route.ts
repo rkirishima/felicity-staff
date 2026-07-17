@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isAuthorizedCron } from '@/lib/cronAuth'
 import { createClient } from '@supabase/supabase-js'
 import { checkRain } from '@/lib/weather'
 import { signDecision, kcDateLabel } from '@/lib/kitchenCar'
@@ -22,8 +23,7 @@ const sb = createClient(
 )
 
 export async function GET(req: Request): Promise<Response> {
-  const authHeader = req.headers.get('authorization')
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
