@@ -1,5 +1,7 @@
 {
-  "regions": ["hnd1"],
+  "regions": [
+    "kix1"
+  ],
   "crons": [
     {
       "path": "/api/cron/monthly-roast-invoice",
