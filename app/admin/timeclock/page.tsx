@@ -7,8 +7,23 @@ import { useRouter } from 'next/navigation'
 import { nextMonthFirstDay } from '@/lib/utils'
 import { getAdminSession } from '@/lib/session'
 
+// 出勤/退勤の JST ISO を組み立てる。退勤時刻が出勤より前なら日跨ぎ勤務とみなし
+// 退勤日を翌日にずらす（同日固定だと clock_out < clock_in で負の労働時間になっていた）。
+function buildClockTimes(date: string, cin: string, cout: string | null): { clock_in: string; clock_out: string | null } {
+  const clock_in = `${date}T${cin}:00+09:00`
+  if (!cout) return { clock_in, clock_out: null }
+  let clockOutDate = date
+  if (cout <= cin) {
+    const d = new Date(`${date}T00:00:00+09:00`)
+    d.setUTCDate(d.getUTCDate() + 1)
+    clockOutDate = d.toISOString().slice(0, 10)
+  }
+  return { clock_in, clock_out: `${clockOutDate}T${cout}:00+09:00` }
+}
+
 export default function AdminTimeclockPage() {
   const [requests, setRequests] = useState<any[]>([])
+  const [approving, setApproving] = useState<string | null>(null)
   const [records, setRecords] = useState<any[]>([])
   const [tab, setTab] = useState<'requests' | 'records' | 'cost'>('records')
   const [month, setMonth] = useState(() => {
@@ -97,7 +112,7 @@ export default function AdminTimeclockPage() {
       const rate = (r.staff as any)?.hourly_rate || 1300
       if (!map[sid]) map[sid] = { name: (r.staff as any)?.name, rate, hours: 0 }
       if (r.clock_out) {
-        const h = (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
+        const h = Math.max(0, (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000)
         map[sid].hours += h
         total += h * rate
       }
@@ -107,14 +122,39 @@ export default function AdminTimeclockPage() {
   }
 
   async function approveRequest(r: any) {
-    await supabase.from('timeclock').insert({
-      staff_id: r.staff_id,
-      clock_in: `${r.date}T${r.clock_in}:00+09:00`,
-      clock_out: r.clock_out ? `${r.date}T${r.clock_out}:00+09:00` : null,
-    })
-    await supabase.from('timeclock_requests').update({ status: 'approved' }).eq('id', r.id)
-    toast.success('承認しました')
-    loadRequests(); loadRecords()
+    if (approving) return // 連打による二重承認防止
+    setApproving(r.id)
+    try {
+      const times = buildClockTimes(r.date, r.clock_in, r.clock_out)
+      // その日に既存の打刻があれば「修正」＝更新。無ければ新規追加。
+      // 以前は常に insert していたため、修正リクエスト承認で当日の記録が二重化していた。
+      const { data: existing, error: exErr } = await supabase
+        .from('timeclock')
+        .select('id')
+        .eq('staff_id', r.staff_id)
+        .gte('clock_in', `${r.date}T00:00:00+09:00`)
+        .lte('clock_in', `${r.date}T23:59:59+09:00`)
+        .order('clock_in', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (exErr) { toast.error('確認失敗: ' + exErr.message); return }
+
+      const writeErr = existing
+        ? (await supabase.from('timeclock').update(times).eq('id', existing.id)).error
+        : (await supabase.from('timeclock').insert({ staff_id: r.staff_id, ...times })).error
+      if (writeErr) { toast.error('反映失敗: ' + writeErr.message); return }
+
+      const { error: reqErr } = await supabase
+        .from('timeclock_requests')
+        .update({ status: 'approved' })
+        .eq('id', r.id)
+      if (reqErr) { toast.error('ステータス更新失敗: ' + reqErr.message); return }
+
+      toast.success(existing ? '既存記録を修正しました' : '承認しました')
+      loadRequests(); loadRecords()
+    } finally {
+      setApproving(null)
+    }
   }
 
   async function rejectRequest(id: string) {
@@ -131,14 +171,7 @@ export default function AdminTimeclockPage() {
   }
 
   async function saveEdit(id: string) {
-    const updates: any = {
-      clock_in: `${editDate}T${editIn}:00+09:00`,
-    }
-    if (editOut) {
-      updates.clock_out = `${editDate}T${editOut}:00+09:00`
-    } else {
-      updates.clock_out = null
-    }
+    const updates = buildClockTimes(editDate, editIn, editOut || null)
     const { error } = await supabase.from('timeclock').update(updates).eq('id', id)
     if (error) { toast.error('更新失敗: ' + error.message); return }
     toast.success('修正しました')
@@ -157,8 +190,7 @@ export default function AdminTimeclockPage() {
     if (!addStaff || !addDate || !addIn) { toast.error('スタッフ・日付・出勤時間は必須'); return }
     const { error } = await supabase.from('timeclock').insert({
       staff_id: addStaff,
-      clock_in: `${addDate}T${addIn}:00+09:00`,
-      clock_out: addOut ? `${addDate}T${addOut}:00+09:00` : null,
+      ...buildClockTimes(addDate, addIn, addOut || null),
     })
     if (error) { toast.error('追加失敗: ' + error.message); return }
     toast.success('追加しました')
@@ -444,10 +476,10 @@ export default function AdminTimeclockPage() {
                 )}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => approveRequest(r)}
-                  className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-medium">✓ 承認</button>
-                <button onClick={() => rejectRequest(r.id)}
-                  className="flex-1 py-2.5 bg-red-50 text-red-500 rounded-xl text-sm font-medium">✕ 却下</button>
+                <button onClick={() => approveRequest(r)} disabled={approving !== null}
+                  className="flex-1 py-2.5 bg-teal-600 disabled:bg-stone-300 text-white rounded-xl text-sm font-medium">{approving === r.id ? '承認中…' : '✓ 承認'}</button>
+                <button onClick={() => rejectRequest(r.id)} disabled={approving !== null}
+                  className="flex-1 py-2.5 bg-red-50 disabled:opacity-50 text-red-500 rounded-xl text-sm font-medium">✕ 却下</button>
               </div>
             </div>
           ))}
