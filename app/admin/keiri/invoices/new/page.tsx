@@ -34,12 +34,12 @@ function emptyLine(): LineDraft {
 function todayJST() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
-function endOfNextMonthJST(): string {
+function endOfThisMonthJST(): string {
   const today = new Date(Date.now() + 9 * 60 * 60 * 1000)
   const y = today.getUTCFullYear()
   const m = today.getUTCMonth() // 0-11
-  // last day of (m+2)th month → use day 0 of (m+2)th month
-  const end = new Date(Date.UTC(y, m + 2, 0))
+  // 支払期限は請求した月の末日（day 0 of next month = last day of this month）
+  const end = new Date(Date.UTC(y, m + 1, 0))
   return end.toISOString().slice(0, 10)
 }
 
@@ -64,7 +64,7 @@ export default function NewInvoicePage() {
   const [clientId, setClientId] = useState('')
   const [issuer, setIssuer] = useState<Issuer>('felicity')
   const [issueDate, setIssueDate] = useState(todayJST())
-  const [dueDate, setDueDate] = useState(endOfNextMonthJST())
+  const [dueDate, setDueDate] = useState(endOfThisMonthJST())
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()])
   const [saving, setSaving] = useState<'draft' | 'publish' | null>(null)
