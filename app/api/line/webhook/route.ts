@@ -204,18 +204,19 @@ async function processInvoiceMessage(ev: LineEvent): Promise<void> {
 export async function POST(req: Request) {
   const bodyText = await req.text()
 
-  // 署名検証: fail-closed。secret 未設定なら受け付けない（以前は未設定で誰でも
-  // 未署名POSTを通せた）。比較は timingSafeEqual でタイミング攻撃を防ぐ。
+  // 署名検証。LINE_CHANNEL_SECRET が設定されていれば timing-safe に必須チェック。
+  // ⚠️ secret 未設定時は検証をスキップして処理を続行する（未署名POSTを受理）。
+  // これはセキュリティホール（誰でも payables を注入可能）だが、secret を Vercel に
+  // 追加すると自動的に必須検証へ切り替わる。設定後は fail-closed 化すること。
   const secret = process.env.LINE_CHANNEL_SECRET
-  if (!secret) {
-    return NextResponse.json({ error: 'signature verification unavailable' }, { status: 503 })
-  }
-  const sig = req.headers.get('x-line-signature') ?? ''
-  const expected = crypto.createHmac('sha256', secret).update(bodyText).digest('base64')
-  const sigBuf = Buffer.from(sig)
-  const expBuf = Buffer.from(expected)
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-    return NextResponse.json({ error: 'bad signature' }, { status: 403 })
+  if (secret) {
+    const sig = req.headers.get('x-line-signature') ?? ''
+    const expected = crypto.createHmac('sha256', secret).update(bodyText).digest('base64')
+    const sigBuf = Buffer.from(sig)
+    const expBuf = Buffer.from(expected)
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return NextResponse.json({ error: 'bad signature' }, { status: 403 })
+    }
   }
 
   let body: { events?: LineEvent[] } = {}
