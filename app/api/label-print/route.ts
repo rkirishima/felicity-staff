@@ -21,9 +21,15 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    const data = await res.json()
-    return NextResponse.json(data, { status: res.status })
-  } catch {
+    const text = await res.text()
+    try {
+      return NextResponse.json(JSON.parse(text), { status: res.status })
+    } catch {
+      console.error(`[label-print] non-JSON response ${res.status} from ${printerUrl}/label_print:`, text.slice(0, 300))
+      return NextResponse.json({ error: `Printer returned ${res.status}` }, { status: 502 })
+    }
+  } catch (err) {
+    console.error('[label-print] printer fetch failed:', err)
     return NextResponse.json({ error: 'Printer server unreachable' }, { status: 503 })
   }
 }
