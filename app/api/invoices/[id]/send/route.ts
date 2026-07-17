@@ -50,7 +50,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const lines = linesRaw ?? []
 
   // MonthlyInvoiceDataもどき(emailテキスト生成に必要なフィールドだけ)
-  const [_, ystr, mstr] = inv.invoice_number.match(/^FCR-(\d{4})-(\d{2})$/) ?? []
+  // invoice_number が null / FCR形式外だと .match が例外や NaN年NaN月 を生むためガード
+  const numMatch =
+    typeof inv.invoice_number === 'string'
+      ? inv.invoice_number.match(/^FCR-(\d{4})-(\d{2})$/)
+      : null
+  if (!numMatch) {
+    return NextResponse.json(
+      { error: `invalid invoice_number for roast send: ${inv.invoice_number ?? 'null'}` },
+      { status: 400 },
+    )
+  }
+  const [, ystr, mstr] = numMatch
   const data: MonthlyInvoiceData = {
     year: Number(ystr),
     month: Number(mstr),

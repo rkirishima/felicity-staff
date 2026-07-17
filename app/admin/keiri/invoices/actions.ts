@@ -135,17 +135,28 @@ export async function publishDraftInvoice(
 
 export async function markInvoicePaid(id: string, paid_date: string): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase
+  // 状態遷移ガード: 無効化済みを入金済みに戻せないよう sent/paid のみ許可
+  const { error, data } = await supabase
     .from('keiri_invoices')
     .update({ status: 'paid', paid_at: paid_date })
     .eq('id', id)
+    .in('status', ['sent', 'paid'])
+    .select('id')
   if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('送付済みの請求書のみ入金にできます')
 }
 
 export async function cancelInvoice(id: string): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase.from('keiri_invoices').update({ status: 'cancelled' }).eq('id', id)
+  // 入金済みは無効化不可（会計整合性のため）
+  const { error, data } = await supabase
+    .from('keiri_invoices')
+    .update({ status: 'cancelled' })
+    .eq('id', id)
+    .neq('status', 'paid')
+    .select('id')
   if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('入金済みの請求書は無効化できません')
 }
 
 export async function deleteInvoice(id: string): Promise<void> {

@@ -22,7 +22,7 @@ type Invoice = {
   subtotal_8: number
   tax_8: number
   total: number
-  status: 'draft' | 'sent' | 'paid' | 'void'
+  status: 'draft' | 'sent' | 'paid' | 'cancelled'
   notes: string | null
   pdf_path: string | null
   sent_at: string | null
@@ -131,7 +131,7 @@ export default function InvoiceReviewPage() {
           <span className={`ml-auto text-xs px-2 py-1 rounded ${
             invoice.status === 'sent' ? 'bg-emerald-900 text-emerald-200' :
             invoice.status === 'paid' ? 'bg-teal-900 text-teal-200' :
-            invoice.status === 'void' ? 'bg-stone-800 text-stone-400' :
+            invoice.status === 'cancelled' ? 'bg-stone-800 text-stone-400' :
             'bg-amber-900 text-amber-200'
           }`}>
             {invoice.status === 'draft' ? 'ドラフト' :
@@ -188,6 +188,11 @@ export default function InvoiceReviewPage() {
               <Send size={18} />
               {sending ? '送付中...' : '承認して送付'}
             </button>
+          </div>
+        ) : invoice.status === 'cancelled' ? (
+          <div className="rounded-lg px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#1c1917', border: '1px solid #44403c' }}>
+            <AlertCircle size={16} className="text-stone-400" />
+            <p className="text-xs text-stone-400">この請求書は無効化されています</p>
           </div>
         ) : (
           <div className="rounded-lg px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#022c22', border: '1px solid #064e3b' }}>

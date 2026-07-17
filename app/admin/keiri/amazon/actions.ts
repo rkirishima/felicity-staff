@@ -63,11 +63,13 @@ function parseCsvLine(line: string): string[] {
 
 function parseNum(s: string | undefined): number {
   if (!s) return 0
-  const cleaned = s.replace(/[,¥$\s　]/g, '')
+  // 金額は integer 円。parseFloat 禁止のため小数部を落として parseInt する
+  // （Amazon JP の金額は円単位=整数。小数が来ても切り捨てで整数円に正規化）。
+  const cleaned = s.replace(/[,¥$\s　]/g, '').split('.')[0]
   if (!cleaned || cleaned === '-') return 0
-  const n = parseFloat(cleaned)
+  const n = parseInt(cleaned, 10)
   if (isNaN(n)) return 0
-  return Math.round(n)
+  return n
 }
 
 function parseDate(s: string | undefined): string | null {

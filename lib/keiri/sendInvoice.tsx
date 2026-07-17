@@ -32,6 +32,10 @@ export async function renderAndSendInvoice(
     .single()
   if (error || !inv) throw new Error('invoice not found')
   if (!inv.invoice_number) throw new Error('下書きは送信できません')
+  // 二重送信防止: 既に sent/paid の請求書は再送しない（発行時自動送信と「送信」ボタンの二重発火対策）
+  if (inv.status === 'sent' || inv.status === 'paid') {
+    throw new Error('この請求書は既に送信済みです')
+  }
 
   const { data: lineRows, error: linesErr } = await supabase
     .from('keiri_invoice_lines')

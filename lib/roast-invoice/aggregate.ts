@@ -101,7 +101,7 @@ export async function buildMonthlyInvoiceData(opts: {
   const bean_subtotal = items.reduce((s, i) => s + i.green_amount, 0)
   const roast_subtotal = items.reduce((s, i) => s + i.roast_amount, 0)
   const subtotal = bean_subtotal + roast_subtotal
-  const tax = Math.floor(subtotal * TAX_RATE)
+  const tax = Math.round(subtotal * TAX_RATE)
   const total = subtotal + tax
 
   return {
