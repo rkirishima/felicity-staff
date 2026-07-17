@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  const printerUrl = process.env.PRINTER_URL
+  // Vercel env値に紛れ込む改行/リテラル"\n"を除去 — "\n"入りURLはfetchが
+  // "https://host/n/…" と解釈して404になる (GOOGLE_CLIENT_IDと同種の問題)
+  const printerUrl = process.env.PRINTER_URL?.replace(/\\n/g, '').trim()
   if (!printerUrl) {
     return NextResponse.json({ error: 'PRINTER_URL not configured' }, { status: 503 })
   }
