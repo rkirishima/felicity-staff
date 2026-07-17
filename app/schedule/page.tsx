@@ -149,6 +149,11 @@ export default function SchedulePage() {
         return
       }
     }
+    // 誤タップ防止の確認（管理者の削除・スタッフの申請取消いずれも取り返しがつかない）
+    const label = shift
+      ? `${shift.date} ${shift.start_time?.slice(0, 5)}〜 ${(shift as { staff_name?: string }).staff_name ?? ''}`.trim()
+      : 'このシフト'
+    if (!confirm(`${label} を${isAdmin ? '削除' : '取消'}しますか？`)) return
     const { error } = await supabase.from('shifts').delete().eq('id', shiftId)
     if (error) { toast.error('削除失敗'); return }
     toast.success('削除しました')

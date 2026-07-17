@@ -1,0 +1,19 @@
+{
+  "name": "Felicity Staff",
+  "short_name": "Felicity",
+  "description": "Felicity Cafe Staff Platform",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F0E8",
+  "theme_color": "#1c1917",
+  "icons": [
+    {
+      "src": "/felicity-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

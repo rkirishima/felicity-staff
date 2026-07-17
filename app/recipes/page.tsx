@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 
 const FREQ_LABEL: Record<string, string> = {
   daily: '毎日',
@@ -90,7 +91,9 @@ export default function RecipesPage() {
       const ext = file.name.split('.').pop()
       const path = `${Date.now()}.${ext}`
       const { error } = await supabase.storage.from('manual-images').upload(path, file)
-      if (!error) {
+      if (error) {
+        toast.error('画像のアップロードに失敗しました: ' + error.message)
+      } else {
         const { data } = supabase.storage.from('manual-images').getPublicUrl(path)
         setForm(f => ({ ...f, image_url: data.publicUrl }))
       }
@@ -103,13 +106,16 @@ export default function RecipesPage() {
     if (!form.title.trim()) return
     setSaving(true)
     try {
-      if (editingId) {
-        await supabase.from('manuals').update(form).eq('id', editingId)
-      } else {
-        await supabase.from('manuals').insert(form)
+      const { error } = editingId
+        ? await supabase.from('manuals').update(form).eq('id', editingId)
+        : await supabase.from('manuals').insert(form)
+      if (error) {
+        toast.error('保存に失敗しました: ' + error.message)
+        return
       }
       await load()
       setFormOpen(false)
+      toast.success(editingId ? 'マニュアルを更新しました' : 'マニュアルを追加しました')
     } finally {
       setSaving(false)
     }

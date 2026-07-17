@@ -78,13 +78,18 @@ function OperationsContent() {
       toast.error('全ての温度を入力してください')
       return
     }
-    const today = new Date().toISOString().split('T')[0]
-    await supabase.from('temperature_logs').insert({
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const { error } = await supabase.from('temperature_logs').insert({
       date: today,
       fridge_temp: parseFloat(fridgeTemp),
       cold_table_temp: parseFloat(coldTableTemp),
       freezer_temp: parseFloat(freezerTemp),
     })
+    // HACCP記録は失敗を握り潰さない（保存できていないのに成功表示は食品衛生上の欠陥）
+    if (error) {
+      toast.error('温度記録の保存に失敗しました: ' + error.message)
+      return
+    }
     toast.success('温度記録を保存しました')
     setTempSaved(true)
   }

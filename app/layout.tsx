@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
@@ -14,6 +14,22 @@ export const metadata: Metadata = {
   title: 'Felicity Staff',
   description: 'Felicity Cafe Staff Platform',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Felicity',
+  },
+  icons: {
+    apple: '/felicity-logo.png',
+  },
+}
+
+// viewport-fit=cover を有効化して env(safe-area-inset-*) を機能させる（ノッチ対応）
+export const viewport: Viewport = {
+  themeColor: '#1c1917',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
