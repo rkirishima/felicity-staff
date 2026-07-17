@@ -12,7 +12,7 @@ export default function PayrollPage() {
   const [summary, setSummary] = useState<any[]>([])
   const [todayData, setTodayData] = useState<any[]>([])
   const [now, setNow] = useState(new Date())
-  const [month, setMonth] = useState(new Date().toISOString().slice(0,7))
+  const [month, setMonth] = useState(() => new Date(Date.now() + 9*60*60*1000).toISOString().slice(0,7))
   const [editId, setEditId] = useState<string | null>(null)
   const [editRate, setEditRate] = useState('')
   const [tab, setTab] = useState<'summary' | 'rates'>('summary')
@@ -61,8 +61,6 @@ export default function PayrollPage() {
       .select('staff_id, clock_in, clock_out, staff(name, hourly_rate, salary_start_date, payment_method)')
       .gte('clock_in', `${month}-01T00:00:00+09:00`)
       .lt('clock_in', `${nextMonthFirstDay(month)}T00:00:00+09:00`)
-    const currentMonth = new Date().toISOString().slice(0, 7)
-    const nowMs = Date.now()
     const map: Record<string, any> = {}
     const recMap: Record<string, any[]> = {}
     for (const r of (records ?? [])) {
@@ -78,6 +76,8 @@ export default function PayrollPage() {
         hasSalaryPeriod: false,
         // 全件 salary 期間なら「正社員」表示で支払対象外
         allSalaryPeriod: true,
+        // 未退勤の記録が1件でもあれば true（給与未確定の警告表示用）
+        openRecord: false,
         paymentMethod: (sRow.payment_method as 'transfer' | 'cash') ?? 'transfer',
       }
       if (!recMap[sid]) recMap[sid] = []
@@ -85,16 +85,20 @@ export default function PayrollPage() {
       if (salary) map[sid].hasSalaryPeriod = true
       else map[sid].allSalaryPeriod = false
 
-      const endMs = r.clock_out
-        ? new Date(r.clock_out).getTime()
-        : (month === currentMonth ? nowMs : null)
-      if (endMs) {
-        const h = (endMs - new Date(r.clock_in).getTime()) / 3600000
+      // 未退勤（clock_out=null）は労働時間に加算しない。以前は当月分を「今」まで
+      // 継続勤務として計上していたため、退勤し忘れが月次給与を数千円単位で水増ししていた。
+      // 給与は退勤済みの記録のみで確定させ、未退勤は別枠フラグで可視化する。
+      if (r.clock_out) {
+        const rawH = (new Date(r.clock_out).getTime() - new Date(r.clock_in).getTime()) / 3600000
+        const h = rawH > 0 ? rawH : 0 // 日跨ぎ等で負値になる不正データを弾く
         if (!salary) {
           map[sid].hours += h
-          if (r.clock_out) map[sid].days += 1
+          map[sid].days += 1
         }
         recMap[sid].push({ ...r, h, salary })
+      } else {
+        map[sid].openRecord = true
+        recMap[sid].push({ ...r, h: 0, salary, open: true })
       }
     }
     setSummary(Object.values(map).sort((a,b) => a.name.localeCompare(b.name, 'ja')))
@@ -133,7 +137,7 @@ export default function PayrollPage() {
   const todayRows = todayData.map(r => {
     const cin = new Date(r.clock_in)
     const cout = r.clock_out ? new Date(r.clock_out) : now
-    const h = (cout.getTime() - cin.getTime()) / 3600000
+    const h = Math.max(0, (cout.getTime() - cin.getTime()) / 3600000)
     const sRow = (r.staff as any) ?? {}
     const rate = sRow.hourly_rate || 1300
     const salary = isSalaryPeriod(r.clock_in, sRow.salary_start_date ?? null)
@@ -245,6 +249,7 @@ export default function PayrollPage() {
                         {s.allSalaryPeriod && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">正社員</span>}
                         {s.hasSalaryPeriod && !s.allSalaryPeriod && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">混在</span>}
                         {s.paymentMethod === 'cash' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">現金</span>}
+                        {s.openRecord && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">未退勤あり</span>}
                       </div>
                       <p className="text-xs text-stone-400 mt-0.5">{s.days}日 / {s.hours.toFixed(1)}h / ¥{s.hourly_rate.toLocaleString()}/h</p>
                     </div>
@@ -269,8 +274,8 @@ export default function PayrollPage() {
                               {cin.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' })}
                               〜{cout ? cout.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' }) : '勤務中'}
                             </span>
-                            <span className="text-teal-600 font-medium w-20 text-right">
-                              {r.h.toFixed(1)}h / ¥{Math.round(r.h * s.hourly_rate).toLocaleString()}
+                            <span className={`font-medium w-20 text-right ${r.open ? 'text-red-500' : 'text-teal-600'}`}>
+                              {r.open ? '未退勤' : `${r.h.toFixed(1)}h / ¥${Math.round(r.h * s.hourly_rate).toLocaleString()}`}
                             </span>
                           </div>
                         )

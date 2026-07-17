@@ -209,7 +209,11 @@ export default function HomePage() {
   async function loadStats(staff: Staff, period: 'week' | 'month') {
     const from = new Date()
     if (period === 'week') {
-      from.setDate(from.getDate() - from.getDay() + 1)
+      // 週初め（月曜）へ戻す。日曜は getDay()===0 なので -6 して当週の月曜にする
+      // （以前は +1 で翌週の月曜=未来日になり、日曜は常に今週0hと表示されていた）
+      const day = from.getDay()
+      const diff = day === 0 ? -6 : 1 - day
+      from.setDate(from.getDate() + diff)
     } else {
       from.setDate(1)
     }
