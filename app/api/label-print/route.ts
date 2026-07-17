@@ -26,7 +26,11 @@ export async function POST(request: Request) {
       return NextResponse.json(JSON.parse(text), { status: res.status })
     } catch {
       console.error(`[label-print] non-JSON response ${res.status} from ${printerUrl}/label_print:`, text.slice(0, 300))
-      return NextResponse.json({ error: `Printer returned ${res.status}` }, { status: 502 })
+      return NextResponse.json({
+        error: `Printer returned ${res.status}`,
+        cfRay: res.headers.get('cf-ray'),
+        detail: text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 300),
+      }, { status: 502 })
     }
   } catch (err) {
     console.error('[label-print] printer fetch failed:', err)
