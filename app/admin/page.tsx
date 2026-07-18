@@ -1,11 +1,19 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { saveSession, getAdminSession } from '@/lib/session'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { saveSession, getAdminSession, clearAdminSession } from '@/lib/session'
 import { createClient } from '@/lib/supabase/client'
 import { verifyAdminPin } from './actions'
 
 export default function AdminPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminPageInner />
+    </Suspense>
+  )
+}
+
+function AdminPageInner() {
   const [pin, setPin] = useState('')
   const [unlocked, setUnlocked] = useState(false)
   const [error, setError] = useState(false)
@@ -14,15 +22,22 @@ export default function AdminPage() {
   const [now, setNow] = useState(new Date())
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const nextParam = searchParams.get('next')
   const supabase = createClient()
 
   useEffect(() => {
-    // proxy が cookie 不在でここへ戻した場合(?next= 付き)は、localStorage が
-    // 残っていても必ずPIN再入力させる。さもないと cookie を取得できず、
-    // 保護ページへ入るたびに /admin へ跳ね返される無限ループになる。
-    const bounced = new URLSearchParams(window.location.search).has('next')
-    if (!bounced && getAdminSession()) setUnlocked(true)
-  }, [])
+    // proxy が cookie 不在でここへ戻した場合(?next= 付き)は、cookie が無い証拠なので
+    // 古い localStorage セッションを消してPIN再入力を強制する。useSearchParams で
+    // URL変化に追従するため、SPA遷移で跳ね返されても確実にPINパッドを出す
+    // （mount一回きりの判定だと、ダッシュボード↔跳ね返りで無限ループしていた）。
+    if (nextParam) {
+      clearAdminSession()
+      setUnlocked(false)
+    } else if (getAdminSession()) {
+      setUnlocked(true)
+    }
+  }, [nextParam])
 
   useEffect(() => {
     if (!unlocked) return
@@ -64,9 +79,8 @@ export default function AdminPage() {
         saveSession({ id: 'admin', name: '桐島', role: 'admin', hourly_rate: 0 })
         window.dispatchEvent(new Event('admin-session-changed'))
         setUnlocked(true)
-        // middleware から ?next= でリダイレクトされていれば元のページへ戻す
-        const dest = new URLSearchParams(window.location.search).get('next')
-        if (dest && dest.startsWith('/admin')) window.location.href = dest
+        // proxy から ?next= で戻されていれば元のページへ。cookie 発行済みなので通る
+        if (nextParam && nextParam.startsWith('/admin')) window.location.href = nextParam
       } else {
         setError(true)
         setTimeout(() => setPin(''), 500)
