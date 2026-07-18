@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { getIssuerInfo, normalizeIssuer } from '@/lib/keiri/company'
 import { getSealDataUri } from '@/lib/keiri/stamps'
 import { InvoicePDF, type InvoicePDFLine } from '@/components/keiri/InvoicePDF'
+import { requireKeiri } from '@/lib/auth/server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -13,6 +14,7 @@ export async function GET(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const { id } = await ctx.params
   const url = new URL(req.url)
   const regenerate = url.searchParams.get('regenerate') === '1'

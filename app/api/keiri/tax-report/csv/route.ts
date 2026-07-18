@@ -1,3 +1,4 @@
+import { requireKeiri } from '@/lib/auth/server'
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { effectiveRevenueCategory, REVENUE_CATEGORY_LABEL } from '@/lib/keiri/classifyRevenue'
@@ -16,6 +17,7 @@ export const maxDuration = 30
 //   5) 経費明細 (keiri_transactions expense)
 //   6) 銀行入出金 (keiri_bank_transactions)
 export async function GET(req: Request): Promise<Response> {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const url = new URL(req.url)
   const month = url.searchParams.get('month')
   const section = url.searchParams.get('section') // null = all sections

@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth/server'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
@@ -9,6 +10,7 @@ const sb = createClient(
 const resend = new Resend(process.env.RESEND_API_KEY!)
 
 export async function POST(req: Request) {
+  const _denied = await requireAdmin(); if (_denied) return _denied
   const { orderId, trackingNumber } = await req.json()
   if (!orderId || !trackingNumber) {
     return NextResponse.json({ error: 'orderId and trackingNumber are required' }, { status: 400 })

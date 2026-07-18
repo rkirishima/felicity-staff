@@ -1,27 +1,44 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { setAuthCookie, clearAuthCookie } from '@/lib/auth/server'
 
 export async function verifyAdminPin(pin: string): Promise<boolean> {
-  if (pin === process.env.ADMIN_PIN) return true
+  if (pin === process.env.ADMIN_PIN) {
+    await setAuthCookie({ role: 'admin', sid: 'admin', name: '桐島' })
+    return true
+  }
 
   const sb = await createClient()
   const { data, error } = await sb
     .from('staff')
-    .select('id')
+    .select('id, name, role')
     .in('role', ['admin', 'accountant'])
     .eq('pin', pin)
     .eq('active', true)
     .limit(1)
     .maybeSingle()
-  if (error) return false
-  return !!data
+  if (error || !data) return false
+  await setAuthCookie({
+    role: data.role === 'accountant' ? 'accountant' : 'admin',
+    sid: data.id as string,
+    name: (data.name as string) ?? '',
+  })
+  return true
 }
 
 export async function verifyStaffPin(staffId: string, pin: string): Promise<boolean> {
   const sb = await createClient()
-  const { data } = await sb.from('staff').select('pin').eq('id', staffId).single()
-  return pin === (data?.pin || '1234')
+  const { data } = await sb.from('staff').select('pin, name').eq('id', staffId).single()
+  // PIN未設定でも '1234' で通す既存挙動は残すが、実在スタッフに限る（存在しなければ拒否）
+  if (!data) return false
+  if (pin !== (data.pin || '1234')) return false
+  await setAuthCookie({ role: 'staff', sid: staffId, name: (data.name as string) ?? '' })
+  return true
+}
+
+export async function logout(): Promise<void> {
+  await clearAuthCookie()
 }
 
 export async function reportAbsence(shiftId: string, staffName: string, date: string, startTime: string, endTime: string): Promise<{ ok: boolean }> {

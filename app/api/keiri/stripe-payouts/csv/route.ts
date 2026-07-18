@@ -1,3 +1,4 @@
+import { requireKeiri } from '@/lib/auth/server'
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 
@@ -27,6 +28,7 @@ type PayoutRow = {
 }
 
 export async function GET(req: Request): Promise<Response> {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const url = new URL(req.url)
   const month = url.searchParams.get('month')
   if (!month || !/^\d{4}-\d{2}$/.test(month)) {

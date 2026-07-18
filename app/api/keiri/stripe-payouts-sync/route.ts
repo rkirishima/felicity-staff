@@ -1,3 +1,4 @@
+import { requireKeiri } from '@/lib/auth/server'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -138,6 +139,7 @@ function allocate(amount: number, w: PiWeights): Record<RateKey, number> {
 }
 
 export async function GET(req: Request): Promise<Response> {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) {
     return NextResponse.json(

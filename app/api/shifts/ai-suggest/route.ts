@@ -1,9 +1,11 @@
+import { requireAdmin } from '@/lib/auth/server'
 import { aiSuggestShifts, type AiShiftInput } from '@/lib/shifts/aiSuggest'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
 export async function POST(request: Request) {
+  const _denied = await requireAdmin(); if (_denied) return _denied
   if (!process.env.ANTHROPIC_API_KEY) {
     return Response.json({ ok: false, error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
   }

@@ -14,6 +14,7 @@ import { sendInvoiceEmail } from '@/lib/roast-invoice/email'
 import { downloadInvoiceBytes } from '@/lib/roast-invoice/storage'
 import { sendTelegramMessage } from '@/lib/telegram'
 import type { MonthlyInvoiceData } from '@/lib/roast-invoice/types'
+import { requireKeiri } from '@/lib/auth/server'
 
 export const runtime = 'nodejs'
 
@@ -26,6 +27,7 @@ function admin() {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const { id } = await params
   const supabase = admin()
 

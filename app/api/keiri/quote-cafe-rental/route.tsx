@@ -1,3 +1,4 @@
+import { requireKeiri } from '@/lib/auth/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { getCompanyInfo } from '@/lib/keiri/company'
 import { getCompanySealDataUri } from '@/lib/keiri/stamps'
@@ -11,6 +12,7 @@ export const maxDuration = 30
 // ?contact=ご担当者名 で担当者名追加可能。
 // ?date=YYYY-MM-DD で発行日上書き可能（デフォルト：今日）。
 export async function GET(req: Request): Promise<Response> {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const url = new URL(req.url)
   const client = url.searchParams.get('client') || 'お客様'
   const contact = url.searchParams.get('contact')

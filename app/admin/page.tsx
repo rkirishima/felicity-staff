@@ -60,6 +60,9 @@ export default function AdminPage() {
         saveSession({ id: 'admin', name: '桐島', role: 'admin', hourly_rate: 0 })
         window.dispatchEvent(new Event('admin-session-changed'))
         setUnlocked(true)
+        // middleware から ?next= でリダイレクトされていれば元のページへ戻す
+        const dest = new URLSearchParams(window.location.search).get('next')
+        if (dest && dest.startsWith('/admin')) window.location.href = dest
       } else {
         setError(true)
         setTimeout(() => setPin(''), 500)

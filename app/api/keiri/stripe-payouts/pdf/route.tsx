@@ -1,3 +1,4 @@
+import { requireKeiri } from '@/lib/auth/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { getCompanyInfo } from '@/lib/keiri/company'
@@ -9,6 +10,7 @@ export const maxDuration = 30
 // /api/keiri/stripe-payouts/pdf?month=YYYY-MM
 // Stripe 週次入金の税率別内訳 (売上高・手数料・差引入金額) を月単位のPDFで返す。
 export async function GET(req: Request): Promise<Response> {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const url = new URL(req.url)
   const month = url.searchParams.get('month')
   if (!month || !/^\d{4}-\d{2}$/.test(month)) {

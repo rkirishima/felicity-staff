@@ -1,4 +1,5 @@
 import { renderAndSendInvoice } from '@/lib/keiri/sendInvoice'
+import { requireKeiri } from '@/lib/auth/server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -7,6 +8,7 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const { id } = await ctx.params
   let body: { to?: string; subject?: string; body?: string } = {}
   try {

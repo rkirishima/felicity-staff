@@ -1,3 +1,4 @@
+import { requireKeiri } from '@/lib/auth/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
 import { getCompanyInfo } from '@/lib/keiri/company'
@@ -9,6 +10,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 
 export async function GET(req: Request): Promise<Response> {
+  const _denied = await requireKeiri(); if (_denied) return _denied
   const url = new URL(req.url)
   const month = url.searchParams.get('month')
   if (!month || !/^\d{4}-\d{2}$/.test(month)) {
