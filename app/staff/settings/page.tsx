@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { changeStaffPin } from '@/app/admin/actions'
 
 function PinInput({ label, value, onChange, error }: { label: string; value: string; onChange: (v: string) => void; error?: boolean }) {
   return (
@@ -46,15 +47,10 @@ function SettingsContent() {
     if (next.length === 4) onComplete(next)
   }
 
-  async function verifyCurrentPin(pin: string) {
-    const { data } = await supabase.from('staff').select('pin').eq('id', staffId).single()
-    if (pin !== (data?.pin || '1234')) {
-      setError(true)
-      setTimeout(() => { setCurrentPin(''); setError(false) }, 600)
-      toast.error('現在のPINが違います')
-    } else {
-      setStep('new')
-    }
+  // 現在PINの検証は最終保存時に changeStaffPin がサーバー側で行う。
+  // ここでブラウザに pin を取得させない（露出防止）ため、いったん次へ進める。
+  function verifyCurrentPin(_pin: string) {
+    setStep('new')
   }
 
   function verifyNewPin(pin: string) {
@@ -69,9 +65,15 @@ function SettingsContent() {
       return
     }
     setLoading(true)
-    await supabase.from('staff').update({ pin: newPin }).eq('id', staffId)
-    toast.success('PINを変更しました！')
+    const res = await changeStaffPin(staffId, currentPin, newPin)
     setLoading(false)
+    if (!res.ok) {
+      toast.error(res.error ?? 'PIN変更に失敗しました')
+      // 現在PIN誤りなら最初のステップへ戻す
+      setStep('current'); setCurrentPin(''); setNewPin(''); setConfirmPin('')
+      return
+    }
+    toast.success('PINを変更しました！')
     router.back()
   }
 

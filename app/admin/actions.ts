@@ -41,6 +41,23 @@ export async function logout(): Promise<void> {
   await clearAuthCookie()
 }
 
+// スタッフ本人のPIN変更。現在PINの検証も新PINの保存もサーバー側で行う
+// （以前はブラウザで pin 列を取得・比較・更新しており PIN が露出していた）。
+export async function changeStaffPin(
+  staffId: string,
+  currentPin: string,
+  newPin: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!/^\d{4}$/.test(newPin)) return { ok: false, error: 'PINは4桁の数字' }
+  const sb = await createClient()
+  const { data } = await sb.from('staff').select('pin').eq('id', staffId).single()
+  if (!data) return { ok: false, error: 'スタッフが見つかりません' }
+  if (currentPin !== (data.pin || '1234')) return { ok: false, error: '現在のPINが違います' }
+  const { error } = await sb.from('staff').update({ pin: newPin }).eq('id', staffId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
 export async function reportAbsence(shiftId: string, staffName: string, date: string, startTime: string, endTime: string): Promise<{ ok: boolean }> {
   const sb = await createClient()
   await sb.from('shifts').update({ status: 'absent' }).eq('id', shiftId)

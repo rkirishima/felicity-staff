@@ -179,7 +179,7 @@ export default function AdminStaffPage() {
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-stone-400">¥</span>
                       <input
-                        type="number"
+                        type="number" inputMode="numeric"
                         value={draft.hourly_rate ?? s.hourly_rate ?? 0}
                         onChange={e =>
                           setDraft(d => ({ ...d, hourly_rate: Number(e.target.value) }))

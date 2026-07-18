@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { buildAuthorizeUrl } from '@/lib/keiri/gmail'
+import { requireKeiri } from '@/lib/auth/server'
 
 export const runtime = 'nodejs'
 
@@ -7,6 +8,7 @@ export const runtime = 'nodejs'
 // Returns a redirect to Google's consent page. After user grants access,
 // Google redirects back to /api/keiri/gmail/oauth/callback?code=...&state=label
 export async function GET(req: Request): Promise<Response> {
+  const denied = await requireKeiri(); if (denied) return denied
   const url = new URL(req.url)
   const label = url.searchParams.get('label') || 'default'
   let authUrl: string

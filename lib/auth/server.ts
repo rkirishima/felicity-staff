@@ -47,3 +47,8 @@ export function requireAdmin(): Promise<Response | null> {
 export function requireKeiri(): Promise<Response | null> {
   return requireRole(['admin', 'accountant'])
 }
+
+// 認証済みなら誰でも可（staff 含む）。社内向けだが機微度の低い内部データ用。
+export function requireAuth(): Promise<Response | null> {
+  return requireRole(['admin', 'accountant', 'staff'])
+}

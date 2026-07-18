@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -75,7 +76,7 @@ export default function AnnouncementsPage() {
       await togglePublished(r.id, !r.published)
       setReload(n => n + 1)
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'failed')
+      toast.error(e instanceof Error ? e.message : 'failed')
     }
   }
 

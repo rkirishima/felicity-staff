@@ -217,7 +217,7 @@ export function AnnouncementForm({
       <div className="grid grid-cols-2 gap-2">
         <Field label="優先度" hint="大きい数字ほど上に表示">
           <input
-            type="number"
+            type="number" inputMode="numeric"
             value={form.priority}
             onChange={e => set('priority', parseInt(e.target.value, 10) || 0)}
             className="w-full bg-white rounded-xl px-3 py-2 text-sm border border-stone-200"

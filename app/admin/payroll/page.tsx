@@ -297,7 +297,7 @@ export default function PayrollPage() {
                 <div className="flex items-center gap-2">
                   <p className="flex-1 font-medium text-stone-700">{s.name}</p>
                   <span className="text-stone-400 text-sm">¥</span>
-                  <input type="number" value={editRate} onChange={e => setEditRate(e.target.value)}
+                  <input type="number" inputMode="numeric" value={editRate} onChange={e => setEditRate(e.target.value)}
                     className="w-24 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right text-stone-800 bg-white" />
                   <button onClick={() => saveRate(s.id)}
                     className="px-3 py-1.5 bg-stone-800 text-white rounded-lg text-xs">保存</button>

@@ -296,7 +296,7 @@ export default function AdminEventsPage() {
                   {form.floor_block && (
                     <div className="flex items-center gap-2 mt-2">
                       <label className="text-xs" style={{ color: '#78716c' }}>確保席数:</label>
-                      <input type="number" value={form.seats_blocked}
+                      <input type="number" inputMode="numeric" value={form.seats_blocked}
                         onChange={e => setForm({...form, seats_blocked: parseInt(e.target.value) || 0})}
                         className="w-16 px-2 py-1.5 rounded-lg text-sm text-center border"
                         style={{ backgroundColor: '#F5F0E8', borderColor: '#E8E0D4' }} />
@@ -310,14 +310,14 @@ export default function AdminEventsPage() {
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <label className="text-xs" style={{ color: '#78716c' }}>最低人数（開催決定）:</label>
-                  <input type="number" value={form.min_votes}
+                  <input type="number" inputMode="numeric" value={form.min_votes}
                     onChange={e => setForm({...form, min_votes: parseInt(e.target.value) || 3})}
                     min={1} className="w-14 px-2 py-1.5 rounded-lg text-sm text-center border"
                     style={{ backgroundColor: '#F5F0E8', borderColor: '#E8E0D4' }} />
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-xs" style={{ color: '#78716c' }}>定員（満員）:</label>
-                  <input type="number" value={form.max_attendees}
+                  <input type="number" inputMode="numeric" value={form.max_attendees}
                     onChange={e => setForm({...form, max_attendees: parseInt(e.target.value) || 0})}
                     min={0} className="w-14 px-2 py-1.5 rounded-lg text-sm text-center border"
                     style={{ backgroundColor: '#F5F0E8', borderColor: '#E8E0D4' }} />

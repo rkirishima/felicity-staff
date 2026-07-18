@@ -32,7 +32,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'TELEGRAM env not configured' }, { status: 500 })
   }
 
-  const payload = (await req.json()) as SupabaseWebhookPayload
+  let payload: SupabaseWebhookPayload
+  try {
+    payload = (await req.json()) as SupabaseWebhookPayload
+  } catch {
+    return NextResponse.json({ error: 'invalid JSON' }, { status: 400 })
+  }
   if (payload.type !== 'INSERT' || payload.table !== 'orders') {
     return NextResponse.json({ ok: true, skipped: true })
   }
@@ -54,7 +59,7 @@ export async function POST(req: Request) {
     '*商品:*',
     items || '-',
     '',
-    `💰 合計: ¥${o.amount.toLocaleString()}`,
+    `💰 合計: ¥${(o.amount ?? 0).toLocaleString()}`,
     o.shipping_address ? `\n📍 ${o.shipping_address}` : '',
   ].filter(Boolean).join('\n')
 

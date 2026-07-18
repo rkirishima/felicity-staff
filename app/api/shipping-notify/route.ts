@@ -9,9 +9,25 @@ const sb = createClient(
 )
 const resend = new Resend(process.env.RESEND_API_KEY!)
 
+// メールHTMLへ差し込む値のエスケープ（追跡番号・氏名・住所・商品名は外部入力/DB由来）
+function esc(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export async function POST(req: Request) {
   const _denied = await requireAdmin(); if (_denied) return _denied
-  const { orderId, trackingNumber } = await req.json()
+  let parsed: { orderId?: string; trackingNumber?: string }
+  try {
+    parsed = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'invalid JSON' }, { status: 400 })
+  }
+  const { orderId, trackingNumber } = parsed
   if (!orderId || !trackingNumber) {
     return NextResponse.json({ error: 'orderId and trackingNumber are required' }, { status: 400 })
   }
@@ -31,7 +47,7 @@ export async function POST(req: Request) {
   }
 
   const itemsList = Array.isArray(order.items)
-    ? order.items.map((i: { name: string; qty: number }) => `<li>${i.name} × ${i.qty}</li>`).join('')
+    ? order.items.map((i: { name: string; qty: number }) => `<li>${esc(i.name)} × ${esc(i.qty)}</li>`).join('')
     : ''
 
   // Send email FIRST. Only update DB if email succeeds — otherwise the order is
@@ -50,7 +66,7 @@ export async function POST(req: Request) {
     <p style="font-size: 13px; letter-spacing: 0.2em; color: #78716c; margin: 0;">FELICITY COFFEE ROASTERS</p>
   </div>
 
-  <p style="font-size: 15px; line-height: 1.7;">${order.customer_name} 様</p>
+  <p style="font-size: 15px; line-height: 1.7;">${esc(order.customer_name)} 様</p>
   <p style="font-size: 15px; line-height: 1.7;">
     この度はご注文いただきありがとうございます。<br>
     ご注文商品を発送いたしましたのでお知らせいたします。
@@ -58,20 +74,20 @@ export async function POST(req: Request) {
 
   <div style="background: #f5f0e8; border-radius: 8px; padding: 20px; margin: 24px 0;">
     <p style="font-size: 12px; color: #78716c; margin: 0 0 4px; letter-spacing: 0.1em;">追跡番号</p>
-    <p style="font-size: 22px; font-weight: bold; margin: 0; letter-spacing: 0.05em;">${trackingNumber}</p>
+    <p style="font-size: 22px; font-weight: bold; margin: 0; letter-spacing: 0.05em;">${esc(trackingNumber)}</p>
   </div>
 
   ${itemsList ? `
   <div style="margin: 24px 0;">
     <p style="font-size: 12px; color: #78716c; margin: 0 0 8px; letter-spacing: 0.1em;">ご注文内容</p>
     <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.8;">${itemsList}</ul>
-    <p style="font-size: 14px; margin: 8px 0 0; color: #555;">合計: ¥${order.amount.toLocaleString()}</p>
+    <p style="font-size: 14px; margin: 8px 0 0; color: #555;">合計: ¥${(order.amount ?? 0).toLocaleString()}</p>
   </div>
   ` : ''}
 
   <div style="margin: 24px 0;">
     <p style="font-size: 12px; color: #78716c; margin: 0 0 4px; letter-spacing: 0.1em;">お届け先</p>
-    <p style="font-size: 14px; line-height: 1.7; margin: 0;">${order.shipping_address}</p>
+    <p style="font-size: 14px; line-height: 1.7; margin: 0;">${esc(order.shipping_address)}</p>
   </div>
 
   <p style="font-size: 14px; line-height: 1.7; color: #555;">

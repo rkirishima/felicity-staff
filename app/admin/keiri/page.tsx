@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -135,13 +136,13 @@ export default function KeiriDashboard() {
       const res = await fetch(`/api/keiri/square-sync-month?month=${month}`)
       const data = await res.json()
       if (!res.ok) {
-        alert(`同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
+        toast.error(`同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
       } else {
-        alert(`同期完了: ${data.completed ?? 0}件 ¥${(data.monthTotal ?? 0).toLocaleString()}`)
+        toast.success(`同期完了: ${data.completed ?? 0}件 ¥${(data.monthTotal ?? 0).toLocaleString()}`)
         setReload(n => n + 1)
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : '同期失敗')
+      toast.error(e instanceof Error ? e.message : '同期失敗')
     } finally {
       setResyncing(false)
     }

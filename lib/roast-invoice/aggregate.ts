@@ -23,7 +23,9 @@ function adminClient() {
 
 /** その日付に有効な単価を返す(effective_from <= on_date のうち最新). */
 function priceFor(prices: BeanPriceRow[], onDate: Date): number | null {
-  const onIso = onDate.toISOString().slice(0, 10)
+  // JST基準で日付を取る。早朝JSTの焙煎がUTCで前日に落ち、価格改定境界で
+  // 旧単価を拾う不具合を防ぐ。
+  const onIso = new Date(onDate.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const candidates = prices
     .filter((p) => p.effective_from <= onIso)
     .sort((a, b) => (a.effective_from < b.effective_from ? 1 : -1))

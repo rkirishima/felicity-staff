@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
     const eff = (a.tax / a.gross) * 100
     let status: Row['status'] | null = null
     if (eff > 11) status = 'double_tax'
-    else if (eff < 1 && (a.configured_rate ?? 0) > 0) status = 'missing_tax'
+    else if (eff < 7 && (a.configured_rate ?? 0) > 0) status = 'missing_tax'
     else if (a.configured_rate !== null && Math.abs(eff - a.configured_rate) > 1.5 && eff > 1) status = 'rate_drift'
     if (status) {
       anomalies.push({

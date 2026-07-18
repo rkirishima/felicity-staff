@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { Suspense, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
@@ -145,12 +146,12 @@ function StripeInner() {
       const res = await fetch(`/api/keiri/stripe-sync-month?month=${month}`)
       const data = await res.json()
       if (!res.ok) {
-        alert(`同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
+        toast.error(`同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
       } else {
         setReload(n => n + 1)
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : '同期失敗')
+      toast.error(e instanceof Error ? e.message : '同期失敗')
     } finally {
       setSyncing(false)
     }
@@ -166,12 +167,12 @@ function StripeInner() {
       const res = await fetch(`/api/keiri/stripe-payouts-sync?from=${from}&to=${to}`)
       const data = await res.json()
       if (!res.ok) {
-        alert(`入金同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
+        toast.error(`入金同期失敗: ${data.error ?? 'unknown'}\n${data.detail ?? ''}`)
       } else {
         setReload(n => n + 1)
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : '入金同期失敗')
+      toast.error(e instanceof Error ? e.message : '入金同期失敗')
     } finally {
       setSyncingPayouts(false)
     }
