@@ -1,6 +1,6 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -52,11 +52,34 @@ function OperationsContent() {
   const initialType = (params.get('type') as 'opening' | 'closing') || 'opening'
   const [type, setType] = useState<'opening' | 'closing'>(initialType)
   const [checked, setChecked] = useState<Record<string, boolean>>({})
+  const [restored, setRestored] = useState(false)
   const [fridgeTemp, setFridgeTemp] = useState('')
   const [coldTableTemp, setColdTableTemp] = useState('')
   const [freezerTemp, setFreezerTemp] = useState('')
   const [tempSaved, setTempSaved] = useState(false)
   const supabase = createClient()
+
+  // チェック状態をJST日付ごとに localStorage へ保存。画面ロック・更新・タブ切替でも
+  // 進捗が消えないようにする（開店/閉店で最も使う画面）。日付が変われば自然にリセット。
+  const storageKey = `felicity_ops_${new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)}`
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (raw) setChecked(JSON.parse(raw))
+      // 古い日付の残骸を掃除
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith('felicity_ops_') && k !== storageKey) localStorage.removeItem(k)
+      }
+    } catch {}
+    setRestored(true)
+  }, [storageKey])
+  useEffect(() => {
+    if (!restored) return // 復元前の空stateで上書きしない
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(checked))
+    } catch {}
+  }, [checked, restored, storageKey])
 
   const items = type === 'opening' ? OPENING : CLOSING
   const doneCount = items.filter((_, i) => checked[`${type}-${i}`]).length
@@ -98,7 +121,7 @@ function OperationsContent() {
     <main className="min-h-screen p-4 max-w-lg mx-auto pb-24" style={{ backgroundColor: '#F5F0E8' }}>
       <div className="flex gap-2 mb-4">
         {(['opening', 'closing'] as const).map(t => (
-          <button key={t} onClick={() => { setType(t); setChecked({}) }}
+          <button key={t} onClick={() => setType(t)}
             className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${type === t ? 'bg-stone-800 text-white' : 'bg-white text-stone-500 shadow-sm'}`}>
             {t === 'opening' ? '🌅 オープン' : '🌙 クローズ'}
           </button>
@@ -120,7 +143,12 @@ function OperationsContent() {
           className="flex-1 py-2 bg-stone-800 text-white rounded-xl text-sm font-medium">
           ✅ 全部OK
         </button>
-        <button onClick={() => setChecked({})}
+        <button onClick={() => setChecked(prev => {
+            // 現在のタブ(opening/closing)の項目だけリセットし、もう一方の進捗は残す
+            const next = { ...prev }
+            items.forEach((_, i) => { delete next[`${type}-${i}`] })
+            return next
+          })}
           className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-500">
           リセット
         </button>

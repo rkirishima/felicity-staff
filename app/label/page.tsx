@@ -240,7 +240,7 @@ export default function LabelPrintPage() {
                 {entries.map(({ item, variation }) => {
                   const key: SelectedKey = `${item.itemId}__${variation.variationId}`
                   const isSelected = selected === key
-                  const badgeColor = variation.type === 'bean' ? 'bg-orange-500' : 'bg-blue-500'
+                  const badgeColor = variation.type === 'bean' ? 'bg-orange-500' : 'bg-teal-500'
                   const badgeLabel = variation.type === 'bean' ? '豆' : '粉'
 
                   return (
@@ -251,7 +251,7 @@ export default function LabelPrintPage() {
                         bg-stone-800 rounded-xl p-3 min-h-16 flex flex-col justify-center relative
                         border-2 transition-all active:scale-97
                         ${isSelected
-                          ? 'border-blue-500 bg-blue-900/20'
+                          ? 'border-teal-500 bg-teal-900/20'
                           : 'border-transparent active:bg-stone-700'
                         }
                       `}
@@ -289,7 +289,7 @@ export default function LabelPrintPage() {
           className={`
             w-full rounded-2xl py-4 text-lg font-semibold transition-all
             ${selected && !printing
-              ? 'bg-blue-500 text-white active:scale-98 shadow-lg shadow-blue-500/30'
+              ? 'bg-teal-500 text-white active:scale-98 shadow-lg shadow-teal-500/30'
               : 'bg-stone-700 text-stone-500'
             }
           `}

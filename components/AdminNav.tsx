@@ -9,10 +9,10 @@ const items = [
   { href: '/admin/reservations', label: '予約', icon: CalendarCheck },
   { href: '/admin/events', label: 'イベント', icon: Sparkles },
   { href: '/admin/shifts', label: 'シフト', icon: CalendarDays },
-  { href: '/admin/timeclock', label: 'タイムカード', icon: Clock },
+  { href: '/admin/timeclock', label: '打刻', icon: Clock },
   { href: '/inventory', label: '在庫', icon: Boxes },
   { href: '/label', label: 'ラベル', icon: Tag },
-  { href: '/admin/payroll', label: 'スタッフ', icon: Users },
+  { href: '/admin/payroll', label: '給与', icon: Users },
 ]
 
 export default function AdminNav() {
