@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
+import { LoadError } from '@/components/keiri/LoadError'
 
 function thisMonthJST(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
@@ -93,6 +94,7 @@ function StripeInner() {
   const [orderCount, setOrderCount] = useState<number>(0)
   const [payouts, setPayouts] = useState<PayoutRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncingPayouts, setSyncingPayouts] = useState(false)
   const [reload, setReload] = useState(0)
@@ -109,6 +111,7 @@ function StripeInner() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
+      setLoadErr(null)
       const [liRes, ordRes, poRes] = await Promise.all([
         supabase
           .from('keiri_stripe_line_items')
@@ -130,6 +133,8 @@ function StripeInner() {
           .order('arrival_date', { ascending: false }),
       ])
       if (cancelled) return
+      const firstErr = [liRes, ordRes, poRes].map(r => r?.error).find(Boolean)
+      setLoadErr(firstErr ? firstErr.message : null)
       setItems((liRes.data ?? []) as LineItem[])
       const ord = (ordRes.data ?? []) as { amount: number }[]
       setOrderTotal(ord.reduce((s, o) => s + (o.amount || 0), 0))
@@ -219,6 +224,8 @@ function StripeInner() {
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">Stripe (EC) 売上</h1>
           <div className="w-12" />
         </div>
+
+        <LoadError message={loadErr} />
 
         <div className="flex items-center gap-2">
           <select

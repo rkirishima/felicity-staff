@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { effectiveRevenueCategory, type RevenueCategory } from '@/lib/keiri/classifyRevenue'
+import { LoadError } from '@/components/keiri/LoadError'
 
 function todayJST() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -53,6 +54,7 @@ export default function KeiriDashboard() {
   const [squareError, setSquareError] = useState<string | null>(null)
   const [resyncing, setResyncing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
 
   const isCurrentMonth = month === thisMonthJST()
@@ -69,6 +71,7 @@ export default function KeiriDashboard() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
+      setLoadErr(null)
       const [incRes, expRes, pendBankRes, pendInvRes, sqLinesRes, ovRes, poRes] = await Promise.all([
         supabase
           .from('keiri_income_view')
@@ -105,6 +108,8 @@ export default function KeiriDashboard() {
           .order('completed_at'),
       ])
       if (cancelled) return
+      const firstErr = [incRes, expRes, pendBankRes, pendInvRes, sqLinesRes, ovRes, poRes].map(r => r?.error).find(Boolean)
+      setLoadErr(firstErr ? firstErr.message : null)
       setIncome((incRes.data ?? []) as IncomeRow[])
       setExpenses((expRes.data ?? []) as ExpenseRow[])
       setPendingBank((pendBankRes.data ?? []) as PendingRow[])
@@ -253,6 +258,8 @@ export default function KeiriDashboard() {
             ))}
           </select>
         </div>
+
+        <LoadError message={loadErr} />
 
         {loading ? (
           <p className="text-center text-stone-400 text-sm py-12">読み込み中...</p>

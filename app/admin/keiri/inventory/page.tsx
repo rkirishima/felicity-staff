@@ -13,6 +13,7 @@ import {
   type Category,
   type InventoryInput,
 } from './actions'
+import { LoadError } from '@/components/keiri/LoadError'
 
 type Row = {
   id: string
@@ -65,6 +66,7 @@ export default function InventoryPage() {
   const [snapshotDate, setSnapshotDate] = useState(thisMonthEndJST())
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
 
   // Add-form state
@@ -88,13 +90,15 @@ export default function InventoryPage() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const { data } = await supabase
+      setLoadErr(null)
+      const { data, error } = await supabase
         .from('keiri_inventory_snapshots')
         .select('id, snapshot_date, item_name, category, unit_price, quantity, unit, note')
         .eq('snapshot_date', snapshotDate)
         .order('category')
         .order('item_name')
       if (cancelled) return
+      setLoadErr(error ? error.message : null)
       setRows((data ?? []) as Row[])
       setLoading(false)
     })()
@@ -212,6 +216,8 @@ export default function InventoryPage() {
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">月末在庫</h1>
           <div className="w-12" />
         </div>
+
+        <LoadError message={loadErr} />
 
         <select
           value={snapshotDate}

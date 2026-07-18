@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { MonthSelector } from '@/components/keiri/MonthSelector'
+import { LoadError } from '@/components/keiri/LoadError'
 
 type Row = {
   id: string
@@ -30,6 +31,7 @@ export default function ExpensesPage() {
   const [month, setMonth] = useState(thisMonthJST())
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -42,13 +44,15 @@ export default function ExpensesPage() {
     const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
     ;(async () => {
       setLoading(true)
-      const { data } = await supabase
+      setLoadErr(null)
+      const { data, error } = await supabase
         .from('keiri_transactions')
         .select('id, date, amount, vendor, payment_method, memo, source, category:keiri_categories(name)')
         .eq('type', 'expense')
         .gte('date', start)
         .lt('date', next)
         .order('date', { ascending: false })
+      setLoadErr(error ? error.message : null)
       setRows((data ?? []) as unknown as Row[])
       setLoading(false)
     })()
@@ -80,6 +84,8 @@ export default function ExpensesPage() {
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">経費明細</h1>
           <span className="w-10" />
         </div>
+
+        <LoadError message={loadErr} />
 
         <MonthSelector value={month} onChange={setMonth} />
 

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { effectiveRevenueCategory, type RevenueCategory } from '@/lib/keiri/classifyRevenue'
+import { LoadError } from '@/components/keiri/LoadError'
 
 function thisMonthJST(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
@@ -99,6 +100,7 @@ function SquareSalesInner() {
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [monthTotalCached, setMonthTotalCached] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncingPayouts, setSyncingPayouts] = useState(false)
   const [reload, setReload] = useState(0)
@@ -118,6 +120,7 @@ function SquareSalesInner() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
+      setLoadErr(null)
       const [pRes, mrRes, liRes, ovRes, poRes] = await Promise.all([
         supabase
           .from('keiri_square_payments')
@@ -148,6 +151,8 @@ function SquareSalesInner() {
           .order('completed_at', { ascending: false }),
       ])
       if (cancelled) return
+      const firstErr = [pRes, mrRes, liRes, ovRes, poRes].map(r => r?.error).find(Boolean)
+      setLoadErr(firstErr ? firstErr.message : null)
       setPayments((pRes.data ?? []) as Payment[])
       setLineItems((liRes.data ?? []) as LineItem[])
       const ovMap = new Map<string, RevenueCategory>()
@@ -381,6 +386,8 @@ function SquareSalesInner() {
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">Square 売上</h1>
           <div className="w-12" />
         </div>
+
+        <LoadError message={loadErr} />
 
         <div className="flex items-center gap-2">
           <select

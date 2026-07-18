@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { effectiveRevenueCategory, type RevenueCategory } from '@/lib/keiri/classifyRevenue'
+import { LoadError } from '@/components/keiri/LoadError'
 
 function thisMonthJST(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
@@ -66,6 +67,7 @@ export default function TaxReportPage() {
   const [month, setMonth] = useState(thisMonthJST())
   const [preview, setPreview] = useState<Preview | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
 
   useEffect(() => {
     if (!getAdminSession()) router.replace('/admin')
@@ -75,6 +77,7 @@ export default function TaxReportPage() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
+      setLoadErr(null)
       const start = `${month}-01`
       const [y, m] = month.split('-').map(s => parseInt(s, 10))
       const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
@@ -120,6 +123,9 @@ export default function TaxReportPage() {
           .order('arrival_date'),
       ])
       if (cancelled) return
+
+      const firstErr = [sqRes, stripeRes, invRes, expRes, bankRes, ordRes, ovRes, inventoryRes, sqPayoutRes, stPayoutRes].map(r => r?.error).find(Boolean)
+      setLoadErr(firstErr ? firstErr.message : null)
 
       const overrides = new Map<string, RevenueCategory>()
       for (const o of (ovRes?.data ?? []) as { item_name: string; revenue_category: string }[]) {
@@ -181,6 +187,8 @@ export default function TaxReportPage() {
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">税理士コーナー</h1>
           <div className="w-12" />
         </div>
+
+        <LoadError message={loadErr} />
 
         <select
           value={month}

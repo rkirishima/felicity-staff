@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { deleteInvoice, markInvoicePaid } from '@/app/admin/keiri/invoices/actions'
 import { MonthSelector } from '@/components/keiri/MonthSelector'
+import { LoadError } from '@/components/keiri/LoadError'
 
 type Status = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 type Tab = 'all' | Status
@@ -65,6 +66,7 @@ function InvoicesListInner() {
   const [month, setMonth] = useState<string>(thisMonthJST())
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [acting, setActing] = useState<string | null>(null)
 
@@ -79,16 +81,18 @@ function InvoicesListInner() {
 
   async function load() {
     setLoading(true)
+    setLoadErr(null)
     const start = `${month}-01`
     const [y, m] = month.split('-').map(s => parseInt(s, 10))
     const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('keiri_invoices')
       .select('id, invoice_number, status, issuer, issue_date, due_date, total, client:keiri_clients(name)')
       .gte('issue_date', start)
       .lt('issue_date', next)
       .order('issue_date', { ascending: false })
       .order('invoice_number', { ascending: false })
+    setLoadErr(error ? error.message : null)
     setRows((data ?? []) as unknown as Row[])
     setLoading(false)
   }
@@ -169,6 +173,8 @@ function InvoicesListInner() {
           <h1 className="text-lg font-semibold tracking-wider text-stone-800">請求書</h1>
           <Link href="/admin/keiri/invoices/new" className="text-sm text-stone-700">+ 新規</Link>
         </div>
+
+        <LoadError message={loadErr} />
 
         <div className="flex items-center gap-3">
           <div className="flex-1">

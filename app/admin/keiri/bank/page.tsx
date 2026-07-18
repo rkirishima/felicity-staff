@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { MonthSelector } from '@/components/keiri/MonthSelector'
+import { LoadError } from '@/components/keiri/LoadError'
 import { aiClassifyAllUnmatchedBank, updateBankRowCategory } from './actions'
 
 function thisMonthJST() {
@@ -39,6 +40,7 @@ export default function BankPage() {
   const [txs, setTxs] = useState<Tx[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
   const [reload, setReload] = useState(0)
 
@@ -53,6 +55,7 @@ export default function BankPage() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
+      setLoadErr(null)
       const [txRes, catRes] = await Promise.all([
         supabase
           .from('keiri_bank_transactions')
@@ -68,6 +71,8 @@ export default function BankPage() {
           .order('sort_order'),
       ])
       if (cancelled) return
+      const firstErr = [txRes, catRes].map(r => r?.error).find(Boolean)
+      setLoadErr(firstErr ? firstErr.message : null)
       setTxs((txRes.data ?? []) as Tx[])
       setCategories((catRes.data ?? []) as Category[])
       setLoading(false)
@@ -140,6 +145,8 @@ export default function BankPage() {
             + CSV取込
           </Link>
         </div>
+
+        <LoadError message={loadErr} />
 
         <MonthSelector value={month} onChange={setMonth} />
 

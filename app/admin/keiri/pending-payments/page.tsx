@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { markInvoicePaid } from '@/app/admin/keiri/invoices/actions'
 import { markOrderPaid } from './actions'
+import { LoadError } from '@/components/keiri/LoadError'
 
 type InvoiceRow = {
   id: string
@@ -39,11 +40,13 @@ export default function PendingPaymentsPage() {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [working, setWorking] = useState<string | null>(null)
   const [resyncing, setResyncing] = useState(false)
 
   const load = async () => {
     setLoading(true)
+    setLoadErr(null)
     const [invRes, ordRes] = await Promise.all([
       supabase
         .from('keiri_invoices')
@@ -56,6 +59,8 @@ export default function PendingPaymentsPage() {
         .eq('status', 'pending_bank_transfer')
         .order('created_at', { ascending: false }),
     ])
+    const firstErr = [invRes, ordRes].map(r => r?.error).find(Boolean)
+    setLoadErr(firstErr ? firstErr.message : null)
     setInvoices((invRes.data ?? []) as unknown as InvoiceRow[])
     setOrders((ordRes.data ?? []) as OrderRow[])
     setLoading(false)
@@ -137,6 +142,8 @@ export default function PendingPaymentsPage() {
             {resyncing ? '同期中…' : '🔄 Square再同期'}
           </button>
         </div>
+
+        <LoadError message={loadErr} />
 
         <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
           <p className="text-xs text-amber-700 tracking-wider">🔶 合計</p>

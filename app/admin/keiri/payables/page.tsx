@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { markPaid, markCancelled, reopenPayable, deletePayable, type PaidVia } from './actions'
+import { LoadError } from '@/components/keiri/LoadError'
 
 type Row = {
   id: string
@@ -42,6 +43,7 @@ export default function PayablesPage() {
   const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('pending')
   const [search, setSearch] = useState('')
   const [reload, setReload] = useState(0)
@@ -54,11 +56,13 @@ export default function PayablesPage() {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const { data } = await supabase
+      setLoadErr(null)
+      const { data, error } = await supabase
         .from('keiri_payables')
         .select('id, vendor, description, amount, invoice_number, order_date, due_date, status, paid_at, paid_amount, paid_via, notes, source, invoice_file_path')
         .order('due_date', { ascending: true })
       if (cancelled) return
+      setLoadErr(error ? error.message : null)
       setRows((data ?? []) as Row[])
       setLoading(false)
     })()
@@ -156,6 +160,8 @@ export default function PayablesPage() {
             + 追加
           </Link>
         </div>
+
+        <LoadError message={loadErr} />
 
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-white rounded-2xl shadow-sm p-3">
