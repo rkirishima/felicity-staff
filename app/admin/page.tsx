@@ -17,7 +17,11 @@ export default function AdminPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    if (getAdminSession()) setUnlocked(true)
+    // proxy が cookie 不在でここへ戻した場合(?next= 付き)は、localStorage が
+    // 残っていても必ずPIN再入力させる。さもないと cookie を取得できず、
+    // 保護ページへ入るたびに /admin へ跳ね返される無限ループになる。
+    const bounced = new URLSearchParams(window.location.search).has('next')
+    if (!bounced && getAdminSession()) setUnlocked(true)
   }, [])
 
   useEffect(() => {
