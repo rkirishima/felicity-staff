@@ -81,7 +81,10 @@ export async function GET(req: Request) {
 
       const [sh, sm] = shift.start_time.split(':').map(Number)
       const [eh, em] = shift.end_time.split(':').map(Number)
-      const scheduledH = (eh * 60 + em - sh * 60 - sm) / 60
+      // 終業<始業は日跨ぎシフト。24h 足して負のscheduledHによる誤アラートを防ぐ
+      let schedMin = eh * 60 + em - (sh * 60 + sm)
+      if (schedMin < 0) schedMin += 24 * 60
+      const scheduledH = schedMin / 60
 
       const diff = Math.abs(actualH - scheduledH)
       if (diff > DIFF_THRESHOLD_H) {
