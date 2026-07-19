@@ -563,6 +563,12 @@ export default function KeiriDashboard() {
                 🏷 商品分類（未分類SKUの手動分類）
               </Link>
               <Link
+                href="/admin/keiri/square-taxes"
+                className="bg-white border border-stone-200 text-stone-700 py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
+              >
+                🧾 Square税設定（標準10%/軽減8%の一括割り当て）
+              </Link>
+              <Link
                 href="/admin/keiri/payables"
                 className="bg-amber-700 text-white py-4 rounded-2xl text-center text-sm font-medium shadow-sm col-span-2"
               >
