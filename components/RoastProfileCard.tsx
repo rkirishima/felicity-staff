@@ -33,12 +33,13 @@ type Profile = {
   gas_plan: string | null
   watchouts: string | null
   evidence: string | null
-  confidence: 'measured' | 'trial' | 'estimated'
+  confidence: 'measured' | 'thin' | 'trial' | 'estimated'
   confidence_rank: number
 }
 
 const CONF: Record<Profile['confidence'], { label: string; text: string; bg: string }> = {
   measured:  { label: '実測ベース', text: '#5eead4', bg: 'rgba(20,184,166,0.14)' },
+  thin:      { label: '実測(僅少)', text: '#7dd3fc', bg: 'rgba(56,189,248,0.14)' },
   trial:     { label: 'トライアル', text: '#fcd34d', bg: 'rgba(245,158,11,0.14)' },
   estimated: { label: '旧推定値',   text: '#a8a29e', bg: 'rgba(168,162,158,0.12)' },
 }
@@ -84,13 +85,18 @@ export function RoastProfileCard({
   if (!beanId) return null
   if (loading) return <div className="rounded-lg p-3 text-xs text-stone-500" style={{ backgroundColor: '#1c1917', border: '1px solid #3f3f3f' }}>プロファイル検索中...</div>
 
-  // 用途が一致するものを優先、無ければ omni、それも無ければ全部から。
-  // そのうえで バッチサイズが最も近く、信頼度が高いものを選ぶ。
+  // 用途が一致するものがあればそれだけ。無ければ全件から信頼度順で選ぶ
+  // （omni だけに絞ると、数値のある実測ドリップより数値の無い旧推定omniが
+  //   勝ってしまう）。用途が違う場合は下に警告を出す。
   const byUse = rows.filter((r) => r.use_case === useCase)
-  const pool = byUse.length ? byUse : (rows.filter((r) => r.use_case === 'omni').length ? rows.filter((r) => r.use_case === 'omni') : rows)
+  const pool = byUse.length ? byUse : rows
+
+  // 信頼度を最優先する。バッチサイズが近いことより、その数字が実際の焙煎から
+  // 出ていることのほうが大事（旧推定にはガス・ファンの数値が無い）。
+  // バッチが違う場合は下に警告を出すので、黙って使われることはない。
   const p = [...pool].sort((a, b) =>
-    Math.abs(a.batch_kg - greenKg) - Math.abs(b.batch_kg - greenKg)
-    || a.confidence_rank - b.confidence_rank
+    a.confidence_rank - b.confidence_rank
+    || Math.abs(a.batch_kg - greenKg) - Math.abs(b.batch_kg - greenKg)
   )[0]
 
   if (!p) return (
@@ -103,6 +109,11 @@ export function RoastProfileCard({
   const n = sampleCount(p.evidence)
   const batchMismatch = Math.abs(p.batch_kg - greenKg) >= 0.5
   const useMismatch = p.use_case !== useCase
+
+  const gas = [p.gas_charge_pct, p.gas_dry_end_pct, p.gas_fc_pct, p.gas_drop_pct]
+  const fan = [p.fan_charge_pct, p.fan_fc_pct, p.fan_drop_pct]
+  const hasGas = gas.some((v) => v != null)
+  const hasFan = fan.some((v) => v != null)
 
   return (
     <div className="rounded-lg p-3 space-y-2.5" style={{ backgroundColor: '#1c1917', border: '1px solid #44403c' }}>
@@ -131,24 +142,33 @@ export function RoastProfileCard({
         <Cell label="DTR" value={p.dtr_pct ? `${p.dtr_pct}%` : '—'} sub={p.weight_loss_pct ? `歩留 ${p.weight_loss_pct}%` : undefined} />
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-[11px]">
-        <div className="rounded px-2 py-1.5 flex items-center gap-1.5" style={{ backgroundColor: '#292524' }}>
-          <Flame size={12} className="text-orange-400 shrink-0" />
-          <span className="text-stone-300 tabular-nums">
-            {[p.gas_charge_pct, p.gas_dry_end_pct, p.gas_fc_pct, p.gas_drop_pct].map((v) => v ?? '—').join('→')}
-          </span>
+      {hasGas || hasFan || p.drum_pct != null ? (
+        <div className="grid grid-cols-3 gap-2 text-[11px]">
+          <div className="rounded px-2 py-1.5 flex items-center gap-1.5" style={{ backgroundColor: '#292524' }}>
+            <Flame size={12} className="text-orange-400 shrink-0" />
+            <span className="text-stone-300 tabular-nums">
+              {hasGas ? gas.map((v) => v ?? '?').join('→') : <span className="text-stone-600">記録なし</span>}
+            </span>
+          </div>
+          <div className="rounded px-2 py-1.5 flex items-center gap-1.5" style={{ backgroundColor: '#292524' }}>
+            <Wind size={12} className="text-sky-400 shrink-0" />
+            <span className="text-stone-300 tabular-nums">
+              {hasFan ? fan.map((v) => v ?? '?').join('→') : <span className="text-stone-600">記録なし</span>}
+            </span>
+          </div>
+          <div className="rounded px-2 py-1.5 flex items-center gap-1.5" style={{ backgroundColor: '#292524' }}>
+            <RotateCw size={12} className="text-stone-400 shrink-0" />
+            <span className="text-stone-300 tabular-nums">
+              {p.drum_pct != null ? `ドラム ${p.drum_pct}` : <span className="text-stone-600">ドラム 記録なし</span>}
+            </span>
+          </div>
         </div>
-        <div className="rounded px-2 py-1.5 flex items-center gap-1.5" style={{ backgroundColor: '#292524' }}>
-          <Wind size={12} className="text-sky-400 shrink-0" />
-          <span className="text-stone-300 tabular-nums">
-            {[p.fan_charge_pct, p.fan_fc_pct, p.fan_drop_pct].map((v) => v ?? '—').join('→')}
-          </span>
-        </div>
-        <div className="rounded px-2 py-1.5 flex items-center gap-1.5" style={{ backgroundColor: '#292524' }}>
-          <RotateCw size={12} className="text-stone-400 shrink-0" />
-          <span className="text-stone-300 tabular-nums">ドラム {p.drum_pct ?? '—'}</span>
-        </div>
-      </div>
+      ) : (
+        <p className="text-[11px] text-amber-300/80 leading-relaxed">
+          この豆はまだ実測データが無く、ガス・ファン・ドラムの数値がありません。
+          下の文章を目安にして、焼いた結果を記録してください（次回から実測値が出ます）。
+        </p>
+      )}
 
       <div className="text-[11px] text-stone-500 flex gap-3">
         <span>ドライエンド {p.dry_end ?? '—'}{p.dry_end_temp_c ? ` / ${p.dry_end_temp_c}°` : ''}</span>
