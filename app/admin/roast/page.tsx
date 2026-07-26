@@ -1,21 +1,20 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import { useIsAdmin } from '@/lib/admin-context'
-import { getSession } from '@/lib/session'
+import { useIsStaff } from '@/lib/use-is-staff'
 import { toast } from 'sonner'
-import { Flame, Trash2, Coffee, Thermometer, Lightbulb, AlertTriangle } from 'lucide-react'
-import {
-  profileFor,
-  profilesForBean,
-  chargeTempFor,
-  heatMethodJa,
-  ROAST_LEVEL_LABELS,
-  type RoastLevel,
-} from '@/lib/roast-profiles'
+import { Flame, Trash2, Coffee } from 'lucide-react'
+import { ROAST_LEVEL_LABELS, type RoastLevel } from '@/lib/roast-profiles'
+import { RoastProfileCard, type UseCase } from '@/components/RoastProfileCard'
+
+const USE_CASES: { key: UseCase; label: string }[] = [
+  { key: 'drip', label: 'ドリップ' },
+  { key: 'espresso', label: 'エスプレッソ' },
+]
+const LEVELS: RoastLevel[] = ['light', 'city', 'medium', 'dark']
 
 type Bean = {
   id: string
@@ -61,9 +60,8 @@ function fmtJST(iso: string): string {
 
 export default function RoastPage() {
   const supabase = createClient()
-  const router = useRouter()
   const isAdmin = useIsAdmin()
-  const [isStaff, setIsStaff] = useState(false)
+  const isStaff = useIsStaff()
 
   const [beans, setBeans] = useState<Bean[]>([])
   const [logs, setLogs] = useState<RoastLog[]>([])
@@ -73,40 +71,22 @@ export default function RoastPage() {
   // フォーム状態
   const [beanId, setBeanId] = useState('')
   const [roastLevel, setRoastLevel] = useState<RoastLevel | ''>('')
+  const [useCase, setUseCase] = useState<UseCase>('espresso')
   const [datetime, setDatetime] = useState(nowJSTLocal())
   const [greenKg, setGreenKg] = useState('')
   const [roastedKg, setRoastedKg] = useState('')
   const [machine, setMachine] = useState(MACHINES[0])
   const [notes, setNotes] = useState('')
-
-  // 豆選択時に利用可能なローストレベルから最初のものを自動選択
-  useEffect(() => {
-    if (!beanId) { setRoastLevel(''); return }
-    const profiles = profilesForBean(beanId)
-    if (profiles.length > 0) {
-      // 既存のレベルが選択中の豆にあればそれを保持、無ければ最初のもの
-      const cur = profiles.find((p) => p.roast_level === roastLevel)
-      if (!cur) setRoastLevel(profiles[0].roast_level)
-    } else {
-      setRoastLevel('')
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [beanId])
-
-  useEffect(() => {
-    setIsStaff(!!getSession())
-  }, [])
+  const [monthStats, setMonthStats] = useState({ batches: 0, kg: 0 })
 
   const hasAccess = isAdmin || isStaff
 
-  useEffect(() => {
-    if (!hasAccess) return
-    load()
-  }, [hasAccess])
-
-  async function load() {
-    setLoading(true)
-    const [{ data: beansData }, { data: logsData }] = await Promise.all([
+  const load = useCallback(async () => {
+    // 今月の集計は「読み込んだ20件」からではなく DB 側で数える。
+    // 20件から数えると、月に20バッチを超えた時点で過少カウントになる。
+    const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    const monthStart = new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), 1) - 9 * 60 * 60 * 1000)
+    const [{ data: beansData }, { data: logsData }, { data: monthData }] = await Promise.all([
       supabase
         .from('roast_beans')
         .select('id, display_name, origin_country, active')
@@ -117,28 +97,21 @@ export default function RoastPage() {
         .select('id, roasted_at, bean_id, bean_raw, green_kg, roasted_kg, machine, notes, source, roast_beans(display_name)')
         .order('roasted_at', { ascending: false })
         .limit(20),
+      supabase
+        .from('roast_logs')
+        .select('green_kg')
+        .gte('roasted_at', monthStart.toISOString()),
     ])
     setBeans((beansData as Bean[]) ?? [])
     setLogs((logsData as unknown as RoastLog[]) ?? [])
+    const m = (monthData as { green_kg: number }[]) ?? []
+    setMonthStats({ batches: m.length, kg: m.reduce((a, x) => a + Number(x.green_kg || 0), 0) })
     setLoading(false)
-  }
+  }, [supabase])
 
-  // 今月集計
-  const monthStats = useMemo(() => {
-    const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
-    const ymPrefix = jstNow.toISOString().slice(0, 7) // YYYY-MM (JST)
-    let batches = 0
-    let kg = 0
-    for (const l of logs) {
-      const ld = new Date(l.roasted_at)
-      const ldJst = new Date(ld.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
-      if (ldJst === ymPrefix) {
-        batches += 1
-        kg += Number(l.green_kg)
-      }
-    }
-    return { batches, kg }
-  }, [logs])
+  // load() は async で setState は必ず await 後に走る
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (hasAccess) load() }, [hasAccess, load])
 
   async function submit() {
     if (!beanId) return toast.error('豆を選択してください')
@@ -227,89 +200,54 @@ export default function RoastPage() {
             </select>
           </div>
 
-          {/* ローストレベル選択(豆選択時に表示) */}
-          {beanId && profilesForBean(beanId).length > 0 && (
+          {/* 用途 — どのプロファイルを引くかを決める */}
+          {beanId && (
             <div>
-              <label className="block text-xs text-stone-400 mb-1">ローストレベル</label>
+              <label className="block text-xs text-stone-400 mb-1">用途</label>
               <div className="flex flex-wrap gap-2">
-                {profilesForBean(beanId).map((p) => (
+                {USE_CASES.map((u) => (
                   <button
-                    key={p.roast_level}
+                    key={u.key}
                     type="button"
-                    onClick={() => setRoastLevel(p.roast_level)}
+                    onClick={() => setUseCase(u.key)}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                      roastLevel === p.roast_level
+                      useCase === u.key
                         ? 'bg-amber-600 text-white'
                         : 'bg-stone-900 text-stone-400 border border-stone-700 hover:border-amber-500'
                     }`}
                   >
-                    {ROAST_LEVEL_LABELS[p.roast_level]}
+                    {u.label}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* 焙煎プロファイル(豆 × レベル選択時に表示) */}
-          {(() => {
-            if (!beanId) return null
-            const p = profileFor(beanId, (roastLevel || undefined) as RoastLevel | undefined)
-            if (!p) return (
-              <div className="rounded-lg p-3 text-xs text-stone-400" style={{ backgroundColor: '#1c1917', border: '1px solid #3f3f3f' }}>
-                この豆のプロファイル未登録。経験値で焙煎してください。
+          {/* ローストレベル(記録用) */}
+          {beanId && (
+            <div>
+              <label className="block text-xs text-stone-400 mb-1">ローストレベル（記録用）</label>
+              <div className="flex flex-wrap gap-2">
+                {LEVELS.map((lv) => (
+                  <button
+                    key={lv}
+                    type="button"
+                    onClick={() => setRoastLevel(roastLevel === lv ? '' : lv)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      roastLevel === lv
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-stone-900 text-stone-400 border border-stone-700 hover:border-amber-500'
+                    }`}
+                  >
+                    {ROAST_LEVEL_LABELS[lv]}
+                  </button>
+                ))}
               </div>
-            )
-            const kgNum = Number(greenKg) || 1
-            const charge = chargeTempFor(p, kgNum)
-            return (
-              <div className="rounded-lg p-3 space-y-2" style={{ backgroundColor: '#1c1917', border: '1px solid #44403c' }}>
-                <div className="flex items-center gap-2 text-xs text-amber-400">
-                  <Thermometer size={14} />
-                  <span className="font-semibold tracking-wider">推奨プロファイル</span>
-                  <span className="ml-auto text-stone-500">{p.group}</span>
-                </div>
+            </div>
+          )}
 
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div className="bg-stone-900 rounded p-2">
-                    <p className="text-[10px] text-stone-500">CHARGE</p>
-                    <p className="text-base font-bold text-white">{charge}°C</p>
-                    <p className="text-[9px] text-stone-600">{kgNum}kg時</p>
-                  </div>
-                  <div className="bg-stone-900 rounded p-2">
-                    <p className="text-[10px] text-stone-500">FC</p>
-                    <p className="text-base font-bold text-white">{p.fc_c}°C</p>
-                  </div>
-                  <div className="bg-stone-900 rounded p-2">
-                    <p className="text-[10px] text-stone-500">DROP</p>
-                    <p className="text-base font-bold text-amber-400">{p.drop_c}°C</p>
-                  </div>
-                  <div className="bg-stone-900 rounded p-2">
-                    <p className="text-[10px] text-stone-500">TIME</p>
-                    <p className="text-base font-bold text-white">{p.total_time_min}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2 text-[10px]">
-                  <span className="px-2 py-0.5 rounded bg-blue-900 text-blue-200">熱量: {heatMethodJa(p.heat_method)}</span>
-                  <span className="px-2 py-0.5 rounded bg-stone-700 text-stone-300">ドラム: {p.drum_rpm} RPM</span>
-                  {p.soak && <span className="px-2 py-0.5 rounded bg-emerald-900 text-emerald-200">SOAK 60秒(CHARGE後30%)</span>}
-                  {p.drum_note && <span className="px-2 py-0.5 rounded bg-rose-900 text-rose-200">{p.drum_note}</span>}
-                </div>
-
-                <div className="text-xs text-stone-300 leading-relaxed">
-                  <span className="text-amber-400">🎯</span> {p.flavor}
-                </div>
-                <div className="text-xs text-stone-400 leading-relaxed">
-                  <Lightbulb size={12} className="inline text-amber-500 mr-1" />
-                  {p.strategy}
-                </div>
-                <div className="text-xs text-stone-300 leading-relaxed border-l-2 border-rose-700 pl-2">
-                  <AlertTriangle size={12} className="inline text-rose-400 mr-1" />
-                  {p.pro_tip}
-                </div>
-              </div>
-            )
-          })()}
+          {/* 推奨プロファイル — roast_profiles(DB) から取得 */}
+          <RoastProfileCard beanId={beanId} greenKg={Number(greenKg) || 1} useCase={useCase} />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
