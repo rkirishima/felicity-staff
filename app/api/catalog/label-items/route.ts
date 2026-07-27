@@ -83,6 +83,32 @@ const HARDCODED_DRIP_PACKS: LabelItem[] = [
       type: 'bean',
     }],
   },
+  // India Attikan — Squareカタログ未登録の新豆 (2026-07-27時点)。upcは擬似バーコード
+  // (200プレフィックス, 非POS)。Squareに print_label=yes で登録したらこのハードコードは削除する。
+  {
+    itemId: 'HARDCODED-INDIA-ATTIKAN',
+    name: 'India Attikan',
+    rawName: 'India Attikan',
+    category: 'retail',
+    variations: [
+      {
+        variationId: 'HARDCODED-INDIA-ATTIKAN-100',
+        sku: 'INA-100',
+        upc: '200731270100',
+        size: '100g',
+        price: 0,
+        type: 'bean',
+      },
+      {
+        variationId: 'HARDCODED-INDIA-ATTIKAN-200',
+        sku: 'INA-200',
+        upc: '200731270200',
+        size: '200g',
+        price: 0,
+        type: 'bean',
+      },
+    ],
+  },
 ]
 
 // Square uses full-width characters. Normalize to ASCII for display/matching.
