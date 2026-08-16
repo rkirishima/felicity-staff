@@ -50,6 +50,14 @@ function sampleCount(ev: string | null): number | null {
   return m ? Number(m[1]) : null
 }
 
+/** ガス・ファンの具体的な数値を持っているか（旧推定行は全てNULL） */
+function hasNumbers(p: Profile): boolean {
+  return [
+    p.gas_charge_pct, p.gas_dry_end_pct, p.gas_fc_pct, p.gas_drop_pct,
+    p.fan_charge_pct, p.fan_fc_pct, p.fan_drop_pct,
+  ].some((v) => v != null)
+}
+
 function Cell({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
     <div className="bg-stone-900 rounded p-2 text-center">
@@ -91,12 +99,19 @@ export function RoastProfileCard({
   const byUse = rows.filter((r) => r.use_case === useCase)
   const pool = byUse.length ? byUse : rows
 
-  // 信頼度を最優先する。バッチサイズが近いことより、その数字が実際の焙煎から
-  // 出ていることのほうが大事（旧推定にはガス・ファンの数値が無い）。
-  // バッチが違う場合は下に警告を出すので、黙って使われることはない。
+  // 並び順は「数値がある → バッチが近い → 信頼度が高い」。
+  //
+  // 以前は信頼度を最優先にしていたが、それだと同じ豆で 1kg の実測が 2kg の
+  // トライアルに勝ってしまい、2kg を焼いているのに 1kg 用の投入温度と
+  // ドロップ温度が出ていた（インド・アティカンで実際に発生）。投入温度と
+  // 1ハゼ時刻はバッチ量で必ずずれるので、バッチ一致を信頼度より優先する。
+  //
+  // ただし数値の有無だけは最優先で見る。旧推定(fable)行はガス・ファンが全て
+  // NULL で、バッチが近いという理由だけで選ばれると「記録なし」しか出せない。
   const p = [...pool].sort((a, b) =>
-    a.confidence_rank - b.confidence_rank
-    || Math.abs(a.batch_kg - greenKg) - Math.abs(b.batch_kg - greenKg)
+    Number(hasNumbers(b)) - Number(hasNumbers(a))
+    || Math.abs(Number(a.batch_kg) - greenKg) - Math.abs(Number(b.batch_kg) - greenKg)
+    || a.confidence_rank - b.confidence_rank
   )[0]
 
   if (!p) return (
