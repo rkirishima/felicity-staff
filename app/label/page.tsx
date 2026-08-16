@@ -39,6 +39,12 @@ const SIZE_GROUPS = [
   { label: '業販 1kg', min: 700, max: 10000 },
 ] as const
 
+type PrinterStatus = {
+  online: boolean
+  age_seconds?: number
+  pending_jobs?: number
+}
+
 export default function LabelPrintPage() {
   const [items, setItems] = useState<LabelItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +54,22 @@ export default function LabelPrintPage() {
   const [printing, setPrinting] = useState(false)
   const [message, setMessage] = useState('')
   const [skipped, setSkipped] = useState<Array<{ item: string; variation: string; reason: string }> | null>(null)
+  const [printerStatus, setPrinterStatus] = useState<PrinterStatus | null>(null)
   const router = useRouter()
+
+  // プリンタ(Pi)のハートビート監視 — 30秒ごと更新
+  useEffect(() => {
+    let cancelled = false
+    const check = () => {
+      fetch('/api/label-printer-status')
+        .then(r => r.ok ? r.json() : null)
+        .then(s => { if (!cancelled && s) setPrinterStatus(s) })
+        .catch(() => {})
+    }
+    check()
+    const t = setInterval(check, 30_000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [])
 
   const loadDiagnostics = async () => {
     try {
@@ -171,6 +192,26 @@ export default function LabelPrintPage() {
           🔍 表示されない商品
         </button>
       </div>
+
+      {/* Printer offline banner */}
+      {printerStatus && !printerStatus.online && (
+        <div className="bg-red-900/30 border-b border-red-800/40 px-4 py-3">
+          <p className="text-sm font-semibold text-red-300">
+            ⚠️ プリンタサーバーがオフラインです
+            {printerStatus.age_seconds != null && printerStatus.age_seconds > 60 && (
+              <span className="font-normal text-red-400/80">（最終応答 {Math.round(printerStatus.age_seconds / 60)}分前）</span>
+            )}
+          </p>
+          <p className="text-xs text-red-400/70 mt-0.5">
+            印刷はキューに溜まり、30分以内に復旧すれば自動で印刷されます。店頭のRaspberry Piを確認してください。
+          </p>
+        </div>
+      )}
+      {printerStatus?.online && (printerStatus.pending_jobs ?? 0) > 0 && (
+        <div className="bg-amber-900/20 border-b border-amber-800/30 px-4 py-2">
+          <p className="text-xs text-amber-300">印刷待ち: {printerStatus.pending_jobs}件</p>
+        </div>
+      )}
 
       {/* Diagnostics Panel */}
       {skipped !== null && (

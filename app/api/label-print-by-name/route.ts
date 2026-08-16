@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/keiri/serviceClient'
 
 // Resolves EC order item names (e.g. "El Salvador Finca La Fany 200g") to
 // Square catalog GTINs, then prints each via the Raspberry Pi. Called by the
 // felicity-web EC confirm-order flow so labels print the moment a payment
 // clears — same as ringing up a sale on POS.
 //
-// Input:  { items: [{ name: string, qty: number }] }
+// Input:  { items: [{ name: string, qty: number, grind?: 'whole'|'drip'|'espresso' }] }
 // Output: { printed: [...], skipped: [...] }
+//
+// grind controls the printed label type / expiry: whole bean → 'bean' (4-month
+// expiry), drip/espresso → 'powder' (2-month expiry). Same distinction the
+// in-store Square POS "挽き方" modifier feeds to the Pi.
 
 const PRINT_LABEL_ATTR_ID = 'X3QZMB3JYOIRV65E4ASKJQJF'
 
@@ -44,12 +49,11 @@ export async function POST(request: Request) {
   }
 
   const squareToken = process.env.SQUARE_ACCESS_TOKEN
-  const printerUrl = process.env.PRINTER_URL
-  if (!squareToken || !printerUrl) {
-    return NextResponse.json({ error: 'SQUARE_ACCESS_TOKEN or PRINTER_URL not configured' }, { status: 503 })
+  if (!squareToken) {
+    return NextResponse.json({ error: 'SQUARE_ACCESS_TOKEN not configured' }, { status: 503 })
   }
 
-  let body: { items?: Array<{ name: string; qty: number }> }
+  let body: { items?: Array<{ name: string; qty: number; grind?: 'whole' | 'drip' | 'espresso' }> }
   try {
     body = await request.json()
   } catch {
@@ -165,27 +169,26 @@ export async function POST(request: Request) {
       .replace(/　/g, ' ')
       .trim()
 
+    // Supabase キューへ投入 — Pi の felicity-queue poller が印刷する。
+    // "printed" のキー名は felicity-web (EC) 側の互換のため維持 (実態は queued)。
     try {
-      const printRes = await fetch(`${printerUrl}/label_print`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const supabase = createServiceClient()
+      const { error } = await supabase.from('label_print_jobs').insert({
+        payload: {
           product_name: displayName,
+          // whole bean → 'bean' (4-month expiry); ground → 'powder' (2-month).
+          type: item.grind && item.grind !== 'whole' ? 'powder' : 'bean',
           size,
-          type: 'bean',  // EC sells whole bean only
           gtin,
           quantity: qty,
           category,
-        }),
+        },
+        source: 'ec',
       })
-      if (!printRes.ok) {
-        const err = await printRes.json().catch(() => ({}))
-        skipped.push({ name: item.name, reason: `printer error: ${JSON.stringify(err)}` })
-        continue
-      }
+      if (error) throw error
       printed.push({ name: item.name, gtin, qty })
     } catch (err) {
-      skipped.push({ name: item.name, reason: `printer unreachable: ${String(err)}` })
+      skipped.push({ name: item.name, reason: `queue insert failed: ${String(err)}` })
     }
   }
 

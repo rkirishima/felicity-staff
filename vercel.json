@@ -4,6 +4,10 @@
   ],
   "crons": [
     {
+      "path": "/api/cron/label-printer-monitor",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/monthly-roast-invoice",
       "schedule": "0 0 1 * *"
     },
