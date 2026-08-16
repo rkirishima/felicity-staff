@@ -325,7 +325,7 @@ export default function RoastPage() {
               </div>
               <input
                 type="number"
-                step="0.1"
+                step="0.01"
                 inputMode="decimal"
                 value={greenKg}
                 onChange={(e) => setGreenKg(e.target.value)}
@@ -335,13 +335,15 @@ export default function RoastPage() {
             </div>
             <div>
               <label className="block text-xs text-stone-400 mb-1">焙煎後 (kg、任意)</label>
+              {/* 歩留まりは1g単位の差が効くので step は 0.01。0.1 だと 1.67 が
+                  ブラウザのバリデーションで弾かれたり、スピナーが 1.7 に丸める。 */}
               <input
                 type="number"
-                step="0.1"
+                step="0.01"
                 inputMode="decimal"
                 value={roastedKg}
                 onChange={(e) => setRoastedKg(e.target.value)}
-                placeholder="2.9"
+                placeholder="1.67"
                 className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-base border border-stone-700 focus:border-amber-500 focus:outline-none"
               />
             </div>
@@ -383,8 +385,11 @@ export default function RoastPage() {
                     {l.roast_beans?.display_name ?? l.bean_raw ?? l.bean_id}
                   </p>
                   <p className="text-xs text-stone-400">
-                    {fmtJST(l.roasted_at)} · {Number(l.green_kg).toFixed(1)}kg
-                    {l.roasted_kg ? ` → ${Number(l.roasted_kg).toFixed(1)}kg` : ''}
+                    {fmtJST(l.roasted_at)} · {Number(l.green_kg).toFixed(2)}kg
+                    {l.roasted_kg ? ` → ${Number(l.roasted_kg).toFixed(2)}kg` : ''}
+                    {l.roasted_kg && Number(l.green_kg) > 0
+                      ? ` (歩留損失 ${((1 - Number(l.roasted_kg) / Number(l.green_kg)) * 100).toFixed(1)}%)`
+                      : ''}
                     {l.machine ? ` · ${l.machine}` : ''}
                   </p>
                   {l.notes && <p className="text-xs text-stone-500 mt-1">{l.notes}</p>}
