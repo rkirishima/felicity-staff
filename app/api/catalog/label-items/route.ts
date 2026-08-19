@@ -85,42 +85,48 @@ const HARDCODED_DRIP_PACKS: LabelItem[] = [
   },
 ]
 
-// 卸専用サイズ — Square の既存アイテムに「バリエーションだけ」足す。
+// 業販用 1kg — 豆のアイテム全部に自動で足す。
 //
-// Square に 1kg を登録すると価格付きの商品としてレジにも並んでしまうが、1kg は
-// 卸専用で店頭では売らない (Rowly 2026-08-18)。ラベルに価格は印字されないので
-// price は 0 のままで問題ない。バーコードは GS1 の番号を消費せず、pseudoUpc()
-// が生成する店内用 (200始まり・POSスキャン不可) を使う。
+// 1kg は業販専用で店頭では売らないため Square には登録しない (Rowly 2026-08-18)。
+// Square に入れると価格付きの商品としてレジに並んでしまうし、GTIN も業販では
+// 不要なので GS1 の番号は消費せず pseudoUpc() の店内用 (200始まり・POSスキャン
+// 不可) を使う。ラベルに価格は印字されないので price は 0 でよい。
 //
-// itemId は Square 実物の ID。既に print_label=yes で取得できるアイテムなので、
-// HARDCODED_DRIP_PACKS のような「アイテムごと追加」ではマージされない
-// (同じ itemId は skip される)。そのため variations だけを差し込む。
-const EXTRA_VARIATIONS: { itemId: string; label: string; variation: Variation }[] = [
-  {
-    itemId: '4AI65ZX2HSAAAERVOX56UXON',   // India Attikan
-    label: 'India Attikan',
-    variation: {
-      variationId: 'felicity-ina-1000',
-      sku: 'INA-1000',
-      upc: '',            // 空 → pseudoUpc() で自動採番
-      size: '1kg',
-      price: 0,           // 卸専用。ラベルに価格は出ない
-      type: 'bean',
-    },
-  },
-  {
-    itemId: '4HGN63MTRMKN2DBFJI6JUWKX',   // Colombia DECAF
-    label: 'Colombia DECAF',
-    variation: {
-      variationId: 'felicity-col-1000',
-      sku: 'COL-1000',
-      upc: '',
+// 対象外にするもの:
+//  - ドリップパック (最小サイズが10g以下)。1kgのドリップパックは存在しない
+//  - 既に Square 側に 1kg があるもの (FELICITY葉山ブレンド / PNG Baroida)
+const WHOLESALE_GRAMS = 1000
+
+// 既存SKU (INA-100, COL-200 …) から接頭辞を取り、1kg 用の SKU を作る。
+// 既存の 1kg は FEL-1000 / PNG-1000 なので "-1000" に揃える。
+function wholesaleSku(variations: Variation[]): string {
+  for (const v of variations) {
+    const m = v.sku.match(/^([A-Za-z]+)-\d+/)
+    if (m) return `${m[1].toUpperCase()}-1000`
+  }
+  return ''
+}
+
+function addWholesaleKilo(items: LabelItem[]): void {
+  for (const item of items) {
+    const grams = item.variations.map((v) => sizeToGrams(v.size))
+    const sized = grams.filter((g) => g > 0)
+    if (sized.length === 0) continue
+    if (Math.min(...sized) <= 10) continue          // ドリップパック
+    if (grams.some((g) => g >= WHOLESALE_GRAMS)) continue  // 既に1kgがある
+
+    const variationId = `felicity-wholesale-1kg-${item.itemId}`
+    item.variations.push({
+      variationId,
+      sku: wholesaleSku(item.variations),
+      upc: pseudoUpc(variationId),
       size: '1kg',
       price: 0,
       type: 'bean',
-    },
-  },
-]
+    })
+    item.variations.sort((a, b) => sizeToGrams(a.size) - sizeToGrams(b.size))
+  }
+}
 
 // Square uses full-width characters. Normalize to ASCII for display/matching.
 function normalizeName(s: string): string {
@@ -259,22 +265,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // 卸専用サイズ (1kg) を既存アイテムにマージ。Square 側に無いバリエーションなので
-    // ここで足さないと出てこない。対象アイテムが print_label から外れていた場合は
-    // 黙って消えると気付けないので skipped に残す。
-    for (const ex of EXTRA_VARIATIONS) {
-      const target = items.find((i) => i.itemId === ex.itemId)
-      if (!target) {
-        skipped.push({ item: ex.label, variation: ex.variation.size, reason: 'Square側に該当アイテムが無い（print_label=yes が外れている可能性）' })
-        continue
-      }
-      if (target.variations.some((v) => v.variationId === ex.variation.variationId)) continue
-      target.variations.push({
-        ...ex.variation,
-        upc: ex.variation.upc || pseudoUpc(ex.variation.variationId),
-      })
-      target.variations.sort((a, b) => sizeToGrams(a.size) - sizeToGrams(b.size))
-    }
+    // 業販用 1kg を全ての豆に自動追加（ドリップパックと既に1kgがあるものは除く）
+    addWholesaleKilo(items)
 
     // Sort items alphabetically by display name
     items.sort((a, b) => a.name.localeCompare(b.name))
