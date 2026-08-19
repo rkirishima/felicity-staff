@@ -537,7 +537,7 @@ function AdjustModal({ sku, onClose, onSaved }: { sku: Sku; onClose: () => void;
 
 function ModalShell({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
       <div className="rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ backgroundColor: '#292524', border: '1px solid #44403c' }}>
         <div className="sticky top-0 z-10 px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#292524', borderBottom: '1px solid #44403c' }}>
           <h2 className="text-sm font-bold text-white">{title}</h2>

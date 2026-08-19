@@ -488,7 +488,10 @@ function SumRow({ label, value }: { label: string; value: number }) {
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+    // AdminNav / BottomNav も fixed bottom-0 の z-50。同じ層だと後から描画される
+    // ナビが上に乗って、モーダル下端の「送信」ボタンが押せなくなる。
+    // モーダルは背面を覆う前提の層なので、ナビより一段上に置く。
+    <div className="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       {/* 高さ制限とスクロールが無いと、本文8行のメール送信モーダルが画面より
           縦に長くなったときに一番下の「送信」ボタンに手が届かなくなる。 */}
       <div

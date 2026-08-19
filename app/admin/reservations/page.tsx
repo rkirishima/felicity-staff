@@ -396,7 +396,7 @@ export default function AdminReservationsPage() {
 
       {/* New reservation bottom sheet */}
       {showNew && (
-        <div className="fixed inset-0 z-50 flex items-end" onClick={() => setShowNew(false)}>
+        <div className="fixed inset-0 z-[60] flex items-end" onClick={() => setShowNew(false)}>
           <div className="absolute inset-0 bg-black/30" />
           <div className="relative w-full rounded-t-3xl p-6 pb-8 max-h-[85vh] overflow-y-auto"
             style={{ backgroundColor: '#F5F0E8' }}

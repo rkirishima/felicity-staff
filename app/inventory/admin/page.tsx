@@ -398,7 +398,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function EditModal({ title, children, onClose, onSave }: { title: string; children: React.ReactNode; onClose: () => void; onSave: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4" onClick={onClose}>
       <div className="w-full sm:max-w-md max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-4 space-y-3"
         style={{ backgroundColor: '#1c1917', border: '1px solid #44403c' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 pb-1">
