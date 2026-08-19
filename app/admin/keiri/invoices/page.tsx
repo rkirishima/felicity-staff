@@ -12,7 +12,10 @@ import { MonthSelector } from '@/components/keiri/MonthSelector'
 import { LoadError } from '@/components/keiri/LoadError'
 
 type Status = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
-type Tab = 'all' | Status
+// 'unsent' は DB の値ではなく表示専用。status='sent' かつ sent_at IS NULL、
+// つまり発行しただけでメールが出ていない請求書を一覧で目立たせるために使う。
+type DisplayStatus = Status | 'unsent'
+type Tab = 'all' | DisplayStatus
 
 type Row = {
   id: string
@@ -21,6 +24,7 @@ type Row = {
   issuer: 'felicity' | 'rook' | null
   issue_date: string
   due_date: string | null
+  sent_at: string | null
   total: number
   client: { name: string } | null
 }
@@ -35,6 +39,7 @@ function todayJST() {
 const TABS: { key: Tab; label: string }[] = [
   { key: 'all', label: 'すべて' },
   { key: 'draft', label: '下書き' },
+  { key: 'unsent', label: '未送付' },
   { key: 'sent', label: '送付済' },
   { key: 'paid', label: '入金済' },
   { key: 'overdue', label: '期限超過' },
@@ -87,7 +92,7 @@ function InvoicesListInner() {
     const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
     const { data, error } = await supabase
       .from('keiri_invoices')
-      .select('id, invoice_number, status, issuer, issue_date, due_date, total, client:keiri_clients(name)')
+      .select('id, invoice_number, status, issuer, issue_date, due_date, sent_at, total, client:keiri_clients(name)')
       .gte('issue_date', start)
       .lt('issue_date', next)
       .order('issue_date', { ascending: false })
@@ -159,8 +164,12 @@ function InvoicesListInner() {
 
   const today = todayJST()
   const decorated = rows.map(r => {
-    const isOverdue = r.status === 'sent' && r.due_date && r.due_date < today
-    return { ...r, displayStatus: (isOverdue ? 'overdue' : r.status) as Status }
+    const isUnsent = r.status === 'sent' && !r.sent_at
+    const isOverdue = r.status === 'sent' && !isUnsent && r.due_date && r.due_date < today
+    return {
+      ...r,
+      displayStatus: (isUnsent ? 'unsent' : isOverdue ? 'overdue' : r.status) as DisplayStatus,
+    }
   })
   const filtered = tab === 'all' ? decorated : decorated.filter(r => r.displayStatus === tab)
   const total = filtered.reduce((s, r) => s + (r.total || 0), 0)
@@ -274,9 +283,10 @@ function InvoicesListInner() {
   )
 }
 
-function StatusBadge({ status }: { status: Status }) {
-  const map: Record<Status, { label: string; cls: string }> = {
+function StatusBadge({ status }: { status: DisplayStatus }) {
+  const map: Record<DisplayStatus, { label: string; cls: string }> = {
     draft: { label: '下書き', cls: 'bg-stone-100 text-stone-500' },
+    unsent: { label: '未送付', cls: 'bg-amber-100 text-amber-800' },
     sent: { label: '送付済', cls: 'bg-blue-100 text-blue-700' },
     paid: { label: '入金済', cls: 'bg-emerald-100 text-emerald-700' },
     overdue: { label: '期限超過', cls: 'bg-rose-100 text-rose-700' },

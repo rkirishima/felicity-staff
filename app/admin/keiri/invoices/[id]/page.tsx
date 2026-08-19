@@ -14,6 +14,10 @@ import {
 } from '@/app/admin/keiri/invoices/actions'
 
 type Status = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+// status='sent' は「発行済み」を意味するだけで、メールが出たかは sent_at が持つ。
+// バッジまで「送付済」と出してしまうと未送付の請求書を送ったと誤認するため、
+// 表示上だけ 'unsent' に分けている。
+type DisplayStatus = Status | 'unsent'
 
 type Invoice = {
   id: string
@@ -116,11 +120,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   }, [id, router, supabase])
 
   const today = todayJST()
-  const displayStatus: Status | null = inv
-    ? inv.status === 'sent' && inv.due_date && inv.due_date < today
-      ? 'overdue'
-      : inv.status
-    : null
+  const displayStatus: DisplayStatus | null = !inv
+    ? null
+    : inv.status === 'sent' && !inv.sent_at
+      ? 'unsent'
+      : inv.status === 'sent' && inv.due_date && inv.due_date < today
+        ? 'overdue'
+        : inv.status
 
   function pdfUrl(forceRegenerate = false): string {
     return `/api/keiri/invoices/${id}/pdf${forceRegenerate ? '?regenerate=1' : ''}`
@@ -458,9 +464,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   )
 }
 
-function Badge({ status }: { status: Status }) {
-  const map: Record<Status, { label: string; cls: string }> = {
+function Badge({ status }: { status: DisplayStatus }) {
+  const map: Record<DisplayStatus, { label: string; cls: string }> = {
     draft: { label: '下書き', cls: 'bg-stone-100 text-stone-600' },
+    unsent: { label: '発行済・未送付', cls: 'bg-amber-100 text-amber-800' },
     sent: { label: '送付済', cls: 'bg-blue-50 text-blue-700' },
     paid: { label: '入金済', cls: 'bg-emerald-50 text-emerald-700' },
     overdue: { label: '期限超過', cls: 'bg-red-50 text-red-700' },

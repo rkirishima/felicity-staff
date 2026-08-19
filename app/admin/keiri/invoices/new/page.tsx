@@ -28,7 +28,9 @@ type LineDraft = {
 }
 
 function emptyLine(): LineDraft {
-  return { item_id: '', description: '', quantity: '', unit_price: '', tax_rate: 10 }
+  // 扱う商品はほぼ飲食料品＝軽減税率8%。10%は送料・雑貨などの例外なので既定を8にする。
+  // （旭興産のパプアを10%で3件請求してしまった経緯があるため、既定側を安全な方に倒す）
+  return { item_id: '', description: '', quantity: '', unit_price: '', tax_rate: 8 }
 }
 
 function todayJST() {
@@ -384,12 +386,17 @@ export default function NewInvoicePage() {
                       }}
                       className={inputCls}
                     >
+                      <option value={8}>8%（軽減・飲食料品）</option>
                       <option value={10}>10%</option>
-                      <option value={8}>8%</option>
                       <option value={0}>0%（非課税・経費立替）</option>
                     </select>
                   </Field>
                 </div>
+                {l.tax_rate === 10 && (
+                  <p className="text-xs text-amber-700">
+                    ⚠ 10%が選ばれています。コーヒー豆などの飲食料品は軽減税率8%です。送料・雑貨等でなければ8%に戻してください。
+                  </p>
+                )}
                 <p className="text-right text-xs text-stone-500">金額: ¥{amt.toLocaleString()}</p>
               </div>
             )
