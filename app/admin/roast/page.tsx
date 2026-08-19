@@ -10,9 +10,12 @@ import { Flame, Trash2, Coffee } from 'lucide-react'
 import { ROAST_LEVEL_LABELS, type RoastLevel } from '@/lib/roast-profiles'
 import { RoastProfileCard, type UseCase } from '@/components/RoastProfileCard'
 
+// オムニ = ドリップとエスプレッソの両用。プロファイル側には以前から存在したが
+// ここに選択肢が無かったため、omni のプロファイルが一度も表示できていなかった。
 const USE_CASES: { key: UseCase; label: string }[] = [
   { key: 'drip', label: 'ドリップ' },
   { key: 'espresso', label: 'エスプレッソ' },
+  { key: 'omni', label: 'オムニ' },
 ]
 const LEVELS: RoastLevel[] = ['light', 'city', 'medium', 'dark']
 
