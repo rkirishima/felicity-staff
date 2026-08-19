@@ -489,8 +489,10 @@ function SumRow({ label, value }: { label: string; value: number }) {
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      {/* 高さ制限とスクロールが無いと、本文8行のメール送信モーダルが画面より
+          縦に長くなったときに一番下の「送信」ボタンに手が届かなくなる。 */}
       <div
-        className="bg-white rounded-2xl w-full max-w-md p-5 space-y-4"
+        className="bg-white rounded-2xl w-full max-w-md p-5 space-y-4 max-h-[85vh] overflow-y-auto overscroll-contain"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
