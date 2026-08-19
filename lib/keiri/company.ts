@@ -34,15 +34,23 @@ const ROOK: CompanyInfo = {
   registrationNumber: 'T7013202013308',
 }
 
+// 環境変数に改行を入れると、設定の仕方によっては本物の改行ではなく
+// バックスラッシュ+n の2文字として保存される。請求書PDFはそれをそのまま
+// 描画するので、振込先が「法人第一支店\n普通 2373525」と印字されてしまう
+// （INV-2026-0008 で発覚）。読み出し側で実際の改行に戻す。
+function withRealNewlines(v: string): string {
+  return v.replace(/\\n/g, '\n')
+}
+
 export function getCompanyInfo(): CompanyInfo {
   return {
     name: process.env.COMPANY_NAME || DEFAULTS.name,
     representative: DEFAULTS.representative,
     postal: process.env.COMPANY_POSTAL || DEFAULTS.postal,
-    address: process.env.COMPANY_ADDRESS || DEFAULTS.address,
+    address: withRealNewlines(process.env.COMPANY_ADDRESS || DEFAULTS.address),
     phone: process.env.COMPANY_PHONE || DEFAULTS.phone,
     email: process.env.COMPANY_EMAIL || DEFAULTS.email,
-    bank: process.env.COMPANY_BANK || DEFAULTS.bank,
+    bank: withRealNewlines(process.env.COMPANY_BANK || DEFAULTS.bank),
     registrationNumber:
       process.env.INVOICE_REGISTRATION_NUMBER || DEFAULTS.registrationNumber,
   }
