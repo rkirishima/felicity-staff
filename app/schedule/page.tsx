@@ -324,7 +324,6 @@ export default function SchedulePage() {
         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-white border-2 border-stone-800 inline-block" />今日</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-white border border-teal-400 inline-block" />土日</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-200 inline-block" />祝日</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-200 inline-block" />キッチンカー</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 border border-amber-600 inline-block" />募集中</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-stone-200 border border-dashed border-stone-300 inline-block" />定休日</span>
         {!isAdmin && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-200 border border-yellow-400 inline-block" />申請中</span>}
@@ -332,14 +331,13 @@ export default function SchedulePage() {
 
       <div className="grid grid-cols-7 gap-1 mb-4">
         {DAYS.map((d, i) => (
-          <div key={d} className={'text-center text-xs py-1 ' + (i===0||i===6?'text-teal-600':i===3||i===4?'text-amber-500':'text-stone-400')}>{d}</div>
+          <div key={d} className={'text-center text-xs py-1 ' + (i===0||i===6?'text-teal-600':'text-stone-400')}>{d}</div>
         ))}
         {cells.map((day, i) => {
           if (!day) return <div key={i} />
           const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(day).padStart(2,'0')
           const date = new Date(year, month, day)
           const weekend = isWeekend(date)
-          const foodtruck = isFoodTruck(date)
           const holiday = holidays[dateStr]
           const closed = isRegularClosedDay(dateStr)
           // 定休日（10月〜毎週金曜）：グレーで塗りつぶして目立たなくする。申請不可・シフト非表示。
@@ -363,14 +361,13 @@ export default function SchedulePage() {
                 isSelected ? 'ring-2 ring-teal-500 bg-teal-100' :
                 isToday ? 'ring-2 ring-stone-800 ring-offset-1 bg-white' :
                 holiday ? 'bg-rose-100' :
-                foodtruck ? 'bg-amber-100' :
                 weekend ? 'bg-white border border-stone-200' :
                 'bg-white/60'
               )}>
               {isToday ? (
                 <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-stone-800 text-white text-xs font-bold">{day}</div>
               ) : (
-                <div className={'text-xs font-medium ' + (holiday?'text-rose-500':weekend?'text-teal-600':foodtruck?'text-amber-500':'text-stone-600')}>{day}</div>
+                <div className={'text-xs font-medium ' + (holiday?'text-rose-500':weekend?'text-teal-600':'text-stone-600')}>{day}</div>
               )}
               {holiday && <div className="text-[7px] text-rose-400 leading-tight truncate">{holiday}</div>}
               <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
