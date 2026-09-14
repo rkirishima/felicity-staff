@@ -491,6 +491,7 @@ export default function AdminShiftsPage() {
               const dayShifts = shifts.filter(s => s.date === dateStr && (s.status === 'approved' || s.status === 'absent'))
               const dow = new Date(y, m, day).getDay()
               const isWeekend = dow === 0 || dow === 6
+              const holiday = holidays[dateStr]
               const isSelected = selectedDate === dateStr
               const closed = isRegularClosedDay(dateStr) // 定休日（10月〜毎週金曜）
               return (
@@ -498,10 +499,12 @@ export default function AdminShiftsPage() {
                   className={`rounded-xl p-1 text-center min-h-[52px] transition-all ${
                     isSelected ? 'ring-2 ring-teal-500 bg-teal-50' :
                     closed ? 'bg-stone-200/50 border border-dashed border-stone-300' :
+                    holiday ? 'bg-rose-100' :
                     isWeekend ? 'bg-white border border-stone-200' : 'bg-white/60'
                   }`}>
-                  <div className={`text-xs font-medium ${closed?'text-stone-300':isWeekend?'text-teal-600':'text-stone-600'}`}>{day}</div>
+                  <div className={`text-xs font-medium ${closed?'text-stone-300':holiday?'text-rose-500':isWeekend?'text-teal-600':'text-stone-600'}`}>{day}</div>
                   {closed && <div className="text-[8px] text-stone-400 leading-tight">定休</div>}
+                  {holiday && !closed && <div className="text-[7px] text-rose-400 leading-tight truncate">{holiday}</div>}
                   <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                     {dayShifts.slice(0,4).map((s,j) => {
                       const meta = LOCATION_META[locationOf(s)]
