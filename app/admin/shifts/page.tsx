@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { getAdminSession } from '@/lib/session'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 import { loadShiftDeadlineSettings, saveShiftDeadline, saveLateAllow, deadlineStatusOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
+import { isRegularClosedDay } from '@/lib/shifts/closedDays'
 import { getHolidaysOf } from 'japanese-holidays'
 
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
@@ -113,6 +114,7 @@ export default function AdminShiftsPage() {
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(yy, mo, day)
       const dateStr = `${yy}-${pad(mo + 1)}-${pad(day)}`
+      if (isRegularClosedDay(dateStr)) continue // 定休日（10月〜毎週金曜）は募集枠を作らない
       const dt = classifyDayType(date, dateStr, specialDays, holidays)
       for (const t of templates.filter(t => t.day_type === dt)) {
         if (existingSet.has(`${dateStr}|${t.id}`)) continue
@@ -490,13 +492,16 @@ export default function AdminShiftsPage() {
               const dow = new Date(y, m, day).getDay()
               const isWeekend = dow === 0 || dow === 6
               const isSelected = selectedDate === dateStr
+              const closed = isRegularClosedDay(dateStr) // 定休日（10月〜毎週金曜）
               return (
                 <button key={i} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
                   className={`rounded-xl p-1 text-center min-h-[52px] transition-all ${
                     isSelected ? 'ring-2 ring-teal-500 bg-teal-50' :
+                    closed ? 'bg-stone-200/50 border border-dashed border-stone-300' :
                     isWeekend ? 'bg-white border border-stone-200' : 'bg-white/60'
                   }`}>
-                  <div className={`text-xs font-medium ${isWeekend?'text-teal-600':'text-stone-600'}`}>{day}</div>
+                  <div className={`text-xs font-medium ${closed?'text-stone-300':isWeekend?'text-teal-600':'text-stone-600'}`}>{day}</div>
+                  {closed && <div className="text-[8px] text-stone-400 leading-tight">定休</div>}
                   <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                     {dayShifts.slice(0,4).map((s,j) => {
                       const meta = LOCATION_META[locationOf(s)]
