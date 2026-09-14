@@ -512,7 +512,7 @@ export default function AdminShiftsPage() {
                       return (
                         <div key={j} className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${isAbsent?'bg-red-400':s.isOpen?'bg-amber-400 border border-amber-600':meta.dot}`}
                           style={{fontSize:'6px', color:'white', fontWeight:'bold'}}>
-                          {s.isOpen ? '?' : s.staffName.slice(-1)}
+                          {s.isOpen ? '?' : (s.staffName.split(' ').pop() || s.staffName).charAt(0)}
                         </div>
                       )
                     })}

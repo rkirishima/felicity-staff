@@ -378,7 +378,7 @@ export default function SchedulePage() {
                   return (
                     <div key={j} className={'w-4 h-4 rounded-full flex items-center justify-center ' + (isOpen ? 'bg-amber-400 border border-amber-600' : meta.dot)}
                       style={{ fontSize:'7px', color:'white', fontWeight:'bold' }}>
-                      {isOpen ? '?' : n.slice(-1)}
+                      {isOpen ? '?' : (n.split(' ').pop() || n).charAt(0)}
                     </div>
                   )
                 })}
