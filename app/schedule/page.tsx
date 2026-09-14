@@ -8,6 +8,7 @@ import { getSession, getAdminSession } from '@/lib/session'
 import { verifyStaffPin } from '@/app/admin/actions'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 import { loadShiftDeadlineSettings, deadlineStatusOf, monthKeyOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
+import { isRegularClosedDay } from '@/lib/shifts/closedDays'
 import { haptic } from '@/lib/utils'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
@@ -162,6 +163,7 @@ export default function SchedulePage() {
 
   async function submitShift() {
     if (!selectedDate || !selectedStaff) { toast.error('日付とスタッフを選んでください'); return }
+    if (isRegularClosedDay(selectedDate)) { toast.error('定休日のため申請できません'); return }
     const tmpl = templates.find(t => t.id === selectedTemplate)
     const startTime = customStart || tmpl?.start_time || ''
     const endTime = customEnd || tmpl?.end_time || ''
@@ -324,6 +326,7 @@ export default function SchedulePage() {
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-200 inline-block" />祝日</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-200 inline-block" />キッチンカー</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 border border-amber-600 inline-block" />募集中</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-stone-200 border border-dashed border-stone-300 inline-block" />定休日</span>
         {!isAdmin && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-yellow-200 border border-yellow-400 inline-block" />申請中</span>}
       </div>
 
@@ -338,6 +341,17 @@ export default function SchedulePage() {
           const weekend = isWeekend(date)
           const foodtruck = isFoodTruck(date)
           const holiday = holidays[dateStr]
+          const closed = isRegularClosedDay(dateStr)
+          // 定休日（10月〜毎週金曜）：グレーで塗りつぶして目立たなくする。申請不可・シフト非表示。
+          if (closed) {
+            return (
+              <div key={i} aria-disabled
+                className="relative rounded-xl p-1 text-center min-h-[52px] bg-stone-200/50 border border-dashed border-stone-300 flex flex-col items-center justify-center">
+                <div className="text-xs font-medium text-stone-300">{day}</div>
+                <div className="text-[8px] text-stone-400 leading-tight">定休</div>
+              </div>
+            )
+          }
           const dayShifts = shifts.filter(s => s.date === dateStr)
           const approvedShifts = dayShifts.filter(s => s.status === 'approved')
           const pendingShifts = dayShifts.filter(s => s.status === 'pending')
