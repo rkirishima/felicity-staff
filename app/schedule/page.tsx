@@ -8,7 +8,7 @@ import { getSession, getAdminSession } from '@/lib/session'
 import { verifyStaffPin } from '@/app/admin/actions'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 import { loadShiftDeadlineSettings, deadlineStatusOf, monthKeyOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
-import { isRegularClosedDay } from '@/lib/shifts/closedDays'
+import { isRegularClosedDay, specialDayOf } from '@/lib/shifts/closedDays'
 import { haptic } from '@/lib/utils'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
@@ -339,6 +339,7 @@ export default function SchedulePage() {
           const date = new Date(year, month, day)
           const weekend = isWeekend(date)
           const holiday = holidays[dateStr]
+          const special = specialDayOf(dateStr)
           const closed = isRegularClosedDay(dateStr)
           // 定休日（10月〜毎週金曜）：グレーで塗りつぶして目立たなくする。申請不可・シフト非表示。
           if (closed) {
@@ -361,15 +362,17 @@ export default function SchedulePage() {
                 isSelected ? 'ring-2 ring-teal-500 bg-teal-100' :
                 isToday ? 'ring-2 ring-stone-800 ring-offset-1 bg-white' :
                 holiday ? 'bg-rose-100' :
+                special ? 'bg-amber-100' :
                 weekend ? 'bg-white border border-stone-200' :
                 'bg-white/60'
               )}>
               {isToday ? (
                 <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-stone-800 text-white text-xs font-bold">{day}</div>
               ) : (
-                <div className={'text-xs font-medium ' + (holiday?'text-rose-500':weekend?'text-teal-600':'text-stone-600')}>{day}</div>
+                <div className={'text-xs font-medium ' + (holiday?'text-rose-500':special?'text-amber-600':weekend?'text-teal-600':'text-stone-600')}>{day}</div>
               )}
               {holiday && <div className="text-[7px] text-rose-400 leading-tight truncate">{holiday}</div>}
+              {special && <div className="text-[7px] text-amber-600 leading-tight truncate">{special.label}</div>}
               <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
                 {approvedShifts.slice(0,3).map((s, j) => {
                   const n = (s.staff as any)?.name ?? ''
@@ -408,6 +411,7 @@ export default function SchedulePage() {
               {isFoodTruck(new Date(selectedDate + 'T12:00:00')) && <span className="ml-2 text-xs text-amber-400 font-normal">🚐 キッチンカー</span>}
             </h3>
             {holidays[selectedDate] && <p className="text-xs text-rose-400 mt-0.5">🎌 {holidays[selectedDate]}</p>}
+            {(() => { const sp = specialDayOf(selectedDate); return sp ? <p className="text-xs text-amber-600 mt-0.5">🧹 {sp.label}{sp.start ? ` ${sp.start}〜` : ''}</p> : null })()}
           </div>
 
           {shifts.filter(s => s.date === selectedDate).length > 0 && (
