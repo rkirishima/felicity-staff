@@ -1,5 +1,10 @@
 'use server'
 
+// PIN の照合・変更は service role で行う。staff.pin 列は anon / authenticated から
+// 読めないようにしてあるため（公開キーはブラウザに配られるので、そこから PIN が
+// 読めると誰でも管理画面に入れてしまう）。このファイルは 'use server' なので
+// service role のキーがブラウザに出ることはない。
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { setAuthCookie, clearAuthCookie } from '@/lib/auth/server'
 
@@ -9,7 +14,7 @@ export async function verifyAdminPin(pin: string): Promise<boolean> {
     return true
   }
 
-  const sb = await createClient()
+  const sb = createAdminClient()
   const { data, error } = await sb
     .from('staff')
     .select('id, name, role')
@@ -28,7 +33,7 @@ export async function verifyAdminPin(pin: string): Promise<boolean> {
 }
 
 export async function verifyStaffPin(staffId: string, pin: string): Promise<boolean> {
-  const sb = await createClient()
+  const sb = createAdminClient()
   const { data } = await sb.from('staff').select('pin, name').eq('id', staffId).single()
   // PIN未設定でも '1234' で通す既存挙動は残すが、実在スタッフに限る（存在しなければ拒否）
   if (!data) return false
@@ -49,7 +54,7 @@ export async function changeStaffPin(
   newPin: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!/^\d{4}$/.test(newPin)) return { ok: false, error: 'PINは4桁の数字' }
-  const sb = await createClient()
+  const sb = createAdminClient()
   const { data } = await sb.from('staff').select('pin').eq('id', staffId).single()
   if (!data) return { ok: false, error: 'スタッフが見つかりません' }
   if (currentPin !== (data.pin || '1234')) return { ok: false, error: '現在のPINが違います' }
