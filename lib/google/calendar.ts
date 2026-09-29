@@ -5,9 +5,11 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID!
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://staff.felicity.cafe/api/google/callback'
+// 環境変数に末尾の改行が混ざっていたことがあるので trim する（lib/keiri/gmail.ts と同じ）。
+// redirect_uri は Google 側の登録と完全一致でないと認可が失敗する。
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim()!
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET?.trim()!
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI?.trim() || 'https://staff.felicity.cafe/api/google/callback'
 
 export function getAuthUrl(): string {
   const params = new URLSearchParams({

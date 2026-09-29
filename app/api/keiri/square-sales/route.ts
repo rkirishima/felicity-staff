@@ -12,7 +12,7 @@ type SquarePayment = {
 
 export async function GET(): Promise<Response> {
   const _denied = await requireKeiri(); if (_denied) return _denied
-  const token = process.env.SQUARE_ACCESS_TOKEN
+  const token = process.env.SQUARE_ACCESS_TOKEN?.trim()
   if (!token) {
     return NextResponse.json({ error: 'SQUARE_ACCESS_TOKEN not set' }, { status: 503 })
   }

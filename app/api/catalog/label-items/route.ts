@@ -165,7 +165,7 @@ function inferType(sku: string, size: string): 'bean' | 'ground' {
 
 export async function GET(request: Request) {
   const denied = await requireAuth(); if (denied) return denied
-  const token = process.env.SQUARE_ACCESS_TOKEN
+  const token = process.env.SQUARE_ACCESS_TOKEN?.trim()
   if (!token) {
     return NextResponse.json({ error: 'SQUARE_ACCESS_TOKEN not configured' }, { status: 503 })
   }
