@@ -40,15 +40,17 @@ function sizesMatch(a: string, b: string): boolean {
 }
 
 export async function POST(request: Request) {
-  const secret = process.env.LABEL_PRINT_SECRET
+  // Vercel の環境変数に末尾の改行が混ざっていたことがある。ヘッダー値は改行を
+  // 含められないので、両側を trim しないと常に 401 になる。
+  const secret = process.env.LABEL_PRINT_SECRET?.trim()
   if (secret) {
-    const provided = request.headers.get(PRINT_SECRET_HEADER)
+    const provided = request.headers.get(PRINT_SECRET_HEADER)?.trim()
     if (provided !== secret) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
   }
 
-  const squareToken = process.env.SQUARE_ACCESS_TOKEN
+  const squareToken = process.env.SQUARE_ACCESS_TOKEN?.trim()
   if (!squareToken) {
     return NextResponse.json({ error: 'SQUARE_ACCESS_TOKEN not configured' }, { status: 503 })
   }
