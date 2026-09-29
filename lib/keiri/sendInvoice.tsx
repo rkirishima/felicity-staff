@@ -26,14 +26,20 @@ export async function renderAndSendInvoice(
   const { data: inv, error } = await supabase
     .from('keiri_invoices')
     .select(
-      'id, invoice_number, status, issuer, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, pdf_path, client:keiri_clients(name, contact_person, postal_code, address, email)',
+      'id, invoice_number, status, sent_at, issuer, issue_date, due_date, subtotal_10, subtotal_8, tax_10, tax_8, total, notes, pdf_path, client:keiri_clients(name, contact_person, postal_code, address, email)',
     )
     .eq('id', invoiceId)
     .single()
   if (error || !inv) throw new Error('invoice not found')
   if (!inv.invoice_number) throw new Error('下書きは送信できません')
-  // 二重送信防止: 既に sent/paid の請求書は再送しない（発行時自動送信と「送信」ボタンの二重発火対策）
-  if (inv.status === 'sent' || inv.status === 'paid') {
+  // 二重送信防止は sent_at で判定する。status='sent' は「発行済み」を表すだけで、
+  // 発行(publishDraftInvoice)が status を sent にしてから送信を呼ぶため、status で
+  // 弾くと発行済みの請求書が一通も送れなくなる（2026-07〜09 に実際に起きた）。
+  // sent_at はメール送信が成功したときにだけ立つ。
+  if (inv.status === 'cancelled') {
+    throw new Error('無効化された請求書は送信できません')
+  }
+  if (inv.sent_at) {
     throw new Error('この請求書は既に送信済みです')
   }
 
