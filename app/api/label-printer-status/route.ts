@@ -22,11 +22,20 @@ export async function GET() {
   }
 
   const ageMs = Date.now() - new Date(status.last_seen).getTime()
+
+  // プリンタ本体の不達。printer_reachable の瞬間値は印刷中にも false になるので、
+  // 画面に出すのは監視cronが「継続している」と判定したもの(printer_alerted)だけ。
+  const unreachableMin = status.printer_unreachable_since
+    ? Math.round((Date.now() - new Date(status.printer_unreachable_since).getTime()) / 60000)
+    : null
+
   return NextResponse.json({
     online: ageMs < STALE_MS,
     last_seen: status.last_seen,
     age_seconds: Math.round(ageMs / 1000),
     printer_reachable: status.printer_reachable,
+    printer_down: status.printer_alerted === true,
+    printer_unreachable_minutes: unreachableMin,
     pending_jobs: pending ?? 0,
   })
 }

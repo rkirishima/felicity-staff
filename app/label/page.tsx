@@ -43,6 +43,9 @@ type PrinterStatus = {
   online: boolean
   age_seconds?: number
   pending_jobs?: number
+  // Pi は生きているが、プリンタ本体に届いていない状態が続いている
+  printer_down?: boolean
+  printer_unreachable_minutes?: number | null
 }
 
 export default function LabelPrintPage() {
@@ -204,6 +207,20 @@ export default function LabelPrintPage() {
           </p>
           <p className="text-xs text-red-400/70 mt-0.5">
             印刷はキューに溜まり、30分以内に復旧すれば自動で印刷されます。店頭のRaspberry Piを確認してください。
+          </p>
+        </div>
+      )}
+      {/* Pi は動いているが本体が応答しない — 押しても紙は出ないので先に知らせる */}
+      {printerStatus?.online && printerStatus.printer_down && (
+        <div className="bg-red-900/30 border-b border-red-800/40 px-4 py-3">
+          <p className="text-sm font-semibold text-red-300">
+            ⚠️ プリンタ本体が応答していません
+            {printerStatus.printer_unreachable_minutes != null && (
+              <span className="font-normal text-red-400/80">（{printerStatus.printer_unreachable_minutes}分継続）</span>
+            )}
+          </p>
+          <p className="text-xs text-red-400/70 mt-0.5">
+            この状態で印刷を押してもラベルは出ません。プリンタ本体の電源を入れ直してください。
           </p>
         </div>
       )}

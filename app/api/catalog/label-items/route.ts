@@ -82,6 +82,27 @@ const HARDCODED_DRIP_PACKS: LabelItem[] = [
       type: 'bean',
     }],
   },
+  // ブラジルサントス業販1kg。他の1kgと違って Square に実商品として登録されていて
+  // (SKU SANTOS-1000 / GTIN 4595433537583)、下の addWholesaleKilo の自動追加では
+  // 拾えない。理由は2つ:
+  //   - print_label 属性が付いていないので Square 同期に乗らない
+  //   - バリエーション名が「1kg」ではなく「通常」でサイズ判定できない
+  // Square 側を触るとPOSの表示が変わるので、ここで固定表示する。
+  // size を 1kg にしてあるので addWholesaleKilo は重複追加しない。
+  {
+    itemId: 'X7AFYG6X2CXLPD6IKGMBHL2X',
+    name: 'Brazil Santos',
+    rawName: 'ＢＲＡＺＩＬ　ＳＡＮＴＯＳ　１ＫＧ',
+    category: 'wholesale',
+    variations: [{
+      variationId: 'WAAQFZ47CDFKJHVYVTOJN53V',
+      sku: 'SANTOS-1000',
+      upc: '4595433537583',
+      size: '1kg',
+      price: 5000,
+      type: 'bean',
+    }],
+  },
 ]
 
 // 業販用 1kg — 豆のアイテム全部に自動で足す。
