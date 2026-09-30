@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/keiri/serviceClient'
+import { fetchPrintLabelItems, PrintLabelCatalogError, type SquareItem } from '@/lib/square/print-label'
 
 // Resolves EC order item names (e.g. "El Salvador Finca La Fany 200g") to
 // Square catalog GTINs, then prints each via the Raspberry Pi. Called by the
@@ -12,8 +13,6 @@ import { createServiceClient } from '@/lib/keiri/serviceClient'
 // grind controls the printed label type / expiry: whole bean → 'bean' (4-month
 // expiry), drip/espresso → 'powder' (2-month expiry). Same distinction the
 // in-store Square POS "挽き方" modifier feeds to the Pi.
-
-const PRINT_LABEL_ATTR_ID = 'X3QZMB3JYOIRV65E4ASKJQJF'
 
 // Shared auth: EC app sends this header; we check it against LABEL_PRINT_SECRET.
 const PRINT_SECRET_HEADER = 'x-label-print-secret'
@@ -67,46 +66,26 @@ export async function POST(request: Request) {
   }
 
   // Fetch catalog once
-  const catalogRes = await fetch('https://connect.squareup.com/v2/catalog/search-catalog-items', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${squareToken}`,
-      'Content-Type': 'application/json',
-      'Square-Version': '2024-01-18',
-    },
-    body: JSON.stringify({
-      custom_attribute_filters: [{
-        custom_attribute_definition_id: PRINT_LABEL_ATTR_ID,
-        string_filter: 'print_label = yes',
-      }],
-      limit: 100,
-    }),
-  })
-
-  if (!catalogRes.ok) {
-    const err = await catalogRes.json().catch(() => ({}))
-    console.error('Square catalog query failed:', err)
-    return NextResponse.json({ error: 'Square catalog query failed' }, { status: 502 })
+  let squareItems: SquareItem[]
+  try {
+    squareItems = await fetchPrintLabelItems(squareToken)
+  } catch (err) {
+    if (err instanceof PrintLabelCatalogError) {
+      console.error('Square catalog query failed:', err.detail)
+      return NextResponse.json({ error: 'Square catalog query failed' }, { status: 502 })
+    }
+    throw err
   }
 
-  const catalog = await catalogRes.json()
-  const squareItems = (catalog.items ?? []) as Array<{
-    id: string
-    is_deleted?: boolean
-    is_archived?: boolean
-    item_data?: {
-      name?: string
-      variations?: Array<{
-        id: string
-        is_deleted?: boolean
-        item_variation_data?: {
-          name?: string
-          sku?: string
-          upc?: string
-        }
-      }>
-    }
-  }>
+  // 0件は異常。この状態だと全商品が「no Square catalog match」で黙って捨てられ、
+  // EC の注文ラベルが1枚も出ない。呼び出し側に分かる形で返す。
+  if (squareItems.length === 0) {
+    console.error('[label-print-by-name] print_label=yes search returned 0 items')
+    return NextResponse.json(
+      { error: 'Square catalog returned no print_label items', printed: [], skipped: [] },
+      { status: 502 },
+    )
+  }
 
   const printed: Array<{ name: string; gtin: string; qty: number }> = []
   const skipped: Array<{ name: string; reason: string }> = []

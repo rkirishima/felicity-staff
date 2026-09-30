@@ -1,11 +1,10 @@
 import { requireAuth } from '@/lib/auth/server'
 import { NextResponse } from 'next/server'
+import { fetchPrintLabelItems, PrintLabelCatalogError } from '@/lib/square/print-label'
 
 // Returns all Square catalog items tagged with print_label=yes, normalized
 // for label printing. Used by both the staff label UI and the EC confirm-order
 // auto-print flow, so there's a single source of truth: Square.
-
-const PRINT_LABEL_ATTR_ID = 'X3QZMB3JYOIRV65E4ASKJQJF'
 
 type Variation = {
   variationId: string
@@ -173,33 +172,32 @@ export async function GET(request: Request) {
   const debug = new URL(request.url).searchParams.get('debug') === '1'
 
   try {
-    const res = await fetch('https://connect.squareup.com/v2/catalog/search-catalog-items', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Square-Version': '2024-01-18',
-      },
-      body: JSON.stringify({
-        custom_attribute_filters: [{
-          custom_attribute_definition_id: PRINT_LABEL_ATTR_ID,
-          string_filter: 'print_label = yes',
-        }],
-        limit: 100,
-      }),
-    })
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      console.error('Square catalog search failed:', err)
-      return NextResponse.json({ error: 'Square catalog query failed' }, { status: 502 })
+    let squareItems
+    try {
+      squareItems = await fetchPrintLabelItems(token)
+    } catch (err) {
+      if (err instanceof PrintLabelCatalogError) {
+        console.error('Square catalog search failed:', err.detail)
+        return NextResponse.json({ error: 'Square catalog query failed' }, { status: 502 })
+      }
+      throw err
     }
 
-    const data = await res.json()
     const items: LabelItem[] = []
     const skipped: Array<{ item: string; variation: string; reason: string }> = []
 
-    for (const item of (data.items ?? [])) {
+    // Square が1件も返さないのは異常 (属性が外れた/検索仕様が変わった)。
+    // 固定表示の商品だけが残って「項目が減った」ように見えるので、理由を出す。
+    if (squareItems.length === 0) {
+      skipped.push({
+        item: '(Square同期分すべて)',
+        variation: '-',
+        reason: 'Squareの print_label=yes 検索が0件。属性が外れたか検索仕様が変わった可能性あり（固定表示の商品のみ表示中）',
+      })
+      console.error('[label-items] print_label=yes search returned 0 items')
+    }
+
+    for (const item of squareItems) {
       if (item.is_deleted || item.is_archived) {
         skipped.push({ item: item.item_data?.name ?? item.id, variation: '-', reason: 'item deleted/archived' })
         continue
@@ -275,7 +273,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         items,
         skipped,
-        totalSquareItems: (data.items ?? []).length,
+        totalSquareItems: squareItems.length,
         tip: 'Squareで「print_label=yes」属性とUPC/GTINの両方を設定してください',
       })
     }
