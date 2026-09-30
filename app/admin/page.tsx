@@ -120,6 +120,7 @@ function AdminPageInner() {
     { label: '📖 レシピ・マニュアル', sub: 'ドリンク・フード・清掃手順', path: '/recipes', color: 'bg-white border border-stone-100' },
     { label: '💰 EC売上', sub: '売上集計・注文一覧', path: '/admin/sales', color: 'bg-white border border-stone-100' },
     { label: '📊 経理', sub: 'レシートOCR・請求書・月次', path: '/admin/keiri', color: 'bg-white border border-stone-100' },
+    { label: '☕ 業販注文', sub: '入金確認・領収書', path: '/admin/keiri/wholesale', color: 'bg-white border border-stone-100' },
     { label: '🔥 焙煎ログ', sub: 'Probat記録・FCR在庫', path: '/admin/roast', color: 'bg-white border border-stone-100' },
     { label: '🫘 生豆在庫', sub: '棚卸し・仕入・残量予測', path: '/admin/green', color: 'bg-white border border-stone-100' },
     { label: '📦 在庫管理', sub: 'アパレル・グッズ・SKU', path: '/admin/inventory', color: 'bg-white border border-stone-100' },
