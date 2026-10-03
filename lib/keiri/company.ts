@@ -19,7 +19,8 @@ const DEFAULTS = {
   address: '神奈川県三浦郡葉山町上山口2432-3',
   phone: '080-8758-4368',
   email: '',
-  bank: 'SBIネット銀行  法人第一支店\n普通 2373525',
+  // 住信SBIネット銀行は 2026年にドコモSMTBネット銀行へ改称（口座番号は同じ）
+  bank: 'ドコモSMTBネット銀行（0038）  法人第一支店（106）\n普通 2373525  カ）フエリシテイ',
   registrationNumber: '',
 } as const
 
