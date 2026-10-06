@@ -55,6 +55,13 @@ export function RecipeCard({ recipe, beanName, greenKg, exact }: { recipe: Recip
         <span className={`text-xs px-2 py-1 rounded-md ${st.cls}`}>{st.label}</span>
       </div>
 
+      {recipe.source === 'best_roast' && recipe.score != null && recipe.score < 70 && (
+        <p className="text-xs text-rose-200 bg-rose-900/40 border border-rose-700/50 rounded-lg px-3 py-2 flex gap-1.5">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+          この提案の元になった焙煎には問題があります（{recipe.why?.split('が基準。')[1] ?? '評価が低い'}）。そのまま真似せず、「レシピ」タブで編集するか AI 試作を作ってください。
+        </p>
+      )}
+
       {!exact && (
         <p className="text-xs text-amber-200 bg-amber-900/30 rounded-lg px-3 py-2 flex gap-1.5">
           <Info size={14} className="shrink-0 mt-0.5" />

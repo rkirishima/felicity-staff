@@ -65,10 +65,15 @@ export function RecipeManager({ beans }: { beans: Bean[] }) {
      
     fetch('/api/roast/recipes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'candidates', bean: beanId, kg, level }) })
       .then((r) => r.json())
-      .then((j) => { if (alive && j.ok) { setCands(j.candidates); setMeta({ total: j.total, rejected: j.rejected }) } })
+      .then((j) => {
+        if (!alive || !j.ok) return
+        setCands(j.candidates)
+        setMeta({ total: j.total, rejected: j.rejected })
+        if (j.filled > 0) loadAll() // 焙煎済みでレシピが無かった組に提案ができた
+      })
       .catch(() => {})
     return () => { alive = false }
-  }, [beanId, kg, level])
+  }, [beanId, kg, level, loadAll])
 
   async function act(body: Record<string, unknown>, label: string): Promise<boolean> {
     setBusy(label)
