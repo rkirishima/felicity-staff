@@ -29,7 +29,7 @@ export type Recipe = {
   batch_kg: number
   roast_level: RoastLevel
   status: RecipeStatus
-  source: 'best_roast' | 'ai'
+  source: 'best_roast' | 'ai' | 'manual'
   source_curve_id: string | null
   charge_temp_c: number | null
   drum_pct: number | null
@@ -121,5 +121,51 @@ export function recipeAsProfile(r: Recipe, beanName = r.bean_id): RecommendedPro
     source: r.source === 'ai' ? 'ai-draft' : 'felicity-best-roast',
     confidence: conf,
     confidence_rank: conf === 'measured' ? 1 : conf === 'thin' ? 2 : 3,
+  }
+}
+
+/** 手入力されたレシピを、保存できる形に整える（範囲外の数値は捨てる）。サーバー・画面共用 */
+export function sanitizeRecipeInput(input: {
+  charge_temp_c?: unknown; drum_pct?: unknown; steps?: unknown; targets?: unknown; watch?: unknown
+}): Pick<Recipe, 'charge_temp_c' | 'drum_pct' | 'steps' | 'targets' | 'watch'> {
+  const num = (v: unknown, lo: number, hi: number): number | null => {
+    if (v === '' || v == null) return null
+    const n = Number(v)
+    return Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n * 10) / 10 : null
+  }
+  const steps: RecipeStep[] = (Array.isArray(input.steps) ? input.steps : [])
+    .map((x) => x as Record<string, unknown>)
+    .map((x) => ({
+      t: num(x.t, 0, 1500) ?? -1,
+      bt: num(x.bt, 0, 260),
+      gas: num(x.gas, 0, 100),
+      fan: num(x.fan, 0, 100),
+      drum: num(x.drum, 0, 100),
+      note: typeof x.note === 'string' && x.note.trim() ? x.note.trim().slice(0, 40) : null,
+    }))
+    .filter((x) => x.t >= 0 && (x.gas != null || x.fan != null || x.drum != null || x.note))
+    .sort((a, b) => a.t - b.t)
+    .slice(0, 20)
+  const t = (input.targets ?? {}) as Record<string, unknown>
+  const targets: RecipeTargets = {
+    tp_s: num(t.tp_s, 0, 300), tp_c: num(t.tp_c, 40, 160),
+    yellow_s: num(t.yellow_s, 60, 600),
+    fc_s: num(t.fc_s, 240, 1200), fc_c: num(t.fc_c, 170, 230),
+    drop_s: num(t.drop_s, 300, 1500), drop_c: num(t.drop_c, 180, 250),
+    wl_lo: num(t.wl_lo, 5, 25), wl_hi: num(t.wl_hi, 5, 25),
+  }
+  if (targets.fc_s != null && targets.drop_s != null && targets.drop_s > targets.fc_s) {
+    targets.dev_s = targets.drop_s - targets.fc_s
+    targets.dtr_pct = Math.round((targets.dev_s / targets.drop_s) * 1000) / 10
+  } else {
+    targets.dev_s = null
+    targets.dtr_pct = null
+  }
+  return {
+    charge_temp_c: num(input.charge_temp_c, 100, 260),
+    drum_pct: num(input.drum_pct, 0, 100),
+    steps,
+    targets,
+    watch: typeof input.watch === 'string' && input.watch.trim() ? input.watch.trim().slice(0, 200) : null,
   }
 }

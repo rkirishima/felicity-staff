@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Sparkles, RefreshCw, CheckCircle2, Archive } from 'lucide-react'
+import { Sparkles, RefreshCw, CheckCircle2, Archive, Pencil } from 'lucide-react'
 import { useIsAdmin } from '@/lib/admin-context'
 import { ROAST_LEVEL_LABELS, type RoastLevel } from '@/lib/roast-profiles'
 import { fmtSec } from '@/lib/roast/profile'
-import { BATCHES, LEVELS, STATUS_LABEL, type Recipe } from '@/lib/roast/recipe'
+import { BATCHES, LEVELS, STATUS_LABEL, pickRecipe, type Recipe } from '@/lib/roast/recipe'
 import { RecipeCard } from './RecipeCard'
+import { RecipeEditor } from './RecipeEditor'
 
 type Bean = { id: string; display_name: string; origin_country: string | null }
 type Cand = {
@@ -37,6 +38,8 @@ export function RecipeManager({ beans }: { beans: Bean[] }) {
   const [cands, setCands] = useState<Cand[] | null>(null)
   const [meta, setMeta] = useState<{ total: number; rejected: number } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  // 編集中の 豆|kg|レベル（切り替えたら編集は閉じる）
+  const [editKey, setEditKey] = useState<string | null>(null)
 
   const loadAll = useCallback(async () => {
     const j = await fetch('/api/roast/recipes').then((r) => r.json()).catch(() => null)
@@ -67,7 +70,7 @@ export function RecipeManager({ beans }: { beans: Bean[] }) {
     return () => { alive = false }
   }, [beanId, kg, level])
 
-  async function act(body: Record<string, unknown>, label: string) {
+  async function act(body: Record<string, unknown>, label: string): Promise<boolean> {
     setBusy(label)
     try {
       const j = await fetch('/api/roast/recipes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json())
@@ -75,14 +78,24 @@ export function RecipeManager({ beans }: { beans: Bean[] }) {
       if (body.action === 'rebuild') toast.success(`提案を ${j.created} 件作りました（記録不完全で除外 ${j.rejected_recordings} 本）`)
       else toast.success('保存しました')
       await loadAll()
+      return true
     } catch (e) {
       toast.error(`${label}失敗: ${e instanceof Error ? e.message : e}`)
+      return false
     } finally {
       setBusy(null)
     }
   }
 
   const bean = beans.find((b) => b.id === beanId)
+  const key = `${beanId}|${kg}|${level}`
+  const editing = editKey === key
+  // レシピが無い組み合わせは、この豆の一番近いレシピを下書きにして手で作る
+  const nearest = !current ? pickRecipe(byBean.get(beanId) ?? [], kg, level)?.recipe ?? null : null
+  async function saveEdit(recipe: Record<string, unknown>) {
+    const ok = await act(current ? { action: 'save', id: current.id, recipe } : { action: 'save', bean: beanId, kg, level, recipe }, '保存')
+    if (ok) setEditKey(null)
+  }
 
   return (
     <div className="space-y-4">
@@ -122,9 +135,17 @@ export function RecipeManager({ beans }: { beans: Bean[] }) {
           <div className="flex flex-wrap gap-2">{BATCHES.map((k) => <Chip key={k} on={kg === k} onClick={() => setKg(k)}>{k}kg</Chip>)}</div>
           <div className="flex flex-wrap gap-2">{LEVELS.map((lv) => <Chip key={lv} on={level === lv} onClick={() => setLevel(lv)}>{ROAST_LEVEL_LABELS[lv]}</Chip>)}</div>
 
-          {current ? (
+          {editing ? (
+            <RecipeEditor base={current ?? nearest} saving={busy === '保存'} onSave={saveEdit} onCancel={() => setEditKey(null)} />
+          ) : current ? (
             <>
               <RecipeCard recipe={current} beanName={bean.display_name} greenKg={kg} exact />
+              {isAdmin && (
+                <button onClick={() => setEditKey(key)} disabled={!!busy}
+                  className="w-full rounded-xl py-3 bg-stone-700 text-white text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                  <Pencil size={15} />このレシピを編集する
+                </button>
+              )}
               {isAdmin && current.status !== 'confirmed' && (
                 <button onClick={() => act({ action: 'confirm', id: current.id }, '確定')} disabled={!!busy}
                   className="w-full rounded-xl py-3 bg-emerald-700 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
@@ -137,7 +158,15 @@ export function RecipeManager({ beans }: { beans: Bean[] }) {
               )}
             </>
           ) : (
-            <p className="text-sm text-stone-400">この {kg}kg・{ROAST_LEVEL_LABELS[level]} のレシピはまだありません。</p>
+            <>
+              <p className="text-sm text-stone-400">この {kg}kg・{ROAST_LEVEL_LABELS[level]} のレシピはまだありません。</p>
+              {isAdmin && (
+                <button onClick={() => setEditKey(key)} disabled={!!busy}
+                  className="w-full rounded-xl py-3 bg-stone-700 text-white text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                  <Pencil size={15} />{nearest ? `${nearest.batch_kg}kg・${ROAST_LEVEL_LABELS[nearest.roast_level].split(' ')[0]} のレシピをもとに手で作る` : '手で作る'}
+                </button>
+              )}
+            </>
           )}
 
           {isAdmin && (

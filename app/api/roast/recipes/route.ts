@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { candidatesForBean, recipeRowFrom, type Candidate } from '@/lib/roast/best'
 import { designRecipe } from '@/lib/roast/designer'
 import { downsample } from '@/lib/roast/curve'
-import { batchBucket, LEVELS } from '@/lib/roast/recipe'
+import { batchBucket, LEVELS, sanitizeRecipeInput } from '@/lib/roast/recipe'
 import type { RoastLevel } from '@/lib/roast-profiles'
 
 export const runtime = 'nodejs'
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   return Response.json({ ok: true, recipes: data ?? [] })
 }
 
-type Body = { action?: string; bean?: string; kg?: number; level?: string; id?: string; curve_id?: string }
+type Body = { action?: string; bean?: string; kg?: number; level?: string; id?: string; curve_id?: string; recipe?: Record<string, unknown> }
 
 function slim(c: Candidate) {
   return {
@@ -130,6 +130,32 @@ export async function POST(request: Request) {
     if (!res) return Response.json({ ok: false, error: 'AI がレシピを作れませんでした（APIキー/モデルを確認）' }, { status: 502 })
     await clearGroup(sb, b.bean, kg, b.level, ['ai_draft'])
     const { data, error } = await sb.from('roast_recipes').insert(res.row).select(COLS).single()
+    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 })
+    return Response.json({ ok: true, recipe: data })
+  }
+
+  if (b.action === 'save') {
+    // 手で編集したレシピを保存。id があれば上書き、無ければその 豆×バッチ×レベル の確定レシピとして新規作成
+    const clean = sanitizeRecipeInput(b.recipe ?? {})
+    if (clean.steps.length === 0) return Response.json({ ok: false, error: '操作の行が1つもありません' }, { status: 400 })
+    const stamp = `手動編集 ${new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)}${session?.name ? `（${session.name}）` : ''}`
+    if (b.id) {
+      const { data: cur } = await sb.from('roast_recipes').select('why').eq('id', b.id).maybeSingle()
+      if (!cur) return Response.json({ ok: false, error: 'not found' }, { status: 404 })
+      const base = ((cur as { why: string | null }).why ?? '').replace(/^手動編集[^。]*。\s*/, '')
+      const { data, error } = await sb.from('roast_recipes')
+        .update({ ...clean, source: 'manual', why: `${stamp}。${base}`.slice(0, 600), updated_at: now })
+        .eq('id', b.id).select(COLS).single()
+      if (error) return Response.json({ ok: false, error: error.message }, { status: 500 })
+      return Response.json({ ok: true, recipe: data })
+    }
+    if (!b.bean || !b.kg || !b.level || !LEVELS.includes(b.level as RoastLevel)) return Response.json({ ok: false, error: 'bean/kg/level required' }, { status: 400 })
+    const kg = batchBucket(Number(b.kg))
+    await clearGroup(sb, b.bean, kg, b.level, ['confirmed', 'suggested', 'ai_draft'])
+    const { data, error } = await sb.from('roast_recipes').insert({
+      bean_id: b.bean, batch_kg: kg, roast_level: b.level, status: 'confirmed', source: 'manual', source_curve_id: null,
+      ...clean, why: `${stamp}。`, score: null, confirmed_by: session?.name ?? null, confirmed_at: now, updated_at: now,
+    }).select(COLS).single()
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 })
     return Response.json({ ok: true, recipe: data })
   }
