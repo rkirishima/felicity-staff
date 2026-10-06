@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Flame, Wind, AlertTriangle, Info } from 'lucide-react'
+import { Flame, Wind, AlertTriangle, Info, RotateCw } from 'lucide-react'
 import { CurveChart } from './CurveChart'
 import { fmtSec } from '@/lib/roast/profile'
 import { ROAST_LEVEL_LABELS } from '@/lib/roast-profiles'
 import { roastedKgRange, STATUS_LABEL, type Recipe } from '@/lib/roast/recipe'
 
 type Row =
-  | { kind: 'step'; t: number; bt: number | null; gas: number | null; fan: number | null; note?: string | null }
+  | { kind: 'step'; t: number; bt: number | null; gas: number | null; fan: number | null; drum?: number | null; note?: string | null }
   | { kind: 'mark'; t: number; label: string; temp: number | null }
 
 function Big({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -40,6 +40,8 @@ export function RecipeCard({ recipe, beanName, greenKg, exact }: { recipe: Recip
     ...(t.drop_s != null ? [{ kind: 'mark' as const, t: t.drop_s, label: 'ドロップ', temp: t.drop_c ?? null }] : []),
   ].sort((a, b) => a.t - b.t || (a.kind === 'mark' ? 1 : -1))
 
+  const drumChanges = (recipe.steps ?? []).some((s) => s.t > 0 && s.drum != null)
+  const cols = 'grid-cols-[3.2rem_3.6rem_1fr_1fr_1fr]'
   const st = STATUS_LABEL[recipe.status]
   const roasted = roastedKgRange(greenKg, t)
 
@@ -61,12 +63,12 @@ export function RecipeCard({ recipe, beanName, greenKg, exact }: { recipe: Recip
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        <Big label="投入（豆温度）" value={recipe.charge_temp_c != null ? `${Math.round(recipe.charge_temp_c)}°C` : '—'} sub={recipe.drum_pct != null ? `ドラム ${recipe.drum_pct}` : undefined} />
+        <Big label="投入（豆温度）" value={recipe.charge_temp_c != null ? `${Math.round(recipe.charge_temp_c)}°C` : '—'} />
+        <Big label="ドラム" value={recipe.drum_pct != null ? String(Math.round(recipe.drum_pct)) : '—'} sub={drumChanges ? '途中で変更あり（表を参照）' : '最後まで固定'} />
         <Big label="1ハゼ" value={fmtSec(t.fc_s)} sub={t.fc_c != null ? `${t.fc_c}°C` : undefined} />
         <Big label="ドロップ" value={t.drop_c != null ? `${t.drop_c}°C` : '—'} sub={`${fmtSec(t.drop_s)} · 発達 ${fmtSec(t.dev_s)}${t.dtr_pct != null ? `（${t.dtr_pct}%）` : ''}`} />
         <Big label="重量減" value={t.wl_lo != null ? `${t.wl_lo}〜${t.wl_hi}%` : '—'} sub={roasted ? `焙煎後 ${roasted.lo.toFixed(2)}〜${roasted.hi.toFixed(2)}kg` : undefined} />
-        <Big label="ボトム" value={fmtSec(t.tp_s)} sub={t.tp_c != null ? `${t.tp_c}°C` : undefined} />
-        <Big label="150°C" value={fmtSec(t.yellow_s)} />
+        <Big label="ボトム / 150°C" value={fmtSec(t.tp_s)} sub={`${t.tp_c != null ? `${t.tp_c}°C · ` : ''}150°C ${fmtSec(t.yellow_s)}`} />
       </div>
 
       {recipe.watch && (
@@ -76,17 +78,17 @@ export function RecipeCard({ recipe, beanName, greenKg, exact }: { recipe: Recip
       )}
 
       <div className="rounded-xl overflow-hidden border border-stone-800">
-        <div className="grid grid-cols-[3.5rem_4rem_1fr_1fr] gap-2 px-3 py-2 text-[11px] text-stone-400 bg-stone-900">
-          <span>時間</span><span>豆温度</span><span className="flex items-center gap-1"><Flame size={11} />ガス</span><span className="flex items-center gap-1"><Wind size={11} />ファン</span>
+        <div className={`grid ${cols} gap-2 px-3 py-2 text-[11px] text-stone-400 bg-stone-900`}>
+          <span>時間</span><span>豆温度</span><span className="flex items-center gap-1"><Flame size={11} />ガス</span><span className="flex items-center gap-1"><Wind size={11} />ファン</span><span className="flex items-center gap-1"><RotateCw size={11} />ドラム</span>
         </div>
         {rows.map((r, i) => r.kind === 'mark' ? (
-          <div key={`m${i}`} className="grid grid-cols-[3.5rem_4rem_1fr] gap-2 px-3 py-1.5 bg-amber-950/40 border-t border-stone-800 text-sm">
+          <div key={`m${i}`} className="grid grid-cols-[3.2rem_3.6rem_1fr] gap-2 px-3 py-1.5 bg-amber-950/40 border-t border-stone-800 text-sm">
             <span className="tabular-nums text-amber-300 font-semibold">{fmtSec(r.t)}</span>
             <span className="tabular-nums text-amber-300">{r.temp != null ? `${r.temp}°C` : ''}</span>
             <span className="text-amber-200 font-semibold">{r.label}</span>
           </div>
         ) : (
-          <div key={`s${i}`} className="grid grid-cols-[3.5rem_4rem_1fr_1fr] gap-2 px-3 py-2 border-t border-stone-800 text-base items-baseline">
+          <div key={`s${i}`} className={`grid ${cols} gap-2 px-3 py-2 border-t border-stone-800 text-base items-baseline`}>
             <span className="tabular-nums text-white font-semibold">{r.t === 0 ? '投入' : fmtSec(r.t)}</span>
             <span className="tabular-nums text-stone-300 text-sm">{r.bt != null ? `${r.bt}°C` : ''}</span>
             <span className="tabular-nums text-orange-300 font-bold">{r.gas != null ? `${r.gas}%` : <span className="text-stone-600 font-normal">—</span>}</span>
@@ -94,6 +96,7 @@ export function RecipeCard({ recipe, beanName, greenKg, exact }: { recipe: Recip
               {r.fan != null ? r.fan : <span className="text-stone-600 font-normal">—</span>}
               {r.note && <span className="block text-[11px] font-normal text-stone-400">{r.note}</span>}
             </span>
+            <span className="tabular-nums text-lime-300 font-bold">{r.drum != null ? r.drum : <span className="text-stone-600 font-normal">—</span>}</span>
           </div>
         ))}
       </div>

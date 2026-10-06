@@ -8,8 +8,9 @@
 //      (STAFF_SUPABASE_URL / STAFF_SUPABASE_SERVICE_KEY).
 //   2. Asks the roaster for its history list (read-only commands only).
 //   3. Inserts any roast not yet in roast_curves (keyed on
-//      metrics->>'probat_history_id'). Skips roasts younger than 20 min so an
-//      in-progress roast is never half-synced.
+//      metrics->>'probat_history_id') as soon as it is finished (its chart stops
+//      growing between two reads 8 s apart), so an in-progress roast is
+//      never half-synced. Runs every 2 min via launchd.
 //   4. Refreshes name/note/weights on the 10 most recent synced entries —
 //      operators often type the roast name on the machine after the fact.
 //   5. Links each curve to an existing roast_logs row for the same JST day.
@@ -35,10 +36,16 @@ const DRY = process.argv.includes('--dry-run');
 const VERBOSE = process.argv.includes('--verbose');
 const ENV_FILE = process.env.PROBAT_ENV_FILE || '/Users/doug/Projects/felicity-web/doug/.env';
 const STATE_FILE = path.join(__dirname, '.alert-state.json');
-const FAIL_ALERT_RUNS = 6;        // 6 consecutive failures (~1 h) before alerting
-const UNREACH_ALERT_RUNS = 3;     // 3 unreachable runs (~30 min) while roasting is happening
+const FAIL_ALERT_MIN = 60;        // failing for 1 h before alerting
+const UNREACH_ALERT_MIN = 30;     // unreachable for 30 min while roasting is happening
 const ROASTING_WINDOW_H = 3;      // "roasting is happening" = a roast_logs row in the last 3 h
-const MIN_AGE_S = 20 * 60;      // don't touch roasts newer than this
+// A roast is synced as soon as it is finished. creationDate is NOT the charge
+// time — it is reset whenever the entry is saved/renamed on the panel — so age
+// can't tell us. Instead, entries younger than MIN_AGE_S have their chart read
+// twice STABLE_GAP_MS apart: a roast in progress grows at 1 Hz, a finished one
+// doesn't. Older entries are always treated as finished.
+const MIN_AGE_S = 20 * 60;
+const STABLE_GAP_MS = 8000;
 const REFRESH_LAST_N = 10;      // re-check metadata on this many recent entries
 const GAP_MS = 80;
 const PAGE_CHART = 250;
@@ -153,7 +160,7 @@ const jstDay = (iso) => new Date(new Date(iso).getTime() + 9 * 3600e3).toISOStri
 
 // --- status + alerts ----------------------------------------------------------
 function readState() {
-  try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return { fails: 0, unreach: 0, alerted: null }; }
+  try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return { failSince: null, unreachSince: null, alerted: null }; }
 }
 function writeState(s) {
   try { fs.writeFileSync(STATE_FILE, JSON.stringify(s)); } catch {}
@@ -184,17 +191,20 @@ async function finish(status, message, extra = {}) {
   catch (e) { log(`status write failed: ${e.message.slice(0, 120)}`); }
 
   if (DRY) process.exit(0);
+  // 実行間隔に依存しないよう、回数ではなく「いつから続いているか」で判定する
   const st = readState();
-  st.fails = status === 'failed' ? st.fails + 1 : 0;
-  st.unreach = status === 'unreachable' ? st.unreach + 1 : 0;
+  const t = Date.now();
+  st.failSince = status === 'failed' ? st.failSince ?? t : null;
+  st.unreachSince = status === 'unreachable' ? st.unreachSince ?? t : null;
+  const minsSince = (x) => (x ? Math.floor((t - x) / 60e3) : 0);
   if (status === 'ok' && st.alerted) {
     await telegram(`✅ Probat 取り込み 復旧しました（${message}）`);
     st.alerted = null;
-  } else if (!st.alerted && st.fails >= FAIL_ALERT_RUNS) {
-    await telegram(`⚠️ Probat 取り込みが ${st.fails} 回連続で失敗しています（Mac mini）\n${message.slice(0, 300)}`);
+  } else if (!st.alerted && minsSince(st.failSince) >= FAIL_ALERT_MIN) {
+    await telegram(`⚠️ Probat 取り込みが ${minsSince(st.failSince)} 分失敗し続けています（Mac mini）\n${message.slice(0, 300)}`);
     st.alerted = 'failed';
-  } else if (!st.alerted && st.unreach >= UNREACH_ALERT_RUNS && (await roastingNow())) {
-    await telegram(`⚠️ 焙煎中なのに Mac mini から Probat が見えません（${st.unreach * 10}分）\nMac mini の有線LAN（en0）とロースター側ルーターを確認してください。カーブがAIレビューに入りません。`);
+  } else if (!st.alerted && minsSince(st.unreachSince) >= UNREACH_ALERT_MIN && (await roastingNow())) {
+    await telegram(`⚠️ 焙煎中なのに Mac mini から Probat が見えません（${minsSince(st.unreachSince)}分）\nMac mini の有線LAN（en0）とロースター側ルーターを確認してください。カーブがAIレビューに入りません。`);
     st.alerted = 'unreachable';
   }
   writeState(st);
@@ -225,23 +235,39 @@ async function finish(status, message, extra = {}) {
     await sleep(GAP_MS);
   }
   const nowS = Date.now() / 1000;
-  const finished = summaries.filter((s) => nowS - parseInt(s.creationDate, 10) > MIN_AGE_S);
-  const fresh = finished.filter((s) => !byProbatId.has(s.id));
+  const ageS = (s) => nowS - parseInt(s.creationDate, 10);
+  const finished = summaries;
+  const fresh = summaries.filter((s) => !byProbatId.has(s.id));
   log(`roaster: ${summaries.length} entries, ${fresh.length} new to sync`);
 
-  // 3. sync new roasts
-  let created = 0, linked = 0, unlinked = 0, unresolved = [];
-  for (const s of fresh) {
-    const entry = (await p.send('getHistoryEntry', { historyId: s.id })).data || {};
+  async function chartOf(id) {
     const raw = [];
     for (let page = 0; page < 20; page++) {
-      const res = await p.send('getHistoryChartData', { historyId: s.id, startBlock: page * PAGE_CHART, endBlock: (page + 1) * PAGE_CHART - 1 });
+      const res = await p.send('getHistoryChartData', { historyId: id, startBlock: page * PAGE_CHART, endBlock: (page + 1) * PAGE_CHART - 1 });
       if (res.status !== 'ok' || !Array.isArray(res.data) || !res.data.length) break;
       raw.push(...res.data);
       await sleep(GAP_MS);
       if (res.data.length < PAGE_CHART) break;
     }
-    const samples = mergeByTimestamp(raw);
+    return mergeByTimestamp(raw);
+  }
+
+  // 3. sync new roasts
+  let created = 0, linked = 0, unlinked = 0, unresolved = [];
+  for (const s of fresh) {
+    let samples = await chartOf(s.id);
+    if (ageS(s) <= MIN_AGE_S) {
+      // まだ新しい焙煎は、8秒あけて読み直し、記録が増えていなければ焼き終わり
+      const lastT = (xs) => (xs.length ? xs[xs.length - 1].timestamp : -1);
+      await sleep(STABLE_GAP_MS);
+      const again = await chartOf(s.id);
+      if (!samples.length || lastT(again) !== lastT(samples) || again.length !== samples.length) {
+        log(`#${s.id} still roasting (last sample ${lastT(again)}s) — next run`);
+        continue;
+      }
+      samples = again;
+    }
+    const entry = (await p.send('getHistoryEntry', { historyId: s.id })).data || {};
     const name = (entry.name || s.name || s.coffeeName || '').trim();
     const beanId = resolveBean(name, aliases, beans);
     if (!beanId && name) unresolved.push(`#${s.id} "${name}"`);

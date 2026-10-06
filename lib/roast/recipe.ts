@@ -7,7 +7,7 @@ import { fmtSec, type RecommendedProfile } from './profile'
 export type RecipeStatus = 'suggested' | 'confirmed' | 'ai_draft' | 'archived'
 
 /** 操作の1行。t=投入からの秒、bt=その時の豆温度（目安） */
-export type RecipeStep = { t: number; bt: number | null; gas: number | null; fan: number | null; note?: string | null }
+export type RecipeStep = { t: number; bt: number | null; gas: number | null; fan: number | null; drum?: number | null; note?: string | null }
 
 export type RecipeTargets = {
   tp_s?: number | null
