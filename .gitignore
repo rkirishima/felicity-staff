@@ -40,3 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# probat-sync (Mac mini local state)
+scripts/probat-sync/node_modules/
+scripts/probat-sync/.roaster-cache.json
+scripts/probat-sync/.alert-state.json
+scripts/probat-sync/sync.log

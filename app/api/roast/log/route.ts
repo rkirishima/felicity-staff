@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server'
-import { requireAuth } from '@/lib/auth/server'
+import { requireAuth, requireRole } from '@/lib/auth/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadRoastContext } from '@/lib/roast/data'
 import { downsample } from '@/lib/roast/curve'
@@ -44,6 +44,17 @@ export async function PATCH(request: NextRequest) {
   if (b.notes !== undefined) patch.notes = b.notes
   const sb = createAdminClient()
   const { error } = await sb.from('roast_logs').update(patch).eq('id', b.id)
+  if (error) return Response.json({ ok: false, error: error.message }, { status: 500 })
+  return Response.json({ ok: true })
+}
+
+// 間違えて記録した焙煎を消す（管理者のみ）。レビュー・カップ評価も消え、Probat カーブは紐付けが外れるだけ。
+export async function DELETE(request: NextRequest) {
+  const denied = await requireRole(['admin']); if (denied) return denied
+  const id = request.nextUrl.searchParams.get('id')
+  if (!id) return Response.json({ ok: false, error: 'id required' }, { status: 400 })
+  const sb = createAdminClient()
+  const { error } = await sb.from('roast_logs').delete().eq('id', id)
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 })
   return Response.json({ ok: true })
 }
