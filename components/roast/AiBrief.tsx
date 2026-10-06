@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { Sparkles, RefreshCw } from 'lucide-react'
-import type { UseCase } from '@/lib/roast/profile'
 import { fmtSec } from '@/lib/roast/profile'
 
 type Brief = { focus: string; points: string[]; watch: { at: string; what: string }[] }
@@ -18,7 +17,7 @@ type Hist = {
 }
 
 /** 焼く前の「今日のポイント」。前回の宿題・カップ評価を踏まえて AI が作る。 */
-export function AiBrief({ beanId, greenKg, useCase }: { beanId: string; greenKg: number; useCase: UseCase }) {
+export function AiBrief({ beanId, greenKg, level }: { beanId: string; greenKg: number; level: string }) {
   const [brief, setBrief] = useState<Brief | null>(null)
   const [history, setHistory] = useState<Hist[]>([])
   const [loading, setLoading] = useState(false)
@@ -35,7 +34,7 @@ export function AiBrief({ beanId, greenKg, useCase }: { beanId: string; greenKg:
         const res = await fetch('/api/roast/brief', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ beanId, greenKg, useCase }),
+          body: JSON.stringify({ beanId, greenKg, level }),
         })
         const j = await res.json()
         if (cancelled) return
@@ -49,7 +48,7 @@ export function AiBrief({ beanId, greenKg, useCase }: { beanId: string; greenKg:
       }
     }, 500)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [beanId, greenKg, useCase, nonce])
+  }, [beanId, greenKg, level, nonce])
 
   if (!beanId) return null
 

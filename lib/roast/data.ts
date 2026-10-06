@@ -2,6 +2,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { digestCurve, digestFromEvents, type CurveDigest, type CurveRow } from './curve'
 import type { RecommendedProfile } from './profile'
+import { LEVELS, pickRecipe, recipeAsProfile, type Recipe } from './recipe'
+import type { RoastLevel } from '@/lib/roast-profiles'
 
 export type RoastLogRow = {
   id: string
@@ -67,20 +69,25 @@ export async function loadCurveForLog(sb: SupabaseClient, logId: string): Promis
   return (data as CurveRow | null) ?? null
 }
 
+/** 豆・バッチ・レベルに合うレシピ（roast_recipes）を、旧プロファイル形式で返す */
+export async function loadRecipeProfile(sb: SupabaseClient, beanId: string, greenKg: number, level: string | null): Promise<RecommendedProfile | null> {
+  const { data } = await sb.from('roast_recipes').select('*, roast_beans(display_name)').eq('bean_id', beanId).neq('status', 'archived')
+  const rows = (data as (Recipe & { roast_beans: { display_name: string } | null })[]) ?? []
+  const picked = pickRecipe(rows, greenKg, LEVELS.includes(level as RoastLevel) ? (level as RoastLevel) : '')
+  if (!picked) return null
+  const r = picked.recipe as Recipe & { roast_beans: { display_name: string } | null }
+  return recipeAsProfile(r, r.roast_beans?.display_name)
+}
+
 export async function loadProfileFor(sb: SupabaseClient, log: RoastLogRow): Promise<RecommendedProfile | null> {
   if (log.profile_id) {
-    const { data } = await sb.from('roast_profile_recommended').select('*').eq('id', log.profile_id).maybeSingle()
-    if (data) return data as RecommendedProfile
+    const { data } = await sb.from('roast_recipes').select('*, roast_beans(display_name)').eq('id', log.profile_id).maybeSingle()
+    if (data) {
+      const r = data as Recipe & { roast_beans: { display_name: string } | null }
+      return recipeAsProfile(r, r.roast_beans?.display_name)
+    }
   }
-  const { data } = await sb.from('roast_profile_recommended').select('*').eq('bean_id', log.bean_id)
-  const rows = (data as RecommendedProfile[]) ?? []
-  if (!rows.length) return null
-  const use = log.use_case
-  const pool = rows.filter((r) => !use || r.use_case === use)
-  const cand = pool.length ? pool : rows
-  return [...cand].sort((a, b) =>
-    Math.abs(Number(a.batch_kg) - Number(log.green_kg)) - Math.abs(Number(b.batch_kg) - Number(log.green_kg))
-    || a.confidence_rank - b.confidence_rank)[0]
+  return loadRecipeProfile(sb, log.bean_id, Number(log.green_kg), log.roast_level)
 }
 
 /** 同じ豆・近いバッチの直近ローストを、要約つきで返す（古い→新しい順ではなく新しい順） */

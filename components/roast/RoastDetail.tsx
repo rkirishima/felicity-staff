@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { X, Sparkles, RefreshCw, Coffee, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { X, Sparkles, RefreshCw, Coffee, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react'
+import { useIsAdmin } from '@/lib/admin-context'
 import { CurveChart } from './CurveChart'
 import { fmtSec, parseRange, parseWindow, type RecommendedProfile } from '@/lib/roast/profile'
 import type { CurveDigest, RoastFlag } from '@/lib/roast/curve'
@@ -69,6 +70,7 @@ export function RoastDetail({ logId, onClose, onChanged }: { logId: string; onCl
   const [roastedKg, setRoastedKg] = useState('')
   const [cup, setCup] = useState<{ overall: number | null; sweetness: number | null; acidity: number | null; body: number | null; defects: string[]; notes: string }>({ overall: null, sweetness: null, acidity: null, body: null, defects: [], notes: '' })
   const [saving, setSaving] = useState(false)
+  const isAdmin = useIsAdmin()
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/roast/log?id=${logId}`)
@@ -124,6 +126,16 @@ export function RoastDetail({ logId, onClose, onChanged }: { logId: string; onCl
     toast.success('カップ評価を保存。AIが味とカーブを照合します')
     setCup({ overall: null, sweetness: null, acidity: null, body: null, defects: [], notes: '' })
     await runReview(true)
+  }
+
+  async function remove() {
+    if (!confirm('この焙煎記録を削除しますか？（AIレビューとカップ評価も消えます）')) return
+    const res = await fetch(`/api/roast/log?id=${logId}`, { method: 'DELETE' })
+    const j = await res.json().catch(() => ({}))
+    if (!j.ok) return toast.error(j.error ?? '削除できませんでした')
+    toast.success('削除しました')
+    onChanged?.()
+    onClose()
   }
 
   const p = d?.profile ?? null
@@ -271,6 +283,12 @@ export function RoastDetail({ logId, onClose, onChanged }: { logId: string; onCl
             </div>
           )}
         </div>
+
+        {isAdmin && d && (
+          <button onClick={remove} className="w-full flex items-center justify-center gap-1.5 text-xs text-rose-400/80 py-3">
+            <Trash2 size={13} />この記録を削除
+          </button>
+        )}
       </div>
     </div>
   )

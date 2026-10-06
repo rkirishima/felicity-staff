@@ -6,19 +6,17 @@ import { createClient } from '@/lib/supabase/client'
 import { useIsAdmin } from '@/lib/admin-context'
 import { useIsStaff } from '@/lib/use-is-staff'
 import { toast } from 'sonner'
-import { Flame, Play, PenLine, ListChecks, AlertTriangle, Sparkles } from 'lucide-react'
+import { Flame, ListChecks, AlertTriangle, Sparkles } from 'lucide-react'
 import { ROAST_LEVEL_LABELS, type RoastLevel } from '@/lib/roast-profiles'
-import { RoastProfileCard } from '@/components/RoastProfileCard'
 import { AiBrief } from '@/components/roast/AiBrief'
-import { LiveRoast, type LiveEvents } from '@/components/roast/LiveRoast'
 import { RoastDetail } from '@/components/roast/RoastDetail'
-import { fmtSec, parseRange, USE_CASE_LABEL, type RecommendedProfile, type UseCase } from '@/lib/roast/profile'
+import { RecipeCard } from '@/components/roast/RecipeCard'
+import { RecipeManager } from '@/components/roast/RecipeManager'
+import { fmtSec } from '@/lib/roast/profile'
+import { BATCHES, LEVELS, pickRecipe, roastedKgRange, type Recipe } from '@/lib/roast/recipe'
 
 // 焙煎機は Probat P05III のみを扱う（Roest のサンプル焙煎は別管理）
 const MACHINE = 'Probat P05III'
-const USE_CASES: UseCase[] = ['drip', 'espresso', 'omni']
-const LEVELS: RoastLevel[] = ['light', 'city', 'medium', 'dark']
-const BATCH_PRESETS = [1.0, 2.0, 3.6]
 
 type Bean = { id: string; display_name: string; origin_country: string | null }
 type Item = {
@@ -55,6 +53,22 @@ function daysAgo(iso: string): string {
   return d <= 0 ? '今日' : d === 1 ? '昨日' : `${d}日前`
 }
 
+type SyncStatus = { checked_at: string; status: 'ok' | 'unreachable' | 'failed'; message: string | null; last_ok_at: string | null }
+
+// Mac mini の Probat 取り込みが止まっていたら、その理由を一文で返す（問題なければ null）
+function syncProblem(sync: SyncStatus | null, items: Item[]): string | null {
+  if (!sync) return null
+  const ago = (iso: string) => Math.round((Date.now() - new Date(iso).getTime()) / 60e3)
+  const m = ago(sync.checked_at)
+  if (m > 60) return `Mac mini の Probat 取り込みが ${m >= 120 ? `${Math.floor(m / 60)}時間` : `${m}分`}動いていません（電源・スリープ・ネットを確認）`
+  if (sync.status === 'failed') return `Probat 取り込みでエラー: ${sync.message ?? '不明'}`
+  // 電源オフの日は見えなくて当然。今日焼いたのにカーブが無い時だけ知らせる
+  const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)
+  const waiting = items.some((i) => !i.has_curve && new Date(new Date(i.roasted_at).getTime() + 9 * 3600e3).toISOString().slice(0, 10) === today && ago(i.roasted_at) > 40)
+  if (sync.status === 'unreachable' && waiting) return 'Mac mini から Probat が見えません。今日のカーブが取り込めていません（Mac mini の有線LANを確認）'
+  return null
+}
+
 const VERDICT_DOT: Record<string, string> = { good: 'bg-emerald-400', ok: 'bg-amber-400', fix: 'bg-rose-500' }
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -72,23 +86,21 @@ export default function RoastPage() {
   const isStaff = useIsStaff()
   const hasAccess = isAdmin || isStaff
 
-  const [tab, setTab] = useState<'roast' | 'log'>('roast')
+  const [tab, setTab] = useState<'roast' | 'log' | 'recipes'>('roast')
   const [beans, setBeans] = useState<Bean[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [month, setMonth] = useState({ batches: 0, kg: 0 })
   const [lastCurveAt, setLastCurveAt] = useState<string | null>(null)
+  const [sync, setSync] = useState<SyncStatus | null>(null)
   const [loading, setLoading] = useState(true)
 
   // 焼く前の選択
   const [beanId, setBeanId] = useState('')
-  const [useCase, setUseCase] = useState<UseCase>('drip')
-  const [level, setLevel] = useState<RoastLevel | ''>('')
+  const [level, setLevel] = useState<RoastLevel>('city')
   const [greenKg, setGreenKg] = useState('2')
-  const [profile, setProfile] = useState<RecommendedProfile | null>(null)
+  const [recipes, setRecipes] = useState<Recipe[] | null>(null)
 
-  // 焙煎中・焙煎後
-  const [live, setLive] = useState(false)
-  const [finish, setFinish] = useState<null | { mode: 'timer'; ev: LiveEvents } | { mode: 'manual' }>(null)
+  // 焼いた後の記録
   const [roastedKg, setRoastedKg] = useState('')
   const [notes, setNotes] = useState('')
   const [datetime, setDatetime] = useState(nowJSTLocal())
@@ -108,12 +120,25 @@ export default function RoastPage() {
       setItems(res.items)
       setMonth(res.month)
       setLastCurveAt(res.last_curve_at)
+      setSync(res.sync)
     }
     setLoading(false)
   }, [supabase])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (hasAccess) load() }, [hasAccess, load])
+
+  // 豆を選んだらその豆のレシピを読む
+  useEffect(() => {
+    if (!beanId) return
+    let alive = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRecipes(null)
+    fetch(`/api/roast/recipes?bean=${encodeURIComponent(beanId)}`).then((r) => r.json())
+      .then((j) => { if (alive) setRecipes(j.ok ? j.recipes : []) })
+      .catch(() => { if (alive) setRecipes([]) })
+    return () => { alive = false }
+  }, [beanId])
 
   // 豆ごとの最終焙煎日（よく焼く豆を上に）
   const beanStats = useMemo(() => {
@@ -130,7 +155,8 @@ export default function RoastPage() {
 
   const kg = Number(greenKg) || 0
   const bean = beans.find((b) => b.id === beanId)
-  const onProfile = useCallback((p: RecommendedProfile | null) => setProfile(p), [])
+  const picked = recipes ? pickRecipe(recipes, kg || 1, level) : null
+  const recipe = picked?.recipe ?? null
 
   // Probat カーブの取り込みが止まっていないか
   const curveLagDays = useMemo(() => {
@@ -139,38 +165,32 @@ export default function RoastPage() {
     if (!newestLog) return 0
     return Math.floor((new Date(newestLog).getTime() - new Date(lastCurveAt).getTime()) / 86400e3)
   }, [lastCurveAt, items])
+  const syncIssue = useMemo(() => syncProblem(sync, items), [sync, items])
 
   const wl = roastedKg && kg ? (1 - Number(roastedKg) / kg) * 100 : null
-  const wlTarget = parseRange(profile?.weight_loss_pct)
-
-  function startLive() {
-    if (!beanId) return toast.error('豆を選んでください')
-    if (!kg) return toast.error('生豆の量を選んでください')
-    setLive(true)
-  }
+  const wlT = recipe?.targets
+  const wlOk = wl != null && wlT?.wl_lo != null && wlT?.wl_hi != null ? wl >= wlT.wl_lo - 0.3 && wl <= wlT.wl_hi + 0.3 : null
+  const expected = recipe ? roastedKgRange(kg, recipe.targets) : null
 
   async function save() {
-    if (!finish || !beanId || !kg) return
+    if (!beanId) return toast.error('豆を選んでください')
+    if (!kg) return toast.error('生豆の量を入れてください')
     setSaving(true)
-    const isTimer = finish.mode === 'timer'
     const { data, error } = await supabase.from('roast_logs').insert({
-      roasted_at: isTimer ? finish.ev.charge_at : localToIso(datetime),
+      roasted_at: localToIso(datetime),
       bean_id: beanId,
       bean_raw: bean?.display_name ?? null,
       green_kg: kg,
       roasted_kg: roastedKg ? Number(roastedKg) : null,
       machine: MACHINE,
-      roast_level: level || null,
-      use_case: useCase,
-      profile_id: profile?.id ?? null,
+      roast_level: level,
+      profile_id: picked?.exact ? recipe?.id ?? null : null,
       notes: notes.trim() || null,
-      source: isTimer ? 'ipad_timer' : 'ipad_manual',
-      events: isTimer ? { dry_end_s: finish.ev.dry_end_s, fc_s: finish.ev.fc_s, drop_s: finish.ev.drop_s } : null,
+      source: 'ipad_manual',
     }).select('id').single()
     setSaving(false)
     if (error || !data) return toast.error(`記録失敗: ${error?.message}`)
-    toast.success(`${bean?.display_name} ${kg}kg を記録しました`)
-    setFinish(null)
+    toast.success(`${bean?.display_name} ${kg}kg を記録しました。Probat のカーブは自動で紐づきます`)
     setRoastedKg('')
     setNotes('')
     setDatetime(nowJSTLocal())
@@ -198,14 +218,20 @@ export default function RoastPage() {
           <span className="text-xs text-stone-500 ml-1">Probat P05III</span>
           <span className="ml-auto text-xs text-stone-400">今月 {month.batches}バッチ / {month.kg.toFixed(1)}kg</span>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button onClick={() => setTab('roast')} className={`py-2 rounded-lg text-sm font-semibold ${tab === 'roast' ? 'bg-stone-100 text-stone-900' : 'bg-stone-800 text-stone-400'}`}>焼く</button>
-          <button onClick={() => setTab('log')} className={`py-2 rounded-lg text-sm font-semibold ${tab === 'log' ? 'bg-stone-100 text-stone-900' : 'bg-stone-800 text-stone-400'}`}>記録と振り返り</button>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {([['roast', '焼く'], ['log', '記録と振り返り'], ['recipes', 'レシピ']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setTab(k)} className={`py-2 rounded-lg text-sm font-semibold ${tab === k ? 'bg-stone-100 text-stone-900' : 'bg-stone-800 text-stone-400'}`}>{label}</button>
+          ))}
         </div>
-        {curveLagDays >= 3 && (
+        {syncIssue && (
+          <p className="mt-2 text-[11px] text-rose-300 flex gap-1.5">
+            <AlertTriangle size={12} className="shrink-0 mt-0.5" />{syncIssue}
+          </p>
+        )}
+        {!syncIssue && curveLagDays >= 3 && (
           <p className="mt-2 text-[11px] text-amber-300 flex gap-1.5">
             <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-            Probat のカーブ取り込みが {curveLagDays} 日止まっています（最終 {lastCurveAt?.slice(0, 10)}）。AIは手入力の時刻だけで判断します。
+            Probat のカーブ取り込みが {curveLagDays} 日止まっています（最終 {lastCurveAt?.slice(0, 10)}）。
           </p>
         )}
       </div>
@@ -232,41 +258,66 @@ export default function RoastPage() {
 
           {beanId && (
             <>
-              {/* 2. 量・用途・レベル */}
+              {/* 2. 量・レベル */}
               <section className="space-y-3">
                 <div>
                   <p className="text-xs text-stone-400 mb-2">2. 生豆の量</p>
-                  <div className="flex gap-2 items-center">
-                    {BATCH_PRESETS.map((k) => <Chip key={k} on={kg === k} onClick={() => setGreenKg(String(k))}>{k}kg</Chip>)}
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {BATCHES.map((k) => <Chip key={k} on={kg === k} onClick={() => setGreenKg(String(k))}>{k}kg</Chip>)}
                     <input type="number" step="0.1" inputMode="decimal" value={greenKg} onChange={(e) => setGreenKg(e.target.value)}
-                      className="w-24 bg-stone-900 text-white rounded-xl px-3 py-2.5 text-sm border border-stone-700" />
+                      className="w-20 bg-stone-900 text-white rounded-xl px-3 py-2.5 text-sm border border-stone-700" aria-label="生豆の量 kg" />
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-stone-400 mb-2">用途</p>
-                  <div className="flex gap-2">{USE_CASES.map((u) => <Chip key={u} on={useCase === u} onClick={() => setUseCase(u)}>{USE_CASE_LABEL[u]}</Chip>)}</div>
+                  <p className="text-xs text-stone-400 mb-2">3. ローストレベル</p>
+                  <div className="flex flex-wrap gap-2">{LEVELS.map((lv) => <Chip key={lv} on={level === lv} onClick={() => setLevel(lv)}>{ROAST_LEVEL_LABELS[lv]}</Chip>)}</div>
+                </div>
+              </section>
+
+              {/* 4. レシピ */}
+              <section className="space-y-3">
+                <p className="text-xs text-stone-400">4. レシピ</p>
+                {recipes == null ? (
+                  <p className="text-sm text-stone-500">読み込み中…</p>
+                ) : recipe ? (
+                  <RecipeCard recipe={recipe} beanName={bean?.display_name ?? ''} greenKg={kg} exact={!!picked?.exact} />
+                ) : (
+                  <div className="rounded-xl p-4 text-sm text-stone-300 space-y-2" style={{ backgroundColor: '#1c1917', border: '1px solid #44403c' }}>
+                    <p>この豆のレシピはまだありません。</p>
+                    <button onClick={() => setTab('recipes')} className="text-violet-300 flex items-center gap-1 text-sm">
+                      <Sparkles size={14} />「レシピ」タブで、過去の焙煎から作るか AI に試作させる
+                    </button>
+                  </div>
+                )}
+                <AiBrief beanId={beanId} greenKg={kg} level={level} />
+              </section>
+
+              {/* 5. 焼いたら記録 */}
+              <section className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: '#1c1917', border: '1px solid #44403c' }}>
+                <p className="text-sm font-bold text-white">5. 焼いたら記録</p>
+                <div>
+                  <label className="block text-xs text-stone-400 mb-1">焙煎後の重さ kg（冷めてから・後で入力も可）</label>
+                  <input type="number" step="0.01" inputMode="decimal" value={roastedKg} onChange={(e) => setRoastedKg(e.target.value)}
+                    placeholder={expected ? `目安 ${expected.lo.toFixed(2)}〜${expected.hi.toFixed(2)}` : '例 1.72'}
+                    className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-lg border border-stone-700" />
+                  {wl != null && (
+                    <p className={`text-sm mt-1 tabular-nums ${wlOk == null ? 'text-stone-300' : wlOk ? 'text-emerald-300' : 'text-rose-300'}`}>
+                      重量減 {wl.toFixed(1)}%{wlT?.wl_lo != null ? `（目標 ${wlT.wl_lo}〜${wlT.wl_hi}%）` : ''}
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <p className="text-xs text-stone-400 mb-2">ローストレベル（記録用）</p>
-                  <div className="flex flex-wrap gap-2">{LEVELS.map((lv) => <Chip key={lv} on={level === lv} onClick={() => setLevel(level === lv ? '' : lv)}>{ROAST_LEVEL_LABELS[lv]}</Chip>)}</div>
+                  <label className="block text-xs text-stone-400 mb-1">焙煎日時</label>
+                  <input type="datetime-local" value={datetime} onChange={(e) => setDatetime(e.target.value)}
+                    className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-sm border border-stone-700" style={{ colorScheme: 'dark' }} />
                 </div>
-              </section>
-
-              {/* 3. 今日のポイント + プラン */}
-              <section className="space-y-3">
-                <p className="text-xs text-stone-400">3. 今日のプラン</p>
-                <AiBrief beanId={beanId} greenKg={kg} useCase={useCase} />
-                <RoastProfileCard beanId={beanId} greenKg={kg || 1} useCase={useCase} onProfile={onProfile} />
-              </section>
-
-              <div className="grid grid-cols-[1fr_auto] gap-2 pt-2">
-                <button onClick={startLive} className="rounded-2xl py-5 bg-amber-600 active:bg-amber-500 text-white text-lg font-bold flex items-center justify-center gap-2">
-                  <Play size={22} fill="currentColor" /> 投入と同時にスタート
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="気づいたこと（例: 1ハゼが弱い、煙が多い）"
+                  className="w-full bg-stone-900 text-white rounded-lg px-3 py-2 text-sm border border-stone-700 resize-none" />
+                <button onClick={save} disabled={saving} className="w-full py-3.5 rounded-xl bg-amber-600 disabled:bg-stone-700 text-white font-bold">
+                  {saving ? '記録中…' : `${kg || '—'}kg を記録してAIレビュー`}
                 </button>
-                <button onClick={() => setFinish({ mode: 'manual' })} className="rounded-2xl px-4 bg-stone-800 text-stone-300 text-xs flex flex-col items-center justify-center gap-1">
-                  <PenLine size={16} />後から記録
-                </button>
-              </div>
+                <p className="text-[11px] text-stone-500">Probat パネルで「投入」と「ドロップ」を必ず押してください。押し忘れるとカーブが学習に使えません。</p>
+              </section>
             </>
           )}
         </div>
@@ -312,51 +363,9 @@ export default function RoastPage() {
         </div>
       )}
 
-      {live && (
-        <LiveRoast
-          profile={profile}
-          beanName={bean?.display_name ?? ''}
-          greenKg={kg}
-          onCancel={() => setLive(false)}
-          onDone={(ev) => { setLive(false); setFinish({ mode: 'timer', ev }) }}
-        />
-      )}
-
-      {finish && (
-        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
-          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 space-y-3" style={{ backgroundColor: '#1c1917', border: '1px solid #44403c' }}>
-            <p className="text-lg font-bold text-white">{bean?.display_name} · {kg}kg</p>
-            {finish.mode === 'timer' ? (
-              <p className="text-sm text-stone-300 tabular-nums">
-                ドライエンド {fmtSec(finish.ev.dry_end_s)} · 1ハゼ {fmtSec(finish.ev.fc_s)} · ドロップ {fmtSec(finish.ev.drop_s)}
-                {finish.ev.fc_s != null && finish.ev.drop_s ? ` · DTR ${(((finish.ev.drop_s - finish.ev.fc_s) / finish.ev.drop_s) * 100).toFixed(1)}%` : ''}
-              </p>
-            ) : (
-              <div>
-                <label className="block text-xs text-stone-400 mb-1">焙煎日時</label>
-                <input type="datetime-local" value={datetime} onChange={(e) => setDatetime(e.target.value)}
-                  className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-sm border border-stone-700" style={{ colorScheme: 'dark' }} />
-              </div>
-            )}
-            <div>
-              <label className="block text-xs text-stone-400 mb-1">焙煎後の重さ kg（冷めてから・後で入力も可）</label>
-              <input type="number" step="0.01" inputMode="decimal" value={roastedKg} onChange={(e) => setRoastedKg(e.target.value)}
-                placeholder="例 1.72" className="w-full bg-stone-900 text-white rounded-lg px-3 py-3 text-lg border border-stone-700" />
-              {wl != null && (
-                <p className={`text-sm mt-1 tabular-nums ${wlTarget ? (wl >= wlTarget.lo - 0.5 && wl <= wlTarget.hi + 0.5 ? 'text-emerald-300' : 'text-rose-300') : 'text-stone-300'}`}>
-                  重量減 {wl.toFixed(1)}%{wlTarget ? `（目標 ${profile?.weight_loss_pct}%）` : ''}
-                </p>
-              )}
-            </div>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="気づいたこと（例: 1ハゼが弱い、煙が多い）"
-              className="w-full bg-stone-900 text-white rounded-lg px-3 py-2 text-sm border border-stone-700 resize-none" />
-            <div className="grid grid-cols-[auto_1fr] gap-2">
-              <button onClick={() => { if (finish.mode === 'manual' || confirm('この焙煎を記録せずに閉じますか？')) setFinish(null) }} className="px-4 py-3 rounded-xl bg-stone-800 text-stone-300 text-sm">閉じる</button>
-              <button onClick={save} disabled={saving} className="py-3 rounded-xl bg-amber-600 disabled:bg-stone-700 text-white font-bold">
-                {saving ? '記録中…' : '記録してAIレビュー'}
-              </button>
-            </div>
-          </div>
+      {tab === 'recipes' && (
+        <div className="px-4 pt-4 max-w-2xl mx-auto">
+          <RecipeManager beans={sortedBeans} />
         </div>
       )}
 

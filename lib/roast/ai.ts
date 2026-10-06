@@ -6,7 +6,7 @@ import type { RoastContext, ReviewJson, HistoryItem } from './data'
 import type { RecommendedProfile } from './profile'
 import { fmtSec } from './profile'
 
-const PRIMARY_MODEL = process.env.ROAST_AI_MODEL || 'claude-sonnet-4-5'
+const PRIMARY_MODEL = process.env.ROAST_AI_MODEL || 'claude-sonnet-5'
 const FALLBACK_MODEL = 'claude-haiku-4-5-20251001'
 
 const KNOWLEDGE = `あなたは葉山のカフェ「Felicity」の焙煎コーチです。焙煎機は Probat P05III（5kg釜・ガス・ドラム式）、通常 1〜2kg、ときどき 3.6kg を焼きます。
@@ -38,7 +38,7 @@ function client(): Anthropic | null {
   return apiKey ? new Anthropic({ apiKey }) : null
 }
 
-async function callJson(system: string, user: string, maxTokens = 1500): Promise<{ json: unknown; model: string } | null> {
+export async function callJson(system: string, user: string, maxTokens = 1500): Promise<{ json: unknown; model: string } | null> {
   const c = client()
   if (!c) return null
   for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
@@ -165,7 +165,7 @@ export async function briefRoast(input: {
   history: HistoryItem[]
 }): Promise<BriefJson | null> {
   const user = [
-    `これから焼く豆: ${input.bean_name} / ${input.green_kg}kg / 用途 ${input.use_case}`,
+    `これから焼く豆: ${input.bean_name} / ${input.green_kg}kg / ローストレベル ${input.use_case}`,
     '',
     ...profileLines(input.profile),
     '',

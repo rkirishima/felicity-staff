@@ -63,12 +63,17 @@ export async function GET(request: NextRequest) {
   const m = (month as { green_kg: number }[]) ?? []
 
   // Probat からのカーブ取り込みが止まっていないか（最新カーブの日時）
-  const { data: lastCurve } = await sb.from('roast_curves').select('roasted_at').order('roasted_at', { ascending: false }).limit(1).maybeSingle()
+  const [{ data: lastCurve }, { data: sync }] = await Promise.all([
+    sb.from('roast_curves').select('roasted_at').order('roasted_at', { ascending: false }).limit(1).maybeSingle(),
+    // Mac mini の sync-probat.js が毎回書く稼働状況
+    sb.from('probat_sync_status').select('checked_at, status, message, last_ok_at').eq('id', 'p05').maybeSingle(),
+  ])
 
   return Response.json({
     ok: true,
     items,
     month: { batches: m.length, kg: m.reduce((a, x) => a + Number(x.green_kg || 0), 0) },
     last_curve_at: (lastCurve as { roasted_at?: string } | null)?.roasted_at ?? null,
+    sync: sync ?? null,
   })
 }
