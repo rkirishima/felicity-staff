@@ -158,6 +158,25 @@ function computeMetrics(historyId, entry, samples) {
 
 const jstDay = (iso) => new Date(new Date(iso).getTime() + 9 * 3600e3).toISOString().slice(0, 10);
 
+// --- outdoor weather (Open-Meteo, no key) -----------------------------------------
+// 焙煎時刻の葉山の外気温・湿度。過去7日分の1時間値を1回だけ取って使い回す。
+// （室内は将来 SwitchBot で別に持つ。外気温10°Cでボトム約+4〜5°C、1ハゼ十数秒の影響を実測）
+const LAT = 35.2674, LON = 139.6103;
+let weatherHours = null;
+async function ambientAt(iso) {
+  try {
+    if (!weatherHours) {
+      const q = `latitude=${LAT}&longitude=${LON}&hourly=temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo&past_days=7&forecast_days=1`;
+      const j = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`).then((r) => r.json());
+      weatherHours = new Map();
+      (j.hourly?.time ?? []).forEach((t, i) => weatherHours.set(t, { t: j.hourly.temperature_2m[i], rh: j.hourly.relative_humidity_2m[i] }));
+    }
+    const jst = new Date(new Date(iso).getTime() + 9 * 3600e3 + 30 * 60e3); // 最も近い正時
+    const w = weatherHours.get(jst.toISOString().slice(0, 13) + ':00');
+    return w && w.t != null ? { ambient_temp_c: w.t, ambient_rh: w.rh, ambient_source: 'open-meteo' } : {};
+  } catch (e) { log(`weather failed: ${e.message}`); return {}; }
+}
+
 // --- status + alerts ----------------------------------------------------------
 function readState() {
   try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return { failSince: null, unreachSince: null, alerted: null }; }
@@ -295,7 +314,8 @@ async function finish(status, message, extra = {}) {
       metrics,
       notes: [name, entry.note].filter(Boolean).join(' — ') || null,
     };
-    if (DRY) { log(`[dry] would insert #${s.id} "${name}" bean=${beanId} samples=${samples.length}`); continue; }
+    Object.assign(curve, await ambientAt(roastedAt));
+    if (DRY) { log(`[dry] would insert #${s.id} "${name}" bean=${beanId} samples=${samples.length} ambient=${curve.ambient_temp_c ?? '-'}°C/${curve.ambient_rh ?? '-'}%`); continue; }
     const [ins] = await sb('roast_curves', { method: 'POST', body: curve });
     created++;
     vlog(`inserted #${s.id} "${name}" → ${ins.id} (bean=${beanId ?? 'UNRESOLVED'})`);
