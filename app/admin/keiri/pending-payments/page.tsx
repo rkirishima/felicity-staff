@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { markInvoicePaid } from '@/app/admin/keiri/invoices/actions'
-import { markOrderPaid } from './actions'
+import { markOrderPaid, cancelOrder } from './actions'
 import { LoadError } from '@/components/keiri/LoadError'
 
 type InvoiceRow = {
@@ -112,6 +112,20 @@ export default function PendingPaymentsPage() {
     try {
       await markOrderPaid(order.id)
       toast.success('入金済みにしました')
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '失敗')
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  async function cancelOrderRow(order: OrderRow) {
+    if (!confirm(`注文 ${order.customer_name ?? ''} (¥${order.amount.toLocaleString('ja-JP')}) をキャンセルします。よろしいですか？`)) return
+    setWorking(order.id)
+    try {
+      await cancelOrder(order.id)
+      toast.success('キャンセルしました')
       await load()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '失敗')
@@ -244,6 +258,13 @@ export default function PendingPaymentsPage() {
                           className="mt-1 text-xs bg-emerald-600 text-white px-3 py-1 rounded-lg disabled:opacity-50"
                         >
                           {working === order.id ? '作業中…' : '✅ 入金確認'}
+                        </button>
+                        <button
+                          onClick={() => cancelOrderRow(order)}
+                          disabled={working === order.id}
+                          className="mt-1 ml-1 text-xs bg-stone-200 text-stone-600 px-3 py-1 rounded-lg disabled:opacity-50"
+                        >
+                          取消
                         </button>
                       </div>
                     </div>

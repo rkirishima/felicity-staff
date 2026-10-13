@@ -14,3 +14,16 @@ export async function markOrderPaid(orderId: string): Promise<void> {
   revalidatePath('/admin/keiri')
   revalidatePath('/admin/sales')
 }
+
+export async function cancelOrder(orderId: string): Promise<void> {
+  const sb = await createClient()
+  const { error } = await sb
+    .from('orders')
+    .update({ status: 'cancelled' })
+    .eq('id', orderId)
+    .eq('status', 'pending_bank_transfer')
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/keiri/pending-payments')
+  revalidatePath('/admin/keiri')
+  revalidatePath('/admin/sales')
+}

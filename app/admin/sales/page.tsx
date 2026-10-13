@@ -34,7 +34,8 @@ export default function SalesPage() {
       .from('orders')
       .select('id, customer_name, customer_email, items, amount, status, created_at')
       .order('created_at', { ascending: false })
-    setOrders(data ?? [])
+    // キャンセル注文は売上集計・一覧から除外
+    setOrders((data ?? []).filter(o => o.status !== 'cancelled'))
     setLoading(false)
   }
 
