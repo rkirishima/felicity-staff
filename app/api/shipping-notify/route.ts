@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   }
 
   const itemsList = Array.isArray(order.items)
-    ? order.items.map((i: { name: string; qty: number }) => `<li>${esc(i.name)} × ${esc(i.qty)}</li>`).join('')
+    ? order.items.map((i: { name: string; qty?: number; quantity?: number }) => `<li>${esc(i.name)} × ${esc(i.qty ?? i.quantity)}</li>`).join('')
     : ''
 
   // Send email FIRST. Only update DB if email succeeds — otherwise the order is

@@ -12,7 +12,7 @@ type Order = {
   customer_email: string
   customer_phone: string
   shipping_address: string
-  items: { name: string; qty: number }[]
+  items: { name: string; qty?: number; quantity?: number }[]
   amount: number
   status: 'pending_bank_transfer' | 'paid' | 'shipped'
   payment_method?: string | null
@@ -215,7 +215,7 @@ export default function ShippingPage() {
               {order.items?.length > 0 && (
                 <div className="text-xs text-stone-400 leading-relaxed">
                   {order.items.map((item, i) => (
-                    <span key={i}>{item.name} ×{item.qty}{i < order.items.length - 1 ? '、' : ''}</span>
+                    <span key={i}>{item.name} ×{item.qty ?? item.quantity}{i < order.items.length - 1 ? '、' : ''}</span>
                   ))}
                 </div>
               )}
