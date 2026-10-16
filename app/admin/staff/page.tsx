@@ -7,6 +7,7 @@ import { getAdminSession } from '@/lib/session'
 import { toast } from 'sonner'
 
 type Role = 'staff' | 'admin' | 'accountant'
+type Employer = 'cafe' | 'fcr'
 type StaffRow = {
   id: string
   name: string
@@ -15,12 +16,19 @@ type StaffRow = {
   hourly_rate: number | null
   employment_type: string | null
   skill: string | null
+  employer: Employer
 }
 
 const ROLES: { value: Role; label: string; badge: string }[] = [
   { value: 'staff', label: 'スタッフ', badge: 'bg-stone-100 text-stone-600' },
   { value: 'admin', label: 'ADMIN', badge: 'bg-teal-100 text-teal-700' },
   { value: 'accountant', label: '経理', badge: 'bg-amber-100 text-amber-700' },
+]
+
+// 会計上の雇用主体（所属）。シフト表示には影響せず、給与集計を分けるためだけに使う。
+const EMPLOYERS: { value: Employer; label: string; badge: string }[] = [
+  { value: 'cafe', label: 'カフェ', badge: 'bg-stone-100 text-stone-600' },
+  { value: 'fcr', label: 'FCR', badge: 'bg-orange-100 text-orange-700' },
 ]
 
 export default function AdminStaffPage() {
@@ -40,7 +48,7 @@ export default function AdminStaffPage() {
   async function load() {
     const { data, error } = await supabase
       .from('staff')
-      .select('id, name, role, active, hourly_rate, employment_type, skill')
+      .select('id, name, role, active, hourly_rate, employment_type, skill, employer')
       .order('active', { ascending: false })
       .order('role')
       .order('name')
@@ -50,7 +58,7 @@ export default function AdminStaffPage() {
 
   function startEdit(s: StaffRow) {
     setEditingId(s.id)
-    setDraft({ role: s.role, active: s.active, hourly_rate: s.hourly_rate })
+    setDraft({ role: s.role, active: s.active, hourly_rate: s.hourly_rate, employer: s.employer })
   }
 
   function cancelEdit() {
@@ -64,6 +72,7 @@ export default function AdminStaffPage() {
     if (draft.role !== undefined) payload.role = draft.role
     if (draft.active !== undefined) payload.active = draft.active
     if (draft.hourly_rate !== undefined) payload.hourly_rate = draft.hourly_rate
+    if (draft.employer !== undefined) payload.employer = draft.employer
     const { error } = await supabase.from('staff').update(payload).eq('id', id)
     setSaving(false)
     if (error) { toast.error('保存失敗: ' + error.message); return }
@@ -100,6 +109,8 @@ export default function AdminStaffPage() {
           const isEditing = editingId === s.id
           const currentRole = isEditing ? (draft.role ?? s.role) : s.role
           const roleMeta = ROLES.find(r => r.value === currentRole) ?? ROLES[0]
+          const currentEmployer = isEditing ? (draft.employer ?? s.employer) : s.employer
+          const employerMeta = EMPLOYERS.find(e => e.value === currentEmployer) ?? EMPLOYERS[0]
           return (
             <div
               key={s.id}
@@ -110,6 +121,9 @@ export default function AdminStaffPage() {
                   <p className="font-medium text-stone-800">{s.name}</p>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${roleMeta.badge}`}>
                     {roleMeta.label}
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${employerMeta.badge}`}>
+                    {employerMeta.label}
                   </span>
                   {!s.active && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500">
@@ -156,6 +170,28 @@ export default function AdminStaffPage() {
                         )
                       })}
                     </div>
+                  </div>
+
+                  {/* 所属（会計上の雇用主体） */}
+                  <div>
+                    <p className="text-xs text-stone-400 mb-1.5">所属（会計上）</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {EMPLOYERS.map(e => {
+                        const active = (draft.employer ?? s.employer) === e.value
+                        return (
+                          <button
+                            key={e.value}
+                            onClick={() => setDraft(d => ({ ...d, employer: e.value }))}
+                            className={`py-2 rounded-xl text-xs font-medium transition-all ${
+                              active ? 'bg-stone-800 text-white' : 'bg-stone-100 text-stone-600'
+                            }`}
+                          >
+                            {e.value === 'fcr' ? 'FCR（焙煎）' : 'カフェ'}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-[10px] text-stone-400 mt-1.5">シフト表示・勤怠には影響しません。給与集計の所属分けだけに使います。</p>
                   </div>
 
                   {/* 有効 / 無効 */}
