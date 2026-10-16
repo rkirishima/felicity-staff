@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { nextMonthFirstDay } from '@/lib/utils'
 import { getAdminSession } from '@/lib/session'
+import { updateStaff } from '../staff/actions'
 
 // 会計上の雇用主体（所属）の表示名。
 const EMPLOYER_LABEL: Record<string, string> = { cafe: 'カフェ', fcr: 'FCR' }
@@ -111,7 +112,9 @@ export default function PayrollPage() {
   }
 
   async function saveRate(id: string) {
-    await supabase.from('staff').update({ hourly_rate: parseInt(editRate) }).eq('id', id)
+    // 時給の変更は admin 限定のサーバーアクション経由（service role）にする。
+    const res = await updateStaff(id, { hourly_rate: parseInt(editRate, 10) })
+    if (!res.ok) { toast.error('更新失敗: ' + (res.error ?? '')); return }
     toast.success('時給を更新しました')
     setEditId(null); loadStaff(); loadSummary()
   }
