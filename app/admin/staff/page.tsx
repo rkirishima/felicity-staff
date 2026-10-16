@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { toast } from 'sonner'
+import { updateStaff } from './actions'
 
 type Role = 'staff' | 'admin' | 'accountant'
 type Employer = 'cafe' | 'fcr'
+type PaymentMethod = 'transfer' | 'cash'
 type StaffRow = {
   id: string
   name: string
@@ -17,6 +19,7 @@ type StaffRow = {
   employment_type: string | null
   skill: string | null
   employer: Employer
+  payment_method: PaymentMethod
 }
 
 const ROLES: { value: Role; label: string; badge: string }[] = [
@@ -48,7 +51,7 @@ export default function AdminStaffPage() {
   async function load() {
     const { data, error } = await supabase
       .from('staff')
-      .select('id, name, role, active, hourly_rate, employment_type, skill, employer')
+      .select('id, name, role, active, hourly_rate, employment_type, skill, employer, payment_method')
       .order('active', { ascending: false })
       .order('role')
       .order('name')
@@ -58,7 +61,7 @@ export default function AdminStaffPage() {
 
   function startEdit(s: StaffRow) {
     setEditingId(s.id)
-    setDraft({ role: s.role, active: s.active, hourly_rate: s.hourly_rate, employer: s.employer })
+    setDraft({ role: s.role, active: s.active, hourly_rate: s.hourly_rate, employer: s.employer, payment_method: s.payment_method })
   }
 
   function cancelEdit() {
@@ -68,14 +71,17 @@ export default function AdminStaffPage() {
 
   async function save(id: string) {
     setSaving(true)
-    const payload: Record<string, unknown> = {}
-    if (draft.role !== undefined) payload.role = draft.role
-    if (draft.active !== undefined) payload.active = draft.active
-    if (draft.hourly_rate !== undefined) payload.hourly_rate = draft.hourly_rate
-    if (draft.employer !== undefined) payload.employer = draft.employer
-    const { error } = await supabase.from('staff').update(payload).eq('id', id)
+    // 保存は admin 限定のサーバーアクション経由（service role）。ブラウザの anon
+    // キーで直接更新すると accountant でも書けてしまうため、ここを実ゲートにする。
+    const res = await updateStaff(id, {
+      role: draft.role,
+      active: draft.active,
+      hourly_rate: draft.hourly_rate ?? undefined,
+      employer: draft.employer,
+      payment_method: draft.payment_method,
+    })
     setSaving(false)
-    if (error) { toast.error('保存失敗: ' + error.message); return }
+    if (!res.ok) { toast.error('保存失敗: ' + (res.error ?? '')); return }
     toast.success('更新しました')
     setEditingId(null)
     setDraft({})
@@ -125,6 +131,11 @@ export default function AdminStaffPage() {
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${employerMeta.badge}`}>
                     {employerMeta.label}
                   </span>
+                  {s.payment_method === 'cash' && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                      現金
+                    </span>
+                  )}
                   {!s.active && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500">
                       無効
@@ -222,6 +233,29 @@ export default function AdminStaffPage() {
                         }
                         className="w-24 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right bg-white text-stone-800"
                       />
+                    </div>
+                  </div>
+
+                  {/* 支払方法 */}
+                  <div>
+                    <p className="text-xs text-stone-400 mb-1.5">支払方法</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(['transfer', 'cash'] as PaymentMethod[]).map(pm => {
+                        const active = (draft.payment_method ?? s.payment_method) === pm
+                        return (
+                          <button
+                            key={pm}
+                            onClick={() => setDraft(d => ({ ...d, payment_method: pm }))}
+                            className={`py-2 rounded-xl text-xs font-medium transition-all ${
+                              active
+                                ? pm === 'cash' ? 'bg-amber-600 text-white' : 'bg-stone-800 text-white'
+                                : 'bg-stone-100 text-stone-600'
+                            }`}
+                          >
+                            {pm === 'cash' ? '現金' : '振込'}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
