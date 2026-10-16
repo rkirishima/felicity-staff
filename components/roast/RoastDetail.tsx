@@ -247,7 +247,7 @@ export function RoastDetail({ logId, onClose, onChanged }: { logId: string; onCl
 
         {/* カップ評価 */}
         <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: '#1c1917', border: '1px solid #3f3f3f' }}>
-          <p className="text-xs font-semibold text-stone-200 tracking-wider flex items-center gap-2"><Coffee size={14} className="text-amber-400" />カップ評価（飲んだら10秒で）</p>
+          <p className="text-xs font-semibold text-stone-200 tracking-wider flex items-center gap-2"><Coffee size={14} className="text-amber-400" />カップ評価（後日でOK・何回でも追加できます）</p>
           <Scale label="総合" max={10} value={cup.overall} onChange={(v) => setCup({ ...cup, overall: v })} />
           <div className="grid grid-cols-3 gap-2">
             <Scale label="甘さ" max={5} value={cup.sweetness} onChange={(v) => setCup({ ...cup, sweetness: v })} />

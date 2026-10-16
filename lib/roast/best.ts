@@ -80,36 +80,43 @@ export function extractSteps(samples: CurveSample[], dropS: number | null): Reci
   let bt: number | null = null
   let gas: number | null = null
   let fan: number | null = null
+  let drum: number | null = null
   const rows: RecipeStep[] = []
   for (const s of ss) {
     if (s.t > end) break
     if (s.bt != null) bt = s.bt
     const g = s.gas != null ? Math.round(s.gas) : null
     const f = s.air != null ? Math.round(s.air) : null
+    const d = s.drum != null ? Math.round(s.drum) : null
     if (s.t <= 10) {
       // 投入時の設定
       if (g != null) gas = g
       if (f != null) fan = f
+      if (d != null) drum = d
       continue
     }
-    if (!rows.length) rows.push({ t: 0, bt: null, gas, fan })
+    if (!rows.length) rows.push({ t: 0, bt: null, gas, fan, drum })
     const gasCh = g != null && gas != null && Math.abs(g - gas) >= 2
     const fanCh = f != null && fan != null && Math.abs(f - fan) >= 3
+    const drumCh = d != null && drum != null && Math.abs(d - drum) >= 2
     if (g != null && gas == null) gas = g
     if (f != null && fan == null) fan = f
-    if (!gasCh && !fanCh) continue
+    if (d != null && drum == null) { drum = d; rows[0].drum ??= d }
+    if (!gasCh && !fanCh && !drumCh) continue
     if (gasCh) gas = g
     if (fanCh) fan = f
+    if (drumCh) drum = d
     const last = rows[rows.length - 1]
     // 15秒以内の連続操作は1行にまとめる（最終値を採用）
     if (last.t > 0 && s.t - last.t <= 15) {
       if (gasCh) last.gas = gas
       if (fanCh) last.fan = fan
+      if (drumCh) last.drum = drum
       continue
     }
-    rows.push({ t: s.t, bt: bt != null ? Math.round(bt) : null, gas: gasCh ? gas : null, fan: fanCh ? fan : null })
+    rows.push({ t: s.t, bt: bt != null ? Math.round(bt) : null, gas: gasCh ? gas : null, fan: fanCh ? fan : null, drum: drumCh ? drum : null })
   }
-  if (!rows.length) rows.push({ t: 0, bt: null, gas, fan })
+  if (!rows.length) rows.push({ t: 0, bt: null, gas, fan, drum })
   // 多すぎる時は、間隔が一番短い2行をまとめる
   while (rows.length > 12) {
     let k = 1
@@ -120,7 +127,7 @@ export function extractSteps(samples: CurveSample[], dropS: number | null): Reci
     }
     const a = rows[k - 1]
     const b = rows[k]
-    rows.splice(k - 1, 2, { t: a.t, bt: a.bt, gas: b.gas ?? a.gas, fan: b.fan ?? a.fan })
+    rows.splice(k - 1, 2, { t: a.t, bt: a.bt, gas: b.gas ?? a.gas, fan: b.fan ?? a.fan, drum: b.drum ?? a.drum })
   }
   return rows
 }
@@ -200,6 +207,7 @@ export async function candidatesForBean(sb: SupabaseClient, beanId: string): Pro
     const name = c.notes?.split(' — ')[0] ?? null
     const cup = c.roast_log_id ? cupBy.get(c.roast_log_id) ?? null : null
     const sc = score(d, level, wl, name, c.roasted_at, cup)
+    const steps = extractSteps(c.samples ?? [], d.drop_s)
     const drums = (c.samples ?? []).map((s) => s.drum).filter((x): x is number => x != null)
     list.push({
       curve_id: c.id,
@@ -215,8 +223,9 @@ export async function candidatesForBean(sb: SupabaseClient, beanId: string): Pro
       score: sc.score,
       reasons: sc.reasons,
       charge_temp_c: c.metrics?.charge_temp_c ?? null,
-      drum_pct: drums.length ? Math.round(drums.reduce((a, b) => a + b, 0) / drums.length) : null,
-      steps: extractSteps(c.samples ?? [], d.drop_s),
+      // 投入時のドラム（途中で変えることはほぼ無い）
+      drum_pct: steps[0]?.drum ?? (drums.length ? Math.round(drums.reduce((a, b) => a + b, 0) / drums.length) : null),
+      steps,
       targets: targetsFrom(d, level, wl),
     })
   }

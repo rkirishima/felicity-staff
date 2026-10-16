@@ -19,6 +19,8 @@ const DESIGN_KNOWLEDGE = `あなたは葉山のカフェ Felicity の焙煎設�
 - 1ハゼは豆の種類・バッチによらず 200.6°C ± 3（最も信頼できる基準点）。
 - 投入温度はバッチでほとんど変えておらず、差はガスで吸収している。バッチを変える時は投入温度より「ガスの段」を調整する。
 - ファン: 1ハゼ前にファンを40未満に抑えると、2kg・3.6kg では1ハゼが約1分早くなる（熱が逃げない）。1kg ではファンが低いとハゼ後のRoRが乱れやすい（振れ幅 7.8 vs 5.1）。基本はファン 30〜40で投入、黄色〜1ハゼで 50〜70 に上げ、ドロップ前に 70〜85。
+- ドラム（Probat表示の%。回転数ではない）: 実績は 1kg 平均60（45〜70とばらつく）、2kg 62、2.5〜3.6kg 63〜65。焙煎中に変えることはほぼ無い。
+  1kg は豆が少なくプローブが埋まりにくいので、ドラムを上げすぎない（60前後）。大バッチは 63〜65 で豆をよく混ぜる。
 - ソーク（投入直後ガス20%以下で約50秒）: ボトムの時刻はほぼ変わらない（1:06 前後）。効果は前半の熱量が減って1ハゼが20〜60秒遅れること。デリケートな豆・小バッチの焦げ防止としては有効、風味を良くする根拠は弱い。投入温度を下げるのと同じ効果と考える。
 
 【原則（研究の要約）】
@@ -54,7 +56,7 @@ type Similar = Pick<Recipe, 'bean_id' | 'batch_kg' | 'roast_level' | 'status' | 
 
 function recipeText(r: Similar): string {
   const t = r.targets ?? {}
-  const steps = (r.steps ?? []).map((s) => `${fmtSec(s.t)}${s.bt != null ? `(${s.bt}°C)` : ''} ガス${s.gas ?? '-'} ファン${s.fan ?? '-'}`).join(' / ')
+  const steps = (r.steps ?? []).map((s) => `${fmtSec(s.t)}${s.bt != null ? `(${s.bt}°C)` : ''} ガス${s.gas ?? '-'} ファン${s.fan ?? '-'}${s.drum != null ? ` ドラム${s.drum}` : ''}`).join(' / ')
   return `[${r.bean_name ?? r.bean_id} / ${r.process ?? '-'} / ${r.origin ?? '-'} / ${r.batch_kg}kg / ${r.roast_level} / ${r.status}] 投入${r.charge_temp_c ?? '-'}°C ドラム${r.drum_pct ?? '-'} | ${steps} | 黄色${fmtSec(t.yellow_s)} 1ハゼ${fmtSec(t.fc_s)}/${t.fc_c ?? '-'}°C ドロップ${fmtSec(t.drop_s)}/${t.drop_c ?? '-'}°C 発達${fmtSec(t.dev_s)} 重量減${t.wl_lo ?? '-'}〜${t.wl_hi ?? '-'}%`
 }
 
@@ -97,12 +99,12 @@ export async function designRecipe(sb: SupabaseClient, beanId: string, batchKg: 
 {
   "charge_temp_c": 数値,
   "drum_pct": 数値,
-  "steps": [{ "t": 投入からの秒(整数), "bt": その時の豆温度の目安(整数 or null), "gas": ガス%(整数 or null=変更なし), "fan": ファン(整数 or null=変更なし), "note": "短い操作メモ or null" }],
+  "steps": [{ "t": 投入からの秒(整数), "bt": その時の豆温度の目安(整数 or null), "gas": ガス%(整数 or null=変更なし), "fan": ファン(整数 or null=変更なし), "drum": ドラム(整数 or null=変更なし), "note": "短い操作メモ or null" }],
   "targets": { "tp_s": 秒, "yellow_s": 秒, "fc_s": 秒, "fc_c": 数値, "drop_s": 秒, "drop_c": 数値, "dev_s": 秒, "dtr_pct": 数値, "wl_lo": 数値, "wl_hi": 数値 },
   "watch": "焙煎中に一番気をつけること。60字以内。時刻・温度・ガス%を入れる",
   "why": "どの実績を土台に、何をどれだけ変えたか。100字以内"
 }
-steps は最初の行を t=0（投入時のガス・ファン）にし、時系列で6〜10行。`,
+steps は最初の行を t=0（投入時のガス・ファン・ドラム）にし、時系列で6〜10行。drum_pct は投入時のドラム。`,
   ].filter((x) => x !== '')
 
   const res = await callJson(DESIGN_KNOWLEDGE, user.join('\n'), 2000)
@@ -111,7 +113,7 @@ steps は最初の行を t=0（投入時のガス・ファン）にし、時系�
 
   const steps: RecipeStep[] = (Array.isArray(j.steps) ? j.steps : [])
     .map((s) => s as Record<string, unknown>)
-    .map((s) => ({ t: clamp(s.t, 0, 1200) ?? 0, bt: clamp(s.bt, 50, 240), gas: clamp(s.gas, 0, 100), fan: clamp(s.fan, 0, 100), note: typeof s.note === 'string' ? s.note.slice(0, 40) : null }))
+    .map((s) => ({ t: clamp(s.t, 0, 1200) ?? 0, bt: clamp(s.bt, 50, 240), gas: clamp(s.gas, 0, 100), fan: clamp(s.fan, 0, 100), drum: clamp(s.drum, 30, 90), note: typeof s.note === 'string' ? s.note.slice(0, 40) : null }))
     .sort((a, c) => a.t - c.t)
     .slice(0, 12)
   if (steps.length < 3) return null

@@ -108,6 +108,8 @@ export default function RoastPage() {
 
   // 記録タブ
   const [filterBean, setFilterBean] = useState<string>('')
+  const [onlyUncupped, setOnlyUncupped] = useState(false)
+  const [cupCutoff] = useState(() => Date.now() - 21 * 86400e3) // 3週間以内の焙煎だけ「カップ未」にする
   const [openId, setOpenId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -207,7 +209,10 @@ export default function RoastPage() {
     )
   }
 
-  const shown = filterBean ? items.filter((i) => i.bean_id === filterBean) : items
+  // カップ評価はその日にはできないので、後から付けるものとして一覧で目立たせる
+  const uncupped = (i: Item) => i.cup == null && new Date(i.roasted_at).getTime() > cupCutoff
+  const uncuppedCount = items.filter(uncupped).length
+  const shown = items.filter((i) => (!filterBean || i.bean_id === filterBean) && (!onlyUncupped || uncupped(i)))
 
   return (
     <main className="min-h-screen pb-24 dark-forms" style={{ backgroundColor: '#1c1917', colorScheme: 'dark' }}>
@@ -326,6 +331,9 @@ export default function RoastPage() {
       {tab === 'log' && (
         <div className="px-4 pt-4 max-w-2xl mx-auto">
           <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
+            <Chip on={onlyUncupped} onClick={() => setOnlyUncupped(!onlyUncupped)}>
+              <span className="whitespace-nowrap">☕ カップ未評価 {uncuppedCount}</span>
+            </Chip>
             <Chip on={!filterBean} onClick={() => setFilterBean('')}>すべて</Chip>
             {sortedBeans.filter((b) => beanStats.has(b.id)).map((b) => (
               <Chip key={b.id} on={filterBean === b.id} onClick={() => setFilterBean(b.id)}>
@@ -342,7 +350,9 @@ export default function RoastPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
                       <p className="text-sm text-white truncate flex-1">{l.bean_name}</p>
-                      {l.cup != null && <span className="text-xs text-amber-300 tabular-nums">☕{l.cup}</span>}
+                      {l.cup != null
+                        ? <span className="text-xs text-amber-300 tabular-nums">☕{l.cup}</span>
+                        : uncupped(l) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-700 text-stone-200 whitespace-nowrap">カップ未</span>}
                     </div>
                     <p className="text-[11px] text-stone-400 tabular-nums">
                       {fmtJST(l.roasted_at)} · {l.green_kg}kg
