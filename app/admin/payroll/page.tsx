@@ -7,6 +7,9 @@ import { toast } from 'sonner'
 import { nextMonthFirstDay } from '@/lib/utils'
 import { getAdminSession } from '@/lib/session'
 
+// 会計上の雇用主体（所属）の表示名。
+const EMPLOYER_LABEL: Record<string, string> = { cafe: 'カフェ', fcr: 'FCR' }
+
 export default function PayrollPage() {
   const [staff, setStaff] = useState<any[]>([])
   const [summary, setSummary] = useState<any[]>([])
@@ -34,7 +37,7 @@ export default function PayrollPage() {
 
   async function loadStaff() {
     const { data } = await supabase.from('staff')
-      .select('id, name, hourly_rate, employment_type, skill, salary_start_date, payment_method')
+      .select('id, name, hourly_rate, employment_type, skill, salary_start_date, payment_method, employer')
       .eq('active', true).not('role', 'in', '("accountant","admin")').order('name')
     setStaff(data ?? [])
   }
@@ -42,7 +45,7 @@ export default function PayrollPage() {
   async function loadToday() {
     const todayJST = new Date(Date.now() + 9*60*60*1000).toISOString().slice(0,10)
     const { data } = await supabase.from('timeclock')
-      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate, salary_start_date, payment_method)')
+      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate, salary_start_date, payment_method, employer)')
       .gte('clock_in', todayJST + 'T00:00:00+09:00')
       .lte('clock_in', todayJST + 'T23:59:59+09:00')
     setTodayData(data ?? [])
@@ -58,7 +61,7 @@ export default function PayrollPage() {
 
   async function loadSummary() {
     const { data: records } = await supabase.from('timeclock')
-      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate, salary_start_date, payment_method)')
+      .select('staff_id, clock_in, clock_out, staff(name, hourly_rate, salary_start_date, payment_method, employer)')
       .gte('clock_in', `${month}-01T00:00:00+09:00`)
       .lt('clock_in', `${nextMonthFirstDay(month)}T00:00:00+09:00`)
     const map: Record<string, any> = {}
@@ -79,6 +82,7 @@ export default function PayrollPage() {
         // 未退勤の記録が1件でもあれば true（給与未確定の警告表示用）
         openRecord: false,
         paymentMethod: (sRow.payment_method as 'transfer' | 'cash') ?? 'transfer',
+        employer: (sRow.employer as 'cafe' | 'fcr') ?? 'cafe',
       }
       if (!recMap[sid]) recMap[sid] = []
       const salary = isSalaryPeriod(r.clock_in, sRow.salary_start_date ?? null)
@@ -113,16 +117,26 @@ export default function PayrollPage() {
   }
 
   async function exportCSV() {
-    const csv = '\uFEFF' + 'スタッフ,出勤日数,労働時間,時給,支払額,支払方法,区分\n' +
+    const csv = '\uFEFF' + 'スタッフ,所属,出勤日数,労働時間,時給,支払額,支払方法,区分\n' +
       summary.map(s => {
         const kind = s.allSalaryPeriod ? '正社員(月給)' : s.hasSalaryPeriod ? '混在' : '時給'
         const method = s.paymentMethod === 'cash' ? '現金' : '振込'
-        return `${s.name},${s.days},${s.hours.toFixed(1)},${s.hourly_rate},${Math.round(s.hours * s.hourly_rate)},${method},${kind}`
+        const employer = EMPLOYER_LABEL[s.employer] ?? s.employer
+        return `${s.name},${employer},${s.days},${s.hours.toFixed(1)},${s.hourly_rate},${Math.round(s.hours * s.hourly_rate)},${method},${kind}`
       }).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
     a.download = `payroll_${month}.csv`; a.click()
   }
+
+  // 所属別の人件費合計（会計用）。月給制(allSalaryPeriod)は時給人件費に含めない。
+  // 支払方法は問わず、所属ごとに「その月の時給人件費いくら分か」を出す。
+  const employerTotals = summary
+    .filter(s => !s.allSalaryPeriod)
+    .reduce((acc, s) => {
+      acc[s.employer] = (acc[s.employer] ?? 0) + Math.round(s.hours * s.hourly_rate)
+      return acc
+    }, {} as Record<string, number>)
 
   // 振込合計: 現金 と allSalaryPeriod を除外（実際に振込で払う額）
   const transferTotal = summary
@@ -229,6 +243,12 @@ export default function PayrollPage() {
             {cashTotal > 0 && (
               <p className="text-xs text-amber-600 mt-2">＋ 現金 ¥{cashTotal.toLocaleString()}</p>
             )}
+            {(employerTotals.fcr ?? 0) > 0 && (
+              <div className="mt-3 pt-3 border-t border-teal-200 flex justify-center gap-6 text-xs">
+                <span className="text-stone-500">カフェ ¥{(employerTotals.cafe ?? 0).toLocaleString()}</span>
+                <span className="text-orange-600 font-medium">FCR ¥{(employerTotals.fcr ?? 0).toLocaleString()}</span>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             {summary.length === 0 ? (
@@ -246,6 +266,7 @@ export default function PayrollPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-stone-800">{s.name}</p>
+                        {s.employer === 'fcr' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">FCR</span>}
                         {s.allSalaryPeriod && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">正社員</span>}
                         {s.hasSalaryPeriod && !s.allSalaryPeriod && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">混在</span>}
                         {s.paymentMethod === 'cash' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">現金</span>}
@@ -307,7 +328,10 @@ export default function PayrollPage() {
               ) : (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-stone-700">{s.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-stone-700">{s.name}</p>
+                      {s.employer === 'fcr' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">FCR</span>}
+                    </div>
                     <p className="text-xs text-stone-400">{s.skill || 'barista'}</p>
                   </div>
                   <div className="flex items-center gap-3">
