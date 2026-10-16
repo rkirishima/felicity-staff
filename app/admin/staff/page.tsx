@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminSession } from '@/lib/session'
 import { toast } from 'sonner'
+import { updateStaff } from './actions'
 
 type Role = 'staff' | 'admin' | 'accountant'
+type Employer = 'cafe' | 'fcr'
+type PaymentMethod = 'transfer' | 'cash'
 type StaffRow = {
   id: string
   name: string
@@ -15,12 +18,20 @@ type StaffRow = {
   hourly_rate: number | null
   employment_type: string | null
   skill: string | null
+  employer: Employer
+  payment_method: PaymentMethod
 }
 
 const ROLES: { value: Role; label: string; badge: string }[] = [
   { value: 'staff', label: 'スタッフ', badge: 'bg-stone-100 text-stone-600' },
   { value: 'admin', label: 'ADMIN', badge: 'bg-teal-100 text-teal-700' },
   { value: 'accountant', label: '経理', badge: 'bg-amber-100 text-amber-700' },
+]
+
+// 会計上の雇用主体（所属）。シフト表示には影響せず、給与集計を分けるためだけに使う。
+const EMPLOYERS: { value: Employer; label: string; badge: string }[] = [
+  { value: 'cafe', label: 'カフェ', badge: 'bg-stone-100 text-stone-600' },
+  { value: 'fcr', label: 'FCR', badge: 'bg-orange-100 text-orange-700' },
 ]
 
 export default function AdminStaffPage() {
@@ -40,7 +51,7 @@ export default function AdminStaffPage() {
   async function load() {
     const { data, error } = await supabase
       .from('staff')
-      .select('id, name, role, active, hourly_rate, employment_type, skill')
+      .select('id, name, role, active, hourly_rate, employment_type, skill, employer, payment_method')
       .order('active', { ascending: false })
       .order('role')
       .order('name')
@@ -50,7 +61,7 @@ export default function AdminStaffPage() {
 
   function startEdit(s: StaffRow) {
     setEditingId(s.id)
-    setDraft({ role: s.role, active: s.active, hourly_rate: s.hourly_rate })
+    setDraft({ role: s.role, active: s.active, hourly_rate: s.hourly_rate, employer: s.employer, payment_method: s.payment_method })
   }
 
   function cancelEdit() {
@@ -60,13 +71,17 @@ export default function AdminStaffPage() {
 
   async function save(id: string) {
     setSaving(true)
-    const payload: Record<string, unknown> = {}
-    if (draft.role !== undefined) payload.role = draft.role
-    if (draft.active !== undefined) payload.active = draft.active
-    if (draft.hourly_rate !== undefined) payload.hourly_rate = draft.hourly_rate
-    const { error } = await supabase.from('staff').update(payload).eq('id', id)
+    // 保存は admin 限定のサーバーアクション経由（service role）。ブラウザの anon
+    // キーで直接更新すると accountant でも書けてしまうため、ここを実ゲートにする。
+    const res = await updateStaff(id, {
+      role: draft.role,
+      active: draft.active,
+      hourly_rate: draft.hourly_rate ?? undefined,
+      employer: draft.employer,
+      payment_method: draft.payment_method,
+    })
     setSaving(false)
-    if (error) { toast.error('保存失敗: ' + error.message); return }
+    if (!res.ok) { toast.error('保存失敗: ' + (res.error ?? '')); return }
     toast.success('更新しました')
     setEditingId(null)
     setDraft({})
@@ -100,6 +115,8 @@ export default function AdminStaffPage() {
           const isEditing = editingId === s.id
           const currentRole = isEditing ? (draft.role ?? s.role) : s.role
           const roleMeta = ROLES.find(r => r.value === currentRole) ?? ROLES[0]
+          const currentEmployer = isEditing ? (draft.employer ?? s.employer) : s.employer
+          const employerMeta = EMPLOYERS.find(e => e.value === currentEmployer) ?? EMPLOYERS[0]
           return (
             <div
               key={s.id}
@@ -111,6 +128,14 @@ export default function AdminStaffPage() {
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${roleMeta.badge}`}>
                     {roleMeta.label}
                   </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${employerMeta.badge}`}>
+                    {employerMeta.label}
+                  </span>
+                  {s.payment_method === 'cash' && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                      現金
+                    </span>
+                  )}
                   {!s.active && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500">
                       無効
@@ -158,6 +183,28 @@ export default function AdminStaffPage() {
                     </div>
                   </div>
 
+                  {/* 所属（会計上の雇用主体） */}
+                  <div>
+                    <p className="text-xs text-stone-400 mb-1.5">所属（会計上）</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {EMPLOYERS.map(e => {
+                        const active = (draft.employer ?? s.employer) === e.value
+                        return (
+                          <button
+                            key={e.value}
+                            onClick={() => setDraft(d => ({ ...d, employer: e.value }))}
+                            className={`py-2 rounded-xl text-xs font-medium transition-all ${
+                              active ? 'bg-stone-800 text-white' : 'bg-stone-100 text-stone-600'
+                            }`}
+                          >
+                            {e.value === 'fcr' ? 'FCR（焙煎）' : 'カフェ'}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-[10px] text-stone-400 mt-1.5">シフト表示・勤怠には影響しません。給与集計の所属分けだけに使います。</p>
+                  </div>
+
                   {/* 有効 / 無効 */}
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-stone-400">在籍</p>
@@ -186,6 +233,29 @@ export default function AdminStaffPage() {
                         }
                         className="w-24 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right bg-white text-stone-800"
                       />
+                    </div>
+                  </div>
+
+                  {/* 支払方法 */}
+                  <div>
+                    <p className="text-xs text-stone-400 mb-1.5">支払方法</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(['transfer', 'cash'] as PaymentMethod[]).map(pm => {
+                        const active = (draft.payment_method ?? s.payment_method) === pm
+                        return (
+                          <button
+                            key={pm}
+                            onClick={() => setDraft(d => ({ ...d, payment_method: pm }))}
+                            className={`py-2 rounded-xl text-xs font-medium transition-all ${
+                              active
+                                ? pm === 'cash' ? 'bg-amber-600 text-white' : 'bg-stone-800 text-white'
+                                : 'bg-stone-100 text-stone-600'
+                            }`}
+                          >
+                            {pm === 'cash' ? '現金' : '振込'}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
