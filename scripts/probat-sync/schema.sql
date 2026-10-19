@@ -15,3 +15,7 @@ create table if not exists public.probat_sync_status (
 
 alter table public.probat_sync_status enable row level security;
 -- ポリシーなし = anon / authenticated からは読めない（service role のみ）
+
+-- クラウド側の外形監視（/api/cron/probat-sync-monitor）が直近に通知した内容。
+-- 同じ異常で何度も鳴らさないためのもの。sync-probat.js は触らない。
+alter table public.probat_sync_status add column if not exists monitor_alert_key text;
