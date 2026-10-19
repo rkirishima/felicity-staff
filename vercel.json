@@ -8,6 +8,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/cron/probat-sync-monitor",
+      "schedule": "7 * * * *"
+    },
+    {
       "path": "/api/cron/monthly-roast-invoice",
       "schedule": "0 0 1 * *"
     },
