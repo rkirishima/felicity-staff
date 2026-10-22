@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { saveSession, getAdminSession, clearAdminSession } from '@/lib/session'
 import { createClient } from '@/lib/supabase/client'
 import { verifyAdminPin } from './actions'
+import { ensureDbPass } from '@/lib/supabase/db-pass-client'
+import DeviceRegistration from '@/components/DeviceRegistration'
 
 export default function AdminPage() {
   return (
@@ -76,6 +78,7 @@ function AdminPageInner() {
     if (next.length === 4) {
       const ok = await verifyAdminPin(next)
       if (ok) {
+        await ensureDbPass()
         saveSession({ id: 'admin', name: '桐島', role: 'admin', hourly_rate: 0 })
         window.dispatchEvent(new Event('admin-session-changed'))
         setUnlocked(true)
@@ -165,6 +168,7 @@ function AdminPageInner() {
           </button>
         ))}
       </div>
+      <DeviceRegistration />
       <button onClick={() => router.push('/')} className="text-stone-400 text-xs hover:text-stone-600">← ホームに戻る</button>
     </main>
   )

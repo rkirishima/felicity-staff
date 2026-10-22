@@ -6,8 +6,10 @@ import { toast } from 'sonner'
 import { getHolidaysOf } from 'japanese-holidays'
 import { getSession, getAdminSession } from '@/lib/session'
 import { verifyStaffPin } from '@/app/admin/actions'
+import { ensureDbPass } from '@/lib/supabase/db-pass-client'
+import { listActiveStaff, getScheduleMonth } from '@/app/public-data/actions'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
-import { loadShiftDeadlineSettings, deadlineStatusOf, monthKeyOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
+import { deadlineStatusOf, monthKeyOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
 import { isRegularClosedDay, specialDayOf } from '@/lib/shifts/closedDays'
 import { haptic } from '@/lib/utils'
 
@@ -90,34 +92,18 @@ export default function SchedulePage() {
       map[key] = h.name
     })
     setHolidays(map)
-    supabase.from('special_business_days').select('date, day_type')
-      .then(({ data }) => setSpecialDays((data ?? []).filter((d: any) => d.day_type === 'weekend').map((d: any) => d.date)))
-    supabase.from('shift_templates').select('*').order('day_type')
-      .then(({ data }) => setTemplates(data ?? []))
-    supabase.from('staff').select('id, name, role').eq('active', true)
-      .not('role', 'eq', 'accountant').order('name')
-      .then(({ data }) => setStaffList((data ?? []) as Staff[]))
-    loadShiftDeadlineSettings(supabase).then(setDeadlineSettings)
+    listActiveStaff().then(list => setStaffList(list.filter(st => st.role !== 'accountant')))
     loadShifts()
   }, [viewMonth])
 
+  // ログイン前でも見られるよう、月のシフト表はサーバー経由で読む
   function loadShifts() {
-    const y = viewMonth.getFullYear()
-    const m = String(viewMonth.getMonth() + 1).padStart(2, '0')
-    const lastDay = new Date(y, viewMonth.getMonth() + 1, 0).getDate()
-    supabase.from('shifts').select('id, staff_id, date, start_time, end_time, status, location, note, staff!shifts_staff_id_fkey(name)')
-      .gte('date', y + '-' + m + '-01')
-      .lte('date', y + '-' + m + '-' + lastDay)
-      .in('status', ['approved', 'pending'])
-      .then(({ data: sd }) => {
-        supabase.from('staff').select('id, name').then(({ data: st }) => {
-          const staffMap: Record<string, string> = {}
-          ;(st ?? []).forEach((s: any) => { staffMap[s.id] = s.name })
-          setShifts((sd ?? []).map((sh: any) => ({
-            ...sh, staff: { name: staffMap[sh.staff_id] ?? '' }
-          })))
-        })
-      })
+    getScheduleMonth(viewMonth.getFullYear(), viewMonth.getMonth() + 1).then(d => {
+      setSpecialDays(d.specialDays)
+      setTemplates(d.templates)
+      setDeadlineSettings(d.deadlineSettings)
+      setShifts(d.shifts)
+    })
   }
 
   async function handlePinInput(n: string) {
@@ -128,6 +114,7 @@ export default function SchedulePage() {
       if (!authStaff) return
       const ok = await verifyStaffPin(authStaff.id, next)
       if (ok) {
+        await ensureDbPass()
         setAuthStep('done')
         setSelectedStaff(authStaff.id)
       } else {

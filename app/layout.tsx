@@ -7,6 +7,7 @@ import { AdminProvider } from '@/lib/admin-context'
 import { Toaster } from '@/components/ui/sonner'
 import OrderNotification from '@/components/OrderNotification'
 import VersionChecker from '@/components/VersionChecker'
+import DbPassGate from '@/components/DbPassGate'
 
 const geist = Geist({ subsets: ['latin'] })
 
@@ -37,11 +38,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja">
       <body className={geist.className + ' bg-zinc-950 text-white'}>
         <AdminProvider>
-          <div className="pb-20">{children}</div>
-          <BottomNav />
-          <AdminNav />
+          <DbPassGate>
+            <div className="pb-20">{children}</div>
+            <BottomNav />
+            <AdminNav />
+            <OrderNotification />
+          </DbPassGate>
           <Toaster />
-          <OrderNotification />
           <VersionChecker />
         </AdminProvider>
       </body>

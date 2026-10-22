@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
 import { getSession, saveSession } from '@/lib/session'
 import Image from 'next/image'
 import { verifyStaffPin, reportAbsence } from '@/app/admin/actions'
+import { ensureDbPass } from '@/lib/supabase/db-pass-client'
+import { listActiveStaff } from '@/app/public-data/actions'
 import { LOCATION_META, locationOf } from '@/lib/shift-locations'
 import { haptic } from '@/lib/utils'
 
@@ -82,9 +84,8 @@ export default function HomePage() {
   }, [staffList])
 
   useEffect(() => {
-    getSb().from('staff').select('id, name, role')
-      .eq('active', true).order('name')
-      .then(({ data }) => setStaffList((data ?? []) as Staff[]))
+    // ログイン前に出す名前一覧はサーバー経由（DB は通行証なしでは読めない）
+    listActiveStaff().then(list => setStaffList(list as Staff[]))
   }, [])
 
   function cancelAutoReset() {
@@ -136,6 +137,7 @@ export default function HomePage() {
       setTimeout(() => setPin(''), 600)
       return
     }
+    await ensureDbPass()
     // PINが正しければ hourly_rate を取得
     const { data: rateData } = await getSb().from('staff').select('hourly_rate').eq('id', selected.id).single()
     const staffWithRate: Staff = { ...selected, hourly_rate: rateData?.hourly_rate ?? 1300 }
