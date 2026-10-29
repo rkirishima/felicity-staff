@@ -222,7 +222,8 @@ export async function candidatesForBean(sb: SupabaseClient, beanId: string): Pro
       digest: d,
       score: sc.score,
       reasons: sc.reasons,
-      charge_temp_c: c.metrics?.charge_temp_c ?? null,
+      // 投入温度はカーブ先頭の実測BT。Probat の fillTemp（metrics）は予熱中の値などを拾ってずれることがあるので最後の手段
+      charge_temp_c: chargeFromSamples(c.samples ?? []) ?? c.metrics?.charge_temp_c ?? null,
       // 投入時のドラム（途中で変えることはほぼ無い）
       drum_pct: steps[0]?.drum ?? (drums.length ? Math.round(drums.reduce((a, b) => a + b, 0) / drums.length) : null),
       steps,
@@ -231,6 +232,12 @@ export async function candidatesForBean(sb: SupabaseClient, beanId: string): Pro
   }
   list.sort((a, b) => b.score - a.score)
   return { list, rejected }
+}
+
+/** 投入時の豆温度 = 記録開始3秒以内で最初に取れたBT */
+export function chargeFromSamples(samples: { t: number; bt: number | null }[]): number | null {
+  const s = samples.find((x) => x.t <= 3 && x.bt != null && x.bt > 100)
+  return s ? s.bt : null
 }
 
 /** 操作表から「ここだけ見ればいい」1行を作る */
