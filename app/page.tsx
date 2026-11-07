@@ -10,7 +10,7 @@ import { verifyStaffPin, reportAbsence } from '@/app/admin/actions'
 import { ensureDbPass } from '@/lib/supabase/db-pass-client'
 import { listActiveStaff } from '@/app/public-data/actions'
 import { LOCATION_META, locationOf } from '@/lib/shift-locations'
-import { haptic } from '@/lib/utils'
+import { haptic, retryOnReject } from '@/lib/utils'
 
 type Staff = { id: string; name: string; role: string; hourly_rate?: number }
 type ClockStatus = 'not_clocked' | 'clocked_in' | 'clocked_out'
@@ -84,8 +84,14 @@ export default function HomePage() {
   }, [staffList])
 
   useEffect(() => {
-    // ログイン前に出す名前一覧はサーバー経由（DB は通行証なしでは読めない）
-    listActiveStaff().then(list => setStaffList(list as Staff[]))
+    // ログイン前に出す名前一覧はサーバー経由（DB は通行証なしでは読めない）。
+    // コールド起動時に DbPassGate の syncDbPass と同時に飛ぶと稀に net::ERR_ABORTED で
+    // 中断され、一覧が空のまま固まっていた。失敗時は自動で数回リトライして回復させる。
+    let cancelled = false
+    retryOnReject(() => listActiveStaff())
+      .then(list => { if (!cancelled) setStaffList(list as Staff[]) })
+      .catch(e => console.error('[listActiveStaff]', e))
+    return () => { cancelled = true }
   }, [])
 
   function cancelAutoReset() {

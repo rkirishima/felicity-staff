@@ -11,7 +11,7 @@ import { listActiveStaff, getScheduleMonth } from '@/app/public-data/actions'
 import { LOCATION_META, SHIFT_LOCATION_OPTIONS, locationOf, type ShiftLocation } from '@/lib/shift-locations'
 import { deadlineStatusOf, monthKeyOf, type ShiftDeadlineSettings } from '@/lib/shifts/deadline'
 import { isRegularClosedDay, specialDayOf } from '@/lib/shifts/closedDays'
-import { haptic } from '@/lib/utils'
+import { haptic, retryOnReject } from '@/lib/utils'
 
 type Template = { id: string; name: string; day_type: string; start_time: string; end_time: string }
 type Shift = { id: string; staff_id: string | null; date: string; start_time: string; end_time: string; status: string; location: string | null; note: string | null; staff: { name: string } }
@@ -92,18 +92,23 @@ export default function SchedulePage() {
       map[key] = h.name
     })
     setHolidays(map)
-    listActiveStaff().then(list => setStaffList(list.filter(st => st.role !== 'accountant')))
+    // コールド起動時に稀にサーバーアクションが中断されるため、失敗時は自動リトライ。
+    retryOnReject(() => listActiveStaff())
+      .then(list => setStaffList(list.filter(st => st.role !== 'accountant')))
+      .catch(e => console.error('[listActiveStaff]', e))
     loadShifts()
   }, [viewMonth])
 
   // ログイン前でも見られるよう、月のシフト表はサーバー経由で読む
   function loadShifts() {
-    getScheduleMonth(viewMonth.getFullYear(), viewMonth.getMonth() + 1).then(d => {
-      setSpecialDays(d.specialDays)
-      setTemplates(d.templates)
-      setDeadlineSettings(d.deadlineSettings)
-      setShifts(d.shifts)
-    })
+    retryOnReject(() => getScheduleMonth(viewMonth.getFullYear(), viewMonth.getMonth() + 1))
+      .then(d => {
+        setSpecialDays(d.specialDays)
+        setTemplates(d.templates)
+        setDeadlineSettings(d.deadlineSettings)
+        setShifts(d.shifts)
+      })
+      .catch(e => console.error('[getScheduleMonth]', e))
   }
 
   async function handlePinInput(n: string) {
