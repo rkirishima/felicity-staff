@@ -15,9 +15,19 @@ export const PERSIAN_DINNER = {
   drinks: ['ワイン', 'ビール', 'コーヒー', 'ソフトドリンク'],
   drinks_en: ['Wine', 'Beer', 'Coffee', 'Soft drinks'],
   description:
-    'フェリシティで一夜限りのペルシャ料理ディナー。サフランライス、ハーブたっぷりのシチュー、ケバブなど、本場の家庭料理をコースでお楽しみください。',
+    'フェリシティで一夜限りのペルシャ料理ディナー。ペルシャの家庭の食卓のように、色とりどりの料理を大皿で囲んでお楽しみください。',
   description_en:
-    'A one-night-only Persian dinner at Felicity. Enjoy a home-style course of saffron rice, herb stews, kebabs and more.',
+    'A one-night-only Persian dinner at Felicity. Gather around a table of colourful sharing dishes, just like a Persian family feast.',
+  // メニュー（予定・仮）
+  menu: [
+    { ja: 'ゼレシュク・ポロ — サフランとバーベリーのライス', en: 'Zereshk Polo — saffron rice with barberries' },
+    { ja: 'ゴルメ・サブズィ — ハーブと牛肉の煮込み', en: 'Ghormeh Sabzi — herb & beef stew' },
+    { ja: 'ホレシュ — ピスタチオを散らした煮込み肉', en: 'Khoresh — slow-cooked meat stew with pistachios' },
+    { ja: 'マスト・オ・ヒヤール — きゅうりとミントのヨーグルト、ローズペタル', en: 'Mast-o-Khiar — cucumber & mint yogurt with rose petals' },
+    { ja: 'サラダ・シーラーズィ — トマトときゅうりのサラダ', en: 'Salad Shirazi — tomato & cucumber salad' },
+    { ja: 'サブズィ・ホルダン — フレッシュハーブとラディッシュ', en: 'Sabzi Khordan — fresh herbs & radishes' },
+    { ja: 'ナン（ペルシャのパン）', en: 'Persian flatbread' },
+  ],
 } as const
 
 // キャンセル期限（JST, YYYY-MM-DD）。開催日の cancel_days_before 日前の 23:59 まで。

@@ -78,6 +78,17 @@ export default function PersianDinnerPage() {
           <p>{EV.description}</p>
           <p className="text-stone-500 mt-2 text-xs">{EV.description_en}</p>
           <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E8E0D4' }}>
+            <p className="text-xs font-semibold">🍽 メニュー（予定）/ Menu (tentative)</p>
+            <ul className="mt-2 space-y-1.5">
+              {EV.menu.map(m => (
+                <li key={m.en} className="text-xs">
+                  <span>{m.ja}</span>
+                  <span className="block text-[11px] text-stone-500">{m.en}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E8E0D4' }}>
             <p className="text-xs font-semibold">🍷 ドリンク（別料金・当日会計）/ Drinks (separate, pay on the day)</p>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {EV.drinks.map((d, i) => (
