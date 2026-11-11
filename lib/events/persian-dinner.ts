@@ -6,6 +6,7 @@ export const PERSIAN_DINNER = {
   title_en: 'Persian Dinner Pop-up',
   date: '2026-12-20',
   start_time: '18:00',
+  photo: '/events/persian-dinner.webp', // 仮写真
   capacity: 20,
   price_jpy: 6600, // 1名あたり・税込
   max_per_order: 6,

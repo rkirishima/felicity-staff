@@ -49,8 +49,11 @@ export default function PersianDinnerPage() {
       </div>
 
       <div className="max-w-md mx-auto px-4">
-        <div className="mt-6 rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg,#7c2d12,#b45309 55%,#ca8a04)' }}>
-          <div className="px-6 py-10 text-white">
+        <div className="mt-6 rounded-3xl overflow-hidden relative" style={{ backgroundColor: '#7c2d12' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={EV.photo} alt={EV.title_en} className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(28,25,23,0.85), rgba(28,25,23,0.15) 70%)' }} />
+          <div className="relative px-6 pt-40 pb-6 text-white">
             <p className="text-xs tracking-[0.2em] opacity-80">FELICITY POP-UP</p>
             <h1 className="text-2xl font-semibold mt-2 leading-snug">{EV.title}</h1>
             <p className="text-sm opacity-90 mt-1">{EV.title_en}</p>
