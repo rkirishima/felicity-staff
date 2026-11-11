@@ -209,6 +209,19 @@ export default function AdminEventsPage() {
           </button>
         </div>
 
+        {/* 有料ポップアップ（テスト版） */}
+        <a href="/events/persian-dinner" target="_blank" rel="noreferrer"
+          className="block rounded-2xl p-4 mb-6 border" style={{ backgroundColor: '#fff', borderColor: '#E8E0D4' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-medium" style={{ color: '#b45309' }}>有料ポップアップ・TEST</p>
+              <p className="text-sm font-medium" style={{ color: '#292524' }}>ペルシャ料理ディナー</p>
+              <p className="text-xs text-stone-500">12/20(日) 18:00〜 ・ 定員20名 ・ ¥6,600/名（税込・ドリンク別）・12/17までキャンセル可</p>
+            </div>
+            <span className="text-xs px-3 py-1.5 rounded-xl" style={{ backgroundColor: '#14b8a6', color: 'white' }}>予約ページ ↗</span>
+          </div>
+        </a>
+
         {/* New event form */}
         {showForm && (
           <div className="rounded-2xl p-4 mb-6 border" style={{ backgroundColor: '#fff', borderColor: '#E8E0D4' }}>

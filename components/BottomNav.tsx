@@ -16,7 +16,7 @@ const items = [
 export default function BottomNav() {
   const path = usePathname()
   const isAdmin = useIsAdmin()
-  if (path.startsWith('/admin') || isAdmin) return null
+  if (path.startsWith('/admin') || path.startsWith('/events') || isAdmin) return null
   return (
     <nav className="fixed bottom-0 left-0 right-0 flex z-50"
       style={{ backgroundColor: '#F5F0E8', borderTop: '1px solid #E5DDD0', paddingBottom: 'env(safe-area-inset-bottom)' }}>
