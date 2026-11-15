@@ -11,6 +11,9 @@ export const PERSIAN_DINNER = {
   photos: {
     utensils: '/events/persian-dinner-utensils.webp',
     nabat: '/events/persian-dinner-nabat.webp',
+    herbs: '/events/persian-dinner-herbs.webp',
+    pots: '/events/persian-dinner-pots.webp',
+    tea: '/events/persian-dinner-tea.webp',
   },
   capacity: 20,
   price_jpy: 6600, // 1名あたり・税込
@@ -43,9 +46,9 @@ export const PERSIAN_DINNER = {
   ],
   about_by: 'レザ',
   menu: [
-    { ja: 'ザクロとクルミと鶏のコレシュ', en: 'Chicken khoresh with pomegranate & walnuts', photo: null },
+    { ja: 'ザクロとクルミと鶏のコレシュ', en: 'Chicken khoresh with pomegranate & walnuts', photo: '/events/persian-dinner-khoresh.webp' },
     { ja: '薄焼きナンロール', en: 'Thin flatbread rolls', photo: '/events/persian-dinner-nan-roll.webp' },
-    { ja: '豆と肉と米のボール', en: 'Bean, meat & rice balls', photo: null },
+    { ja: '豆と肉と米のボール', en: 'Bean, meat & rice balls', photo: '/events/persian-dinner-kufteh.webp' },
     { ja: 'ハーブの炊き込みご飯', en: 'Herb rice', photo: '/events/persian-dinner-herb-rice.webp' },
   ],
 } as const

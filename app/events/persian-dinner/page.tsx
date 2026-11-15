@@ -110,6 +110,8 @@ export default function PersianDinnerPage() {
                 </span>
               ))}
             </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={EV.photos.tea} alt="Persian tea" className="mt-3 w-full aspect-[4/3] object-cover rounded-xl" />
           </div>
         </div>
 
@@ -124,6 +126,10 @@ export default function PersianDinnerPage() {
             <img src={EV.photos.utensils} alt="Persian kitchen utensils" className="w-full aspect-[3/4] object-cover rounded-xl" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={EV.photos.nabat} alt="Nabat (Persian rock candy)" className="w-full aspect-[3/4] object-cover rounded-xl" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={EV.photos.herbs} alt="Fresh herbs" className="w-full aspect-[3/4] object-cover rounded-xl" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={EV.photos.pots} alt="Clay pots and mortar" className="w-full aspect-[3/4] object-cover rounded-xl" />
           </div>
         </div>
 
