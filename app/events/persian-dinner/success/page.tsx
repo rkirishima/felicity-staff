@@ -12,7 +12,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
         <h1 className="text-lg font-semibold mt-2">ご予約ありがとうございます</h1>
         <p className="text-sm text-stone-500">Thank you for your reservation</p>
         <div className="mt-4 text-sm space-y-1">
-          <p>{EV.title}</p>
+          <p>『{EV.title}』</p>
           <p>{EV.date.replaceAll('-', '/')} {EV.start_time}〜</p>
           <p className="text-xs text-stone-500">キャンセルは {cancelDeadline().replaceAll('-', '/')} 23:59 まで全額返金</p>
           {qty > 0 && <p>{qty}名 / ¥{total.toLocaleString('ja-JP')}</p>}

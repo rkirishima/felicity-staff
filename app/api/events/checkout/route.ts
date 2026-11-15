@@ -34,7 +34,7 @@ export async function POST(req: Request): Promise<Response> {
   p.set('line_items[0][quantity]', String(qty))
   p.set('line_items[0][price_data][currency]', 'jpy')
   p.set('line_items[0][price_data][unit_amount]', String(EV.price_jpy))
-  p.set('line_items[0][price_data][product_data][name]', `${EV.title} ${EV.date.replaceAll('-', '/')} ${EV.start_time}`)
+  p.set('line_items[0][price_data][product_data][name]', `『${EV.title}』 ${EV.date.replaceAll('-', '/')} ${EV.start_time}`)
   p.set('metadata[event]', EV.slug)
   p.set('metadata[name]', name)
   p.set('metadata[qty]', String(qty))

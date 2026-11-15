@@ -54,8 +54,9 @@ export default function PersianDinnerPage() {
           <img src={EV.photo} alt={EV.title_en} className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(28,25,23,0.85), rgba(28,25,23,0.15) 70%)' }} />
           <div className="relative px-6 pt-40 pb-6 text-white">
-            <p className="text-xs tracking-[0.2em] opacity-80">FELICITY POP-UP</p>
-            <h1 className="text-2xl font-semibold mt-2 leading-snug">{EV.title}</h1>
+            <p className="text-xs tracking-[0.2em] opacity-80">FELICITY POP-UP · SHAB-E YALDA</p>
+            <h1 className="text-2xl font-semibold mt-2 leading-snug">『{EV.title}』</h1>
+            <p className="text-[11px] opacity-70">（{EV.title_note}）</p>
             <p className="text-sm opacity-90 mt-1">{EV.title_en}</p>
           </div>
         </div>
@@ -75,10 +76,17 @@ export default function PersianDinnerPage() {
         <p className="text-[11px] text-stone-500 text-right mt-1">料金は1名あたり・税込・ドリンク別 / per person, tax incl., drinks not included</p>
 
         <div className="mt-4 rounded-2xl border bg-white p-4 text-sm leading-relaxed" style={{ borderColor: '#E8E0D4' }}>
-          <p>{EV.description}</p>
-          <p className="text-stone-500 mt-2 text-xs">{EV.description_en}</p>
+          <div className="space-y-2">
+            {EV.intro.map(t => <p key={t}>{t}</p>)}
+          </div>
+          <p className="text-right text-xs mt-3">{EV.hosts.join('　')}</p>
+          <p className="text-right text-[11px] text-stone-500">{EV.book}</p>
+          <p className="text-stone-500 mt-3 text-xs">{EV.intro_en}</p>
+          <ul className="mt-3 space-y-1 text-[11px] text-stone-500">
+            {EV.notes.map(n => <li key={n}>＊{n}</li>)}
+          </ul>
           <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E8E0D4' }}>
-            <p className="text-xs font-semibold">🍽 メニュー（予定）/ Menu (tentative)</p>
+            <p className="text-xs font-semibold">🍽 メニュー / Menu</p>
             <ul className="mt-2 space-y-1.5">
               {EV.menu.map(m => (
                 <li key={m.en} className="text-xs">
@@ -98,6 +106,14 @@ export default function PersianDinnerPage() {
               ))}
             </div>
           </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border bg-white p-4 text-sm leading-relaxed" style={{ borderColor: '#E8E0D4' }}>
+          <h2 className="text-sm font-semibold mb-2">『ペルシャ料理とは』</h2>
+          <div className="space-y-2">
+            {EV.about.map(t => <p key={t}>{t}</p>)}
+          </div>
+          <p className="text-right text-xs mt-2">{EV.about_by}</p>
         </div>
 
         <div className="mt-4 rounded-2xl border bg-white p-4 space-y-3" style={{ borderColor: '#E8E0D4' }}>

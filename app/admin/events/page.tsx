@@ -215,7 +215,7 @@ export default function AdminEventsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[10px] font-medium" style={{ color: '#b45309' }}>有料ポップアップ・TEST</p>
-              <p className="text-sm font-medium" style={{ color: '#292524' }}>ペルシャ料理ディナー</p>
+              <p className="text-sm font-medium" style={{ color: '#292524' }}>『冬至のペルシャ料理』（仮称）</p>
               <p className="text-xs text-stone-500">12/20(日) 18:00〜 ・ 定員20名 ・ ¥6,600/名（税込・ドリンク別）・12/17までキャンセル可</p>
             </div>
             <span className="text-xs px-3 py-1.5 rounded-xl" style={{ backgroundColor: '#14b8a6', color: 'white' }}>予約ページ ↗</span>
