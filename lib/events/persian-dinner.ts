@@ -7,7 +7,11 @@ export const PERSIAN_DINNER = {
   title_en: 'Persian Cuisine for the Winter Solstice (Shab-e Yalda)',
   date: '2026-12-20',
   start_time: '18:00',
-  photo: '/events/persian-dinner.webp', // 仮写真
+  photo: '/events/persian-dinner-pomegranate-tree.webp', // レザ作「ザクロの木」
+  photos: {
+    utensils: '/events/persian-dinner-utensils.webp',
+    nabat: '/events/persian-dinner-nabat.webp',
+  },
   capacity: 20,
   price_jpy: 6600, // 1名あたり・税込
   max_per_order: 6,
@@ -39,10 +43,10 @@ export const PERSIAN_DINNER = {
   ],
   about_by: 'レザ',
   menu: [
-    { ja: 'ザクロとクルミと鶏のコレシュ', en: 'Chicken khoresh with pomegranate & walnuts' },
-    { ja: '薄焼きナンロール', en: 'Thin flatbread rolls' },
-    { ja: '豆と肉と米のボール', en: 'Bean, meat & rice balls' },
-    { ja: 'ハーブの炊き込みご飯', en: 'Herb rice' },
+    { ja: 'ザクロとクルミと鶏のコレシュ', en: 'Chicken khoresh with pomegranate & walnuts', photo: null },
+    { ja: '薄焼きナンロール', en: 'Thin flatbread rolls', photo: '/events/persian-dinner-nan-roll.webp' },
+    { ja: '豆と肉と米のボール', en: 'Bean, meat & rice balls', photo: null },
+    { ja: 'ハーブの炊き込みご飯', en: 'Herb rice', photo: '/events/persian-dinner-herb-rice.webp' },
   ],
 } as const
 

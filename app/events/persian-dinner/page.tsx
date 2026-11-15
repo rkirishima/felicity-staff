@@ -51,9 +51,9 @@ export default function PersianDinnerPage() {
       <div className="max-w-md mx-auto px-4">
         <div className="mt-6 rounded-3xl overflow-hidden relative" style={{ backgroundColor: '#7c2d12' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={EV.photo} alt={EV.title_en} className="absolute inset-0 w-full h-full object-cover" />
+          <img src={EV.photo} alt="ザクロの木 / Pomegranate tree by Reza" className="absolute inset-0 w-full h-full object-cover object-top" />
           <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(28,25,23,0.85), rgba(28,25,23,0.15) 70%)' }} />
-          <div className="relative px-6 pt-40 pb-6 text-white">
+          <div className="relative px-6 pt-64 pb-6 text-white">
             <p className="text-xs tracking-[0.2em] opacity-80">FELICITY POP-UP · SHAB-E YALDA</p>
             <h1 className="text-2xl font-semibold mt-2 leading-snug">『{EV.title}』</h1>
             <p className="text-[11px] opacity-70">（{EV.title_note}）</p>
@@ -87,11 +87,16 @@ export default function PersianDinnerPage() {
           </ul>
           <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E8E0D4' }}>
             <p className="text-xs font-semibold">🍽 メニュー / Menu</p>
-            <ul className="mt-2 space-y-1.5">
-              {EV.menu.map(m => (
+            <ul className="mt-2 space-y-3">
+              {EV.menu.map((m, i) => (
                 <li key={m.en} className="text-xs">
+                  <span className="text-stone-400 mr-1">{'abcd'[i]}</span>
                   <span>{m.ja}</span>
-                  <span className="block text-[11px] text-stone-500">{m.en}</span>
+                  <span className="block text-[11px] text-stone-500 ml-3">{m.en}</span>
+                  {m.photo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={m.photo} alt={m.en} className="mt-2 w-full aspect-[4/3] object-cover rounded-xl" />
+                  )}
                 </li>
               ))}
             </ul>
@@ -114,6 +119,12 @@ export default function PersianDinnerPage() {
             {EV.about.map(t => <p key={t}>{t}</p>)}
           </div>
           <p className="text-right text-xs mt-2">{EV.about_by}</p>
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={EV.photos.utensils} alt="Persian kitchen utensils" className="w-full aspect-[3/4] object-cover rounded-xl" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={EV.photos.nabat} alt="Nabat (Persian rock candy)" className="w-full aspect-[3/4] object-cover rounded-xl" />
+          </div>
         </div>
 
         <div className="mt-4 rounded-2xl border bg-white p-4 space-y-3" style={{ borderColor: '#E8E0D4' }}>
