@@ -12,6 +12,10 @@
       "schedule": "5 3,23 * * *"
     },
     {
+      "path": "/api/cron/pos-label-poll",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/probat-sync-monitor",
       "schedule": "7 * * * *"
     },
