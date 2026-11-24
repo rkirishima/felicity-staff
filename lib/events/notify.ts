@@ -9,8 +9,10 @@ const FROM = 'FELICITY <orders@felicity.cafe>'
 const yen = (n: number) => `¥${n.toLocaleString('ja-JP')}`
 
 function notifyTo(): string[] {
-  const raw = process.env.EVENT_NOTIFY_EMAIL || getCompanyInfo().email
-  return raw.split(',').map(s => s.trim()).filter(Boolean)
+  const env = process.env.EVENT_NOTIFY_EMAIL
+  if (env) return env.split(',').map(s => s.trim()).filter(Boolean)
+  if (EV.notify_emails.length) return [...EV.notify_emails]
+  return [getCompanyInfo().email].filter(Boolean)
 }
 
 function jst(iso: string | null): string {
