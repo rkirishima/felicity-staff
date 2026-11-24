@@ -18,7 +18,7 @@ export const PERSIAN_DINNER = {
   price_jpy: 6600, // 1名あたり・税込
   max_per_order: 6,
   // 予約確定時に予約リストを送る宛先（EVENT_NOTIFY_EMAIL があればそちらを優先）
-  notify_emails: ['sakura370@mac.com', 'reza-art@d9.dion.ne.jp'],
+  notify_emails: ['sakura3701@mac.com', 'reza-art@d9.dion.ne.jp'],
   cancel_days_before: 3, // 開催3日前まで全額返金でキャンセル可
   // ドリンクは料金に含まない（当日別会計）
   drinks: ['ワイン', 'ビール', 'コーヒー', 'ソフトドリンク'],
