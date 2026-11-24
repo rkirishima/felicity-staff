@@ -3,7 +3,7 @@ const BASE = 'https://api.stripe.com/v1'
 
 export function stripeKey(): string | null {
   const k = process.env.STRIPE_SECRET_KEY
-  return k && k.startsWith('sk_') ? k : null
+  return k && /^(sk|rk)_/.test(k.trim()) ? k.trim() : null
 }
 
 async function call<T>(method: 'GET' | 'POST', path: string, body?: URLSearchParams): Promise<T> {
