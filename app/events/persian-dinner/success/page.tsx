@@ -29,7 +29,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
               <p>{EV.date.replaceAll('-', '/')} {EV.start_time}〜</p>
               <p>{b.name} 様　{b.qty}名 / ¥{b.amount_jpy.toLocaleString('ja-JP')}（お支払い済み）</p>
               <p className="text-xs text-stone-500 pt-2">キャンセルは {cancelDeadline().replaceAll('-', '/')} 23:59 まで全額返金</p>
-              {b.email && <p className="text-xs text-stone-500">確認メールを {b.email} にお送りしました</p>}
+              {b.email && <p className="text-xs text-stone-500">確認メール（キャンセル用リンク付き）を {b.email} にお送りしました</p>}
             </div>
           </>
         ) : b?.status === 'pending' ? (

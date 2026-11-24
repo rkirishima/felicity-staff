@@ -3,6 +3,7 @@ import { Resend } from 'resend'
 import { getCompanyInfo } from '@/lib/keiri/company'
 import { PERSIAN_DINNER as EV, cancelDeadline } from './persian-dinner'
 import type { Booking } from './bookings'
+import { cancelUrl } from './cancel'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const FROM = 'FELICITY <orders@felicity.cafe>'
@@ -20,22 +21,30 @@ function jst(iso: string | null): string {
   return new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ')
 }
 
-export async function notifyNewBooking(b: Booking): Promise<void> {
-  const key = process.env.RESEND_API_KEY
-  if (!key) throw new Error('RESEND_API_KEY not set')
-  const resend = new Resend(key)
+const dateLabel = `${EV.date.replaceAll('-', '/')} ${EV.start_time}`
 
+async function summary(slug: string) {
   const sb = createAdminClient()
   const { data } = await sb
-    .from('event_bookings').select('*').eq('event_slug', b.event_slug).eq('status', 'paid').order('paid_at')
+    .from('event_bookings').select('*').eq('event_slug', slug).eq('status', 'paid').order('paid_at')
   const paid = (data ?? []) as Booking[]
   const totalQty = paid.reduce((s, r) => s + r.qty, 0)
   const totalAmt = paid.reduce((s, r) => s + r.amount_jpy, 0)
-  const dateLabel = `${EV.date.replaceAll('-', '/')} ${EV.start_time}`
-
   const list = paid
     .map((r, i) => `${i + 1}. ${r.name}（${r.qty}名）${yen(r.amount_jpy)}  ${r.email ?? ''}  ${jst(r.paid_at)}`)
-    .join('\n')
+    .join('\n') || '（なし）'
+  return { totalQty, totalAmt, list }
+}
+
+function resendClient(): Resend {
+  const key = process.env.RESEND_API_KEY
+  if (!key) throw new Error('RESEND_API_KEY not set')
+  return new Resend(key)
+}
+
+export async function notifyNewBooking(b: Booking): Promise<void> {
+  const resend = resendClient()
+  const { totalQty, totalAmt, list } = await summary(b.event_slug)
 
   const to = notifyTo()
   if (to.length) {
@@ -76,9 +85,56 @@ ${list}
 
 キャンセルについて
 ${cancelDeadline().replaceAll('-', '/')} 23:59 までのキャンセルは全額返金いたします。それ以降のキャンセル・無断欠席は返金できません。
-キャンセルの際はこのメールにご返信ください。
+キャンセルは下記リンクからお手続きいただけます（返金は自動で行われます）。
+${cancelUrl(b.id)}
 
 当日お会いできるのを楽しみにしております。
+
+FELICITY
+https://felicity.cafe`,
+      replyTo: notifyTo()[0],
+    })
+  }
+}
+
+export async function notifyCancellation(b: Booking, by: 'guest' | 'admin'): Promise<void> {
+  const resend = resendClient()
+  const { totalQty, totalAmt, list } = await summary(b.event_slug)
+
+  const to = notifyTo()
+  if (to.length) {
+    await resend.emails.send({
+      from: FROM,
+      to,
+      subject: `【キャンセル】${EV.title} ${b.name}様 ${b.qty}名（計${totalQty}/${EV.capacity}名）`,
+      text: `予約がキャンセルされ、${yen(b.amount_jpy)} を返金しました（${by === 'guest' ? 'お客様がリンクから手続き' : '管理画面から操作'}）。
+
+${b.name}様  ${b.qty}名  ${yen(b.amount_jpy)}
+メール: ${b.email ?? '—'}
+
+■ ${EV.title}（${dateLabel}〜）
+予約 ${totalQty} / ${EV.capacity} 名　残り ${Math.max(0, EV.capacity - totalQty)} 名
+売上合計 ${yen(totalAmt)}
+
+■ 予約リスト
+${list}
+
+管理画面: https://staff.felicity.cafe/admin/events/persian-dinner`,
+    })
+  }
+
+  if (b.email) {
+    await resend.emails.send({
+      from: FROM,
+      to: b.email,
+      subject: `【FELICITY】『${EV.title}』キャンセルを承りました`,
+      text: `${b.name} 様
+
+『${EV.title}』（${dateLabel}〜、${b.qty}名）のキャンセルを承りました。
+お支払いいただいた ${yen(b.amount_jpy)} を全額返金いたしました。
+カード会社により、明細への反映まで数日〜1週間ほどかかる場合があります。
+
+またのご来店をお待ちしております。
 
 FELICITY
 https://felicity.cafe`,

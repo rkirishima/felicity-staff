@@ -1,7 +1,7 @@
 // イベント予約の DB 操作（service role、サーバー専用）。
 import { createAdminClient } from '@/lib/supabase/admin'
-import { expireSession, getSession, type StripeSession } from './stripe'
-import { notifyNewBooking } from './notify'
+import { expireSession, getSession, refundPaymentIntent, type StripeSession } from './stripe'
+import { notifyCancellation, notifyNewBooking } from './notify'
 
 export type Booking = {
   id: string
@@ -91,4 +91,24 @@ export async function reconcile(slug: string): Promise<void> {
       try { await syncBooking(r) } catch (e) { console.error('reconcile failed', r.id, e) }
     }
   }
+}
+
+/** 全額返金してキャンセル扱いにし、主催者とお客様に通知する。 */
+export async function refundBooking(b: Booking, by: 'guest' | 'admin'): Promise<Booking> {
+  if (b.status !== 'paid' || !b.stripe_payment_intent) throw new Error('決済済みの予約のみ返金できます')
+  await refundPaymentIntent(b.stripe_payment_intent)
+  const sb = createAdminClient()
+  const { data } = await sb
+    .from('event_bookings')
+    .update({ status: 'refunded', cancelled_at: new Date().toISOString() })
+    .eq('id', b.id)
+    .eq('status', 'paid')
+    .select('*')
+  const updated = (data?.[0] as Booking | undefined) ?? { ...b, status: 'refunded' as const }
+  try {
+    await notifyCancellation(updated, by)
+  } catch (e) {
+    console.error('event cancel notify failed', e)
+  }
+  return updated
 }
