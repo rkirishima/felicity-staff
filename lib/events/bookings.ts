@@ -2,6 +2,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { expireSession, getSession, refundPaymentIntent, type StripeSession } from './stripe'
 import { notifyCancellation, notifyNewBooking } from './notify'
+import { syncEventOrder } from './orders'
 
 export type Booking = {
   id: string
@@ -59,6 +60,7 @@ export async function markPaid(booking: Booking, session: StripeSession): Promis
     .select('*')
   const updated = (data?.[0] as Booking | undefined) ?? null
   if (!updated) return (await getBooking(booking.id)) ?? booking
+  try { await syncEventOrder(updated) } catch (e) { console.error('event order sync failed', e) }
   try {
     await notifyNewBooking(updated)
   } catch (e) {
@@ -105,6 +107,7 @@ export async function refundBooking(b: Booking, by: 'guest' | 'admin'): Promise<
     .eq('status', 'paid')
     .select('*')
   const updated = (data?.[0] as Booking | undefined) ?? { ...b, status: 'refunded' as const }
+  try { await syncEventOrder(updated) } catch (e) { console.error('event order sync failed', e) }
   try {
     await notifyCancellation(updated, by)
   } catch (e) {

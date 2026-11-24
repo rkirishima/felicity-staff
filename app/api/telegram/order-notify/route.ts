@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server'
+import { getPaymentIntent, stripeKey } from '@/lib/events/stripe'
+import { getBooking, listBookings } from '@/lib/events/bookings'
+import { syncEventOrder } from '@/lib/events/orders'
+import { PERSIAN_DINNER as EV } from '@/lib/events/persian-dinner'
 
 export const runtime = 'nodejs'
 
@@ -43,11 +47,41 @@ export async function POST(req: Request) {
   }
 
   const o = payload.record
+
+  // イベント予約の決済なら、予約内容で通知（EC 注文としては扱わない）
+  let text: string | null = null
+  if (o.id?.startsWith('pi_') && stripeKey()) {
+    try {
+      const pi = await getPaymentIntent(o.id)
+      const bookingId = pi.metadata?.booking_id
+      const b = bookingId ? await getBooking(bookingId) : null
+      if (b) {
+        await syncEventOrder({ ...b, status: 'paid', stripe_payment_intent: o.id })
+        const taken = (await listBookings(b.event_slug))
+          .filter(r => r.status === 'paid' || r.id === b.id)
+          .reduce((s, r) => s + r.qty, 0)
+        text = [
+          '🎟 *イベント予約*',
+          '',
+          `『${EV.title}』${EV.date.slice(5).replace('-', '/')} ${EV.start_time}`,
+          `お客様: ${b.name}（${b.qty}名）`,
+          b.email ? `📧 ${b.email}` : '',
+          `💰 ¥${b.amount_jpy.toLocaleString()}`,
+          '',
+          `予約 ${taken} / ${EV.capacity} 名`,
+        ].filter(Boolean).join('\n')
+      }
+    } catch (e) {
+      console.error('event lookup failed', e)
+    }
+  }
+
+  if (!text) {
   const items = Array.isArray(o.items)
     ? o.items.map(i => `・${i.name} × ${i.qty}`).join('\n')
     : ''
 
-  const text = [
+  text = [
     '🛒 *新規 EC 注文*',
     '',
     `注文ID: \`${o.id}\``,
@@ -62,6 +96,7 @@ export async function POST(req: Request) {
     `💰 合計: ¥${(o.amount ?? 0).toLocaleString()}`,
     o.shipping_address ? `\n📍 ${o.shipping_address}` : '',
   ].filter(Boolean).join('\n')
+  }
 
   const tgRes = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST',

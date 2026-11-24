@@ -42,3 +42,7 @@ export function refundPaymentIntent(paymentIntent: string) {
   const p = new URLSearchParams({ payment_intent: paymentIntent })
   return call<{ id: string; status: string }>('POST', '/refunds', p)
 }
+
+export function getPaymentIntent(id: string) {
+  return call<{ id: string; metadata?: Record<string, string> }>('GET', `/payment_intents/${encodeURIComponent(id)}`)
+}
