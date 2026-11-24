@@ -87,12 +87,17 @@ export default function PersianDinnerPage() {
           </ul>
           <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E8E0D4' }}>
             <p className="text-xs font-semibold">🍽 メニュー / Menu</p>
-            <ul className="mt-2 space-y-3">
-              {EV.menu.map((m, i) => (
+            <div className="text-center mt-3">
+              <p className="text-[11px] text-stone-500">{EV.menu_lead}</p>
+              <p className="text-sm font-semibold mt-1">{EV.title}</p>
+            </div>
+            <ul className="mt-4 space-y-4 text-center">
+              {EV.menu.map(m => (
                 <li key={m.en} className="text-xs">
-                  <span className="text-stone-400 mr-1">{'abcd'[i]}</span>
-                  <span>{m.ja}</span>
-                  <span className="block text-[11px] text-stone-500 ml-3">{m.en}</span>
+                  {m.label && <span className="block text-[11px] text-stone-500 mb-0.5">{m.label}</span>}
+                  <span className="text-sm">{m.ja}</span>
+                  {m.sub?.map(t => <span key={t} className="block text-[11px] text-stone-600">{t}</span>)}
+                  <span className="block text-[11px] text-stone-400 mt-0.5">{m.en}</span>
                   {m.photo && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={m.photo} alt={m.en} className="mt-2 w-full aspect-[4/3] object-cover rounded-xl" />
@@ -100,6 +105,8 @@ export default function PersianDinnerPage() {
                 </li>
               ))}
             </ul>
+            <p className="text-right text-xs text-stone-500 mt-2">{EV.menu_tail}</p>
+            <p className="text-right text-[11px] text-stone-400 mt-1">{EV.menu_note}</p>
           </div>
           <div className="mt-3 pt-3 border-t" style={{ borderColor: '#E8E0D4' }}>
             <p className="text-xs font-semibold">🍷 ドリンク（別料金・当日会計）/ Drinks (separate, pay on the day)</p>
@@ -110,8 +117,6 @@ export default function PersianDinnerPage() {
                 </span>
               ))}
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={EV.photos.tea} alt="Persian tea" className="mt-3 w-full aspect-[4/3] object-cover rounded-xl" />
           </div>
         </div>
 

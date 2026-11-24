@@ -13,7 +13,6 @@ export const PERSIAN_DINNER = {
     nabat: '/events/persian-dinner-nabat.webp',
     herbs: '/events/persian-dinner-herbs.webp',
     pots: '/events/persian-dinner-pots.webp',
-    tea: '/events/persian-dinner-tea.webp',
   },
   capacity: 20,
   price_jpy: 6600, // 1名あたり・税込
@@ -45,12 +44,24 @@ export const PERSIAN_DINNER = {
     'たっぷり時間をかけて用意をして、ゆっくり食べる。幼い私が遊びに行きたい一心で急いで食べようとすると、きまって聞かされるのが「急ぐのは悪魔の仕業」という、ことわざでした。',
   ],
   about_by: 'レザ',
+  menu_lead: '古代からつづく特別な日には赤い食材で元気をいただく',
   menu: [
-    { ja: 'ザクロとクルミと鶏のコレシュ', en: 'Chicken khoresh with pomegranate & walnuts', photo: '/events/persian-dinner-khoresh.webp' },
-    { ja: '薄焼きナンロール', en: 'Thin flatbread rolls', photo: '/events/persian-dinner-nan-roll.webp' },
-    { ja: '豆と肉と米のボール', en: 'Bean, meat & rice balls', photo: '/events/persian-dinner-kufteh.webp' },
-    { ja: 'ハーブの炊き込みご飯', en: 'Herb rice', photo: '/events/persian-dinner-herb-rice.webp' },
-  ],
+    { ja: 'ピスタチオ スープ', en: 'Pistachio soup', photo: null },
+    {
+      label: 'はじめの一皿',
+      ja: '薄焼きナンのバンチ',
+      sub: ['（ハーブ・自家製チーズ・ピクルス）', 'パプリカペースト・ビーツヨーグルトサラダ など'],
+      en: 'Starter: thin flatbread bundles with herbs, homemade cheese & pickles; paprika paste, beet & yogurt salad and more',
+      photo: '/events/persian-dinner-nan-roll.webp',
+    },
+    { ja: 'ザクロとクルミと鶏のコレシュ＆サフランライス', en: 'Chicken khoresh with pomegranate & walnuts, saffron rice', photo: '/events/persian-dinner-khoresh.webp' },
+    { ja: '豆と米とひき肉の大きなボール', en: 'Large balls of beans, rice & minced meat', photo: '/events/persian-dinner-kufteh.webp' },
+    { ja: '小さな紅茶', en: 'A small glass of Persian tea', photo: '/events/persian-dinner-tea.webp' },
+    { ja: 'デーツ小麦あんがけ', en: 'Date & wheat sweet', photo: null },
+    { ja: 'バラ水の練り菓子', en: 'Rose water confection', photo: null },
+  ] as { label?: string; ja: string; sub?: string[]; en: string; photo: string | null }[],
+  menu_tail: 'など',
+  menu_note: '＊多少の変更があるかもしれません。',
 } as const
 
 // キャンセル期限（JST, YYYY-MM-DD）。開催日の cancel_days_before 日前の 23:59 まで。
