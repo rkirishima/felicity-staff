@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PERSIAN_DINNER as EV, cancelDeadline } from '@/lib/events/persian-dinner'
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
@@ -18,6 +18,19 @@ export default function PersianDinnerPage() {
   const cd = new Date(cancelDeadline() + 'T00:00:00')
   const cancelLabel = `${cd.getMonth() + 1}/${cd.getDate()}(${DAYS_JA[cd.getDay()]})`
   const [agree, setAgree] = useState(false)
+  const [seats, setSeats] = useState<{ remaining: number | null; open: boolean } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/events/seats', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => setSeats({ remaining: j.remaining, open: j.open }))
+      .catch(() => {})
+  }, [])
+
+  const remaining = seats?.remaining ?? null
+  const soldOut = remaining !== null && remaining <= 0
+  const closed = seats !== null && !seats.open
+  const maxQty = Math.min(EV.max_per_order, remaining ?? EV.max_per_order)
 
   async function pay() {
     setErr('')
@@ -44,10 +57,6 @@ export default function PersianDinnerPage() {
 
   return (
     <div className="min-h-screen -mb-20 pb-10" style={{ backgroundColor: '#FAF7F2', color: '#292524' }}>
-      <div className="text-center text-[11px] py-1.5 font-medium" style={{ backgroundColor: '#fde68a', color: '#78350f' }}>
-        TEST MODE — 実際の請求は発生しません / No real charge
-      </div>
-
       <div className="max-w-md mx-auto px-4">
         <div className="mt-6 rounded-3xl overflow-hidden relative" style={{ backgroundColor: '#7c2d12' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -64,7 +73,7 @@ export default function PersianDinnerPage() {
         <div className="grid grid-cols-3 gap-2 mt-4 text-center">
           {[
             ['日時 / Date', `${dateLabel} ${EV.start_time}〜`],
-            ['定員 / Seats', `${EV.capacity}名`],
+            ['残席 / Seats left', remaining === null ? `定員${EV.capacity}名` : soldOut ? '満席' : `${remaining} / ${EV.capacity}`],
             ['料金 / Price', `${yen(EV.price_jpy)}`],
           ].map(([k, v]) => (
             <div key={k} className="rounded-2xl border bg-white px-2 py-3" style={{ borderColor: '#E8E0D4' }}>
@@ -150,7 +159,7 @@ export default function PersianDinnerPage() {
                 disabled={qty <= 1} onClick={() => setQty(q => q - 1)}>−</button>
               <span className="w-6 text-center font-semibold">{qty}</span>
               <button className="w-9 h-9 rounded-full border text-lg disabled:opacity-30" style={{ borderColor: '#E8E0D4' }}
-                disabled={qty >= EV.max_per_order} onClick={() => setQty(q => q + 1)}>＋</button>
+                disabled={qty >= maxQty} onClick={() => setQty(q => q + 1)}>＋</button>
             </div>
           </div>
 
@@ -171,7 +180,10 @@ export default function PersianDinnerPage() {
 
           {err && <p className="text-xs text-red-600">{err}</p>}
 
-          <button onClick={pay} disabled={busy}
+          {(soldOut || closed) && (
+            <p className="text-sm text-center font-medium text-red-600">{closed ? '受付は終了しました / Booking closed' : '満席になりました / Sold out'}</p>
+          )}
+          <button onClick={pay} disabled={busy || soldOut || closed || qty > maxQty}
             className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-60"
             style={{ backgroundColor: '#14b8a6' }}>
             {busy ? '処理中…' : `${yen(total)} を支払って予約 / Pay & Reserve`}

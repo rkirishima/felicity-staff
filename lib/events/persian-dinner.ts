@@ -70,3 +70,9 @@ export function cancelDeadline(): string {
   d.setUTCDate(d.getUTCDate() - PERSIAN_DINNER.cancel_days_before)
   return d.toISOString().slice(0, 10)
 }
+
+// 予約受付中か（開催開始時刻 JST まで）
+export function salesOpen(): boolean {
+  const start = new Date(`${PERSIAN_DINNER.date}T${PERSIAN_DINNER.start_time}:00+09:00`).getTime()
+  return Date.now() < start
+}
