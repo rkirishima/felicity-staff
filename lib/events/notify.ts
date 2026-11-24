@@ -42,7 +42,7 @@ function resendClient(): Resend {
   return new Resend(key)
 }
 
-export async function notifyNewBooking(b: Booking): Promise<void> {
+export async function notifyNewBooking(b: Booking, opts: { organizersOnly?: boolean } = {}): Promise<void> {
   const resend = resendClient()
   const { totalQty, totalAmt, list } = await summary(b.event_slug)
 
@@ -68,7 +68,7 @@ ${list}
     })
   }
 
-  if (b.email) {
+  if (b.email && !opts.organizersOnly) {
     await resend.emails.send({
       from: FROM,
       to: b.email,

@@ -41,6 +41,13 @@ export default function PersianDinnerBookingsPage() {
     toast.success('返金しました'); load()
   }
 
+  async function resend(b: Booking) {
+    const r = await fetch(`/api/events/bookings/${b.id}/notify`, { method: 'POST' })
+    const j = await r.json()
+    if (!r.ok) { toast.error(j.error ?? '送信失敗'); return }
+    toast.success('主催者に通知メールを再送しました')
+  }
+
   function downloadCsv() {
     if (!data) return
     const rows = data.bookings.filter(b => b.status === 'paid')
@@ -94,7 +101,10 @@ export default function PersianDinnerBookingsPage() {
                 <p className="text-sm">{yen(b.amount_jpy)}</p>
                 <span className="text-[10px] font-medium" style={{ color: STATUS[b.status][1] }}>{STATUS[b.status][0]}</span>
                 {b.status === 'paid' && (
-                  <button onClick={() => refund(b)} className="block ml-auto mt-1 text-[10px] text-red-500 underline">返金してキャンセル</button>
+                  <>
+                    <button onClick={() => resend(b)} className="block ml-auto mt-1 text-[10px] text-teal-600 underline">通知を再送</button>
+                    <button onClick={() => refund(b)} className="block ml-auto mt-1 text-[10px] text-red-500 underline">返金してキャンセル</button>
+                  </>
                 )}
               </div>
             </div>
